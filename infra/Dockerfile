@@ -11,6 +11,9 @@ COPY frontend/ ./
 RUN npm run build -- --configuration production
 
 FROM eclipse-temurin:25-jdk AS backend-build
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace/backend
 COPY backend/ ./
 RUN chmod +x mvnw && ./mvnw -B package -DskipTests
