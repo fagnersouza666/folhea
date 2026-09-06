@@ -12,7 +12,7 @@ scripts abaixo deve ser mantido quando frontend e backend forem evoluídos.
 | Smoke/contrato | JUnit 5, Quarkus Test, RestAssured | inicialização da API, autenticação, endpoints e schema OpenAPI | `./mvnw -B clean verify` |
 | Integração | Dev Services/Testcontainers | PostgreSQL e dependências reais, migrações e isolamento | `./mvnw -B clean verify` |
 | E2E | Playwright | landing, login, livro, sessão, edição/exclusão, finalização, stats e isolamento | `npm run e2e:critical` |
-| SEO | Node + artefato SSG | title, description, canonical, robots, sitemap, noindex, 404 e redirects | `npm run test:seo` |
+| SEO | Node + artefato SSG | title, description, canonical, robots, sitemap, noindex, 404 e redirects | `node ../scripts/ci/validate-seo.mjs dist seo-report/seo-validation.txt` |
 
 ### Regras do streak
 
@@ -36,7 +36,7 @@ frontend: npm ci && npm run lint
 frontend: npm run build -- --configuration production
 frontend: npm run build:ssg -- --configuration production
 frontend: npm run test -- --run
-frontend: npm run test:seo
+frontend: node ../scripts/ci/validate-seo.mjs dist seo-report/seo-validation.txt
 backend:  ./mvnw -B clean verify
 e2e:      npm run e2e:critical
 docker:   docker build -f infra/Dockerfile .
