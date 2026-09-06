@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../core/auth/auth.service';
 import { DashboardStore } from '../core/state/dashboard.store';
@@ -30,7 +30,7 @@ import { AnalyticsService } from '../core/analytics/analytics.service';
     </div>
   `
 })
-export class AppShellComponent {
+export class AppShellComponent implements OnDestroy {
   readonly auth = inject(AuthService);
   readonly store = inject(DashboardStore);
   readonly pwa = inject(PwaService);
@@ -39,6 +39,10 @@ export class AppShellComponent {
     this.store.load();
     inject(SeoService).update('Folhea — Seu progresso', 'Área pessoal do Folhea.', '/app', false);
     if (typeof window !== 'undefined') window.addEventListener('appinstalled', this.onInstalled);
+  }
+
+  ngOnDestroy(): void {
+    if (typeof window !== 'undefined') window.removeEventListener('appinstalled', this.onInstalled);
   }
 
   private readonly onInstalled = (): void => this.analytics.track('pwa_installed');
