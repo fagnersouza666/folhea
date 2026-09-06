@@ -40,6 +40,12 @@ class OidcConfigurationTest {
     }
 
     @Test
+    void productionProfileRequiresConfidentialClientSecret() {
+        assertTrue(CONFIG.containsKey("%prod.quarkus.oidc.credentials.secret"));
+        assertEquals("${OIDC_CLIENT_SECRET}", CONFIG.getProperty("%prod.quarkus.oidc.credentials.secret"));
+    }
+
+    @Test
     void tokenValidationRequiresPublicIssuerAudienceAzpAndSubject() {
         assertEquals("${OIDC_TOKEN_ISSUER:https://folhea.com.br/realms/folhea}",
                 CONFIG.getProperty("quarkus.oidc.token.issuer"));

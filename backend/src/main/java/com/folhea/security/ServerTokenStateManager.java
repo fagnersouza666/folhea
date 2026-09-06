@@ -1,5 +1,7 @@
 package com.folhea.security;
 
+import com.folhea.security.store.InMemoryTokenStateStore;
+import com.folhea.security.store.TokenStateStore;
 import io.quarkus.oidc.AuthorizationCodeTokens;
 import io.quarkus.oidc.OidcRequestContext;
 import io.quarkus.oidc.OidcTenantConfig;
@@ -7,13 +9,11 @@ import io.quarkus.oidc.TokenStateManager;
 import io.smallrye.mutiny.Uni;
 import io.vertx.ext.web.RoutingContext;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import java.security.SecureRandom;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.Base64;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Stores authorization-code tokens behind an opaque browser reference. The
@@ -24,21 +24,30 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ServerTokenStateManager implements TokenStateManager {
     private static final int TOKEN_REFERENCE_BYTES = 32;
     private static final int DEFAULT_MAX_ENTRIES = 100_000;
-    private final Map<String, StoredTokens> tokens = new ConcurrentHashMap<>();
+    private final TokenStateStore store;
     private final SecureRandom random = new SecureRandom();
     private final Clock clock;
     private final int maxEntries;
-    private long checks;
+
+    @Inject
+    ServerTokenStateManager(TokenStateStore store) {
+        this(store, Clock.systemUTC(), DEFAULT_MAX_ENTRIES);
+    }
 
     ServerTokenStateManager() {
-        this(Clock.systemUTC(), DEFAULT_MAX_ENTRIES);
+        this(new InMemoryTokenStateStore(), Clock.systemUTC(), DEFAULT_MAX_ENTRIES);
     }
 
     ServerTokenStateManager(Clock clock) {
-        this(clock, DEFAULT_MAX_ENTRIES);
+        this(new InMemoryTokenStateStore(clock), clock, DEFAULT_MAX_ENTRIES);
     }
 
     ServerTokenStateManager(Clock clock, int maxEntries) {
+        this(new InMemoryTokenStateStore(clock), clock, maxEntries);
+    }
+
+    ServerTokenStateManager(TokenStateStore store, Clock clock, int maxEntries) {
+        this.store = store;
         this.clock = clock;
         this.maxEntries = maxEntries;
     }
@@ -49,12 +58,11 @@ public class ServerTokenStateManager implements TokenStateManager {
             OidcTenantConfig tenantConfig,
             AuthorizationCodeTokens authorizationCodeTokens,
             OidcRequestContext<String> requestContext) {
-        purgeExpired(clock.instant());
-        if (tokens.size() >= maxEntries) return Uni.createFrom().nullItem();
+        if (store.atCapacity(maxEntries)) return Uni.createFrom().nullItem();
         String reference;
         do {
             reference = newReference();
-        } while (tokens.putIfAbsent(reference, new StoredTokens(copy(authorizationCodeTokens), clock.instant().plus(SessionCookiePolicy.MAX_AGE))) != null);
+        } while (!store.save(reference, authorizationCodeTokens, SessionCookiePolicy.MAX_AGE));
         return Uni.createFrom().item(reference);
     }
 
@@ -65,14 +73,7 @@ public class ServerTokenStateManager implements TokenStateManager {
             String tokenState,
             OidcRequestContext<AuthorizationCodeTokens> requestContext) {
         if (!SessionCookiePolicy.isValidTicket(tokenState)) return Uni.createFrom().nullItem();
-        purgeExpired(clock.instant());
-        StoredTokens stored = tokens.get(tokenState);
-        if (stored == null) return Uni.createFrom().nullItem();
-        if (!clock.instant().isBefore(stored.expiresAt())) {
-            tokens.remove(tokenState, stored);
-            return Uni.createFrom().nullItem();
-        }
-        return Uni.createFrom().item(copy(stored.tokens()));
+        return Uni.createFrom().item(store.find(tokenState).orElse(null));
     }
 
     @Override
@@ -81,17 +82,12 @@ public class ServerTokenStateManager implements TokenStateManager {
             OidcTenantConfig tenantConfig,
             String tokenState,
             OidcRequestContext<Void> requestContext) {
-        if (tokenState != null) tokens.remove(tokenState);
+        store.remove(tokenState);
         return Uni.createFrom().nullItem();
     }
 
     int tokenCount() {
-        return tokens.size();
-    }
-
-    private void purgeExpired(Instant now) {
-        if (++checks % 256 != 0 && tokens.size() < maxEntries) return;
-        tokens.entrySet().removeIf(entry -> !now.isBefore(entry.getValue().expiresAt()));
+        return store.size();
     }
 
     private String newReference() {
@@ -99,16 +95,4 @@ public class ServerTokenStateManager implements TokenStateManager {
         random.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
-
-    private static AuthorizationCodeTokens copy(AuthorizationCodeTokens source) {
-        if (source == null) return null;
-        return new AuthorizationCodeTokens(
-                source.getIdToken(),
-                source.getAccessToken(),
-                source.getRefreshToken(),
-                source.getAccessTokenExpiresIn(),
-                source.getAccessTokenScope());
-    }
-
-    private record StoredTokens(AuthorizationCodeTokens tokens, Instant expiresAt) { }
 }
