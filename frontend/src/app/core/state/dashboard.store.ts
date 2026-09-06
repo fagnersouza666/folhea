@@ -59,7 +59,8 @@ export class DashboardStore {
   }
 
   updateSession(session: ReadingSession): void {
-    this.api.updateSession(session.id, session).subscribe({ next: () => this.analytics.track('reading_session_updated', { pages: session.pages, minutes: session.minutes }), error: () => undefined });
+    const input = { bookId: session.bookId, readingDate: session.readingDate, pages: session.pages, minutes: session.minutes };
+    this.api.updateSession(session.id, input).subscribe({ next: () => this.analytics.track('reading_session_updated', { pages: session.pages, minutes: session.minutes }), error: () => undefined });
   }
 
   deleteSession(id: string): void {

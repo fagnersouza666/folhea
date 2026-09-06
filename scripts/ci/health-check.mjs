@@ -22,7 +22,7 @@ for (let attempt = 1; attempt <= attempts; attempt += 1) {
     console.log(`health check passed on attempt ${attempt}: ${checks.join(', ')}`);
     process.exit(0);
   } catch (error) {
-    lastError = error.message;
+    lastError = error instanceof Error ? error.message : String(error);
     if (attempt < attempts) await wait(delayMs);
   }
 }

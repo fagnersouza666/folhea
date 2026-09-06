@@ -57,9 +57,9 @@ async function validateOpenApi() {
   try {
     const content = source ? readFileSafe(resolve(process.cwd(), source)) : await fetch(url).then((response) => response.text());
     const document = JSON.parse(content);
-    for (const [, path] of operations) {
+    for (const [method, path] of operations) {
       const openApiPath = path.replace('{id}', '{id}');
-      if (!document.paths?.[openApiPath]) failures.push(`OpenAPI document is missing ${openApiPath}`);
+      if (!document.paths?.[openApiPath]?.[method.toLowerCase()]) failures.push(`OpenAPI document is missing ${method} ${openApiPath}`);
     }
   } catch (error) {
     failures.push(`OpenAPI document could not be read as JSON: ${error.message}`);
