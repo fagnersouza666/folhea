@@ -49,6 +49,8 @@ export class AnalyticsService {
   private readonly endpoint = inject(ANALYTICS_ENDPOINT);
 
   track(event: ProductEvent, properties: AnalyticsProperties = {}): void {
+    if (typeof window === 'undefined') return;
+
     const payload = JSON.stringify({
       event,
       occurredAt: new Date().toISOString(),

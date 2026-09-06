@@ -4,3 +4,5 @@ dist/
 out-tsc/
 coverage/
 .cache/
+playwright-report/
+test-results/
