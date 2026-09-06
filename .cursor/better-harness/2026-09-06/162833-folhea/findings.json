@@ -1,0 +1,544 @@
+{
+  "summary": {
+    "projectName": "Folhea",
+    "locale": "en",
+    "modelId": "agent-work-loop-v4",
+    "reportContractVersion": 26,
+    "overview": "O Folhea tem merge-gate por superficie, mas README e a rule Cursor omitem passos da CI, e os 403/413 do filtro de API ficam sem teste REST nem log",
+    "strengths": [
+      "O merge-gate de CI por superficie e documentado e o BackendResourceTest cobre 401 anonimo e 415 de content-type"
+    ],
+    "evidenceMode": "session-limited",
+    "evidenceBoundary": {
+      "manifest": {
+        "schemaVersion": 2,
+        "sourceFingerprint": "371394aeaf59ebc2",
+        "adapterVersion": "cursor-task-loop-source-v2",
+        "platform": "cursor",
+        "selection": {
+          "strategy": "all-eligible",
+          "eligibleCount": 0,
+          "analyzedCount": 0,
+          "confidence": "Low"
+        }
+      },
+      "episodeCoverage": {
+        "episodeCount": 0,
+        "editedEpisodeCount": 0,
+        "closedEpisodeCount": 0,
+        "recoveredEpisodeCount": 0
+      },
+      "deliveryEvidenceLevels": [],
+      "sourceGaps": []
+    },
+    "semanticFacets": {
+      "schemaVersion": 1,
+      "status": "supplementary",
+      "entries": [
+        {
+          "id": "session-insight:source-coverage",
+          "kind": "redacted-summary",
+          "episodeRef": null,
+          "status": "candidate",
+          "labels": [
+            "source-coverage",
+            "Low"
+          ],
+          "summary": "Analyzed 0 of 0 sessions; 2/5 enabled source roots exist. Use this as the current workspace evidence boundary for final insight cards.",
+          "evidenceRefs": [],
+          "modelVersion": "session-insights-v1"
+        },
+        {
+          "id": "session-insight:validation-behavior",
+          "kind": "redacted-summary",
+          "episodeRef": null,
+          "status": "candidate",
+          "labels": [
+            "validation-behavior",
+            "Low"
+          ],
+          "summary": "No validation command category was observed in the analyzed session sample. Inspect more sessions or add explicit validation guidance before claiming validation-after-edit behavior.",
+          "evidenceRefs": [],
+          "modelVersion": "session-insights-v1"
+        },
+        {
+          "id": "session-insight:post-edit-validation",
+          "kind": "rework-correction",
+          "episodeRef": null,
+          "status": "candidate",
+          "labels": [
+            "post-edit-validation",
+            "Low"
+          ],
+          "summary": "No edit event was observed in the analyzed sample. Inspect more sessions before making claims about edit or validation habits.",
+          "evidenceRefs": [],
+          "modelVersion": "session-insights-v1"
+        },
+        {
+          "id": "session-insight:execution-friction",
+          "kind": "friction-taxonomy",
+          "episodeRef": null,
+          "status": "candidate",
+          "labels": [
+            "execution-friction",
+            "Low"
+          ],
+          "summary": "No strong execution friction signal in the analyzed sample. Keep friction claims narrow unless additional failed commands, rejected actions, or warnings are inspected.",
+          "evidenceRefs": [],
+          "modelVersion": "session-insights-v1"
+        }
+      ]
+    },
+    "learningCapture": {
+      "schemaVersion": 1,
+      "state": "N/A",
+      "summary": "N/A — requires two comparable observation windows and an intervention comparison.",
+      "interventions": []
+    },
+    "contextUsage": {
+      "schemaVersion": 1,
+      "status": "unobserved",
+      "evidence": "cursor-native-context-usage-canvas",
+      "categories": [],
+      "items": [],
+      "coverage": {
+        "snapshotCount": 0,
+        "itemCount": 0,
+        "sourceItemCount": 0,
+        "truncated": false,
+        "rawTextOmitted": true
+      },
+      "actions": {
+        "openAgentId": null
+      }
+    },
+    "aiAgentPractice": {
+      "inspectedSurfaces": [
+        "Rules",
+        "Workflows"
+      ],
+      "coverageRows": [
+        {
+          "surface": "Rules",
+          "scopes": [
+            "Project"
+          ],
+          "count": 2,
+          "paths": [
+            ".cursor/rules/verificacao-local-antes-de-push.mdc",
+            ".cursor/rules/versionamento.mdc"
+          ]
+        },
+        {
+          "surface": "Workflows",
+          "scopes": [
+            "Project"
+          ],
+          "count": 3,
+          "paths": [
+            ".github/workflows/ci.yml"
+          ]
+        }
+      ]
+    },
+    "dimensions": [
+      {
+        "id": "task-understanding",
+        "label": "Task Understanding",
+        "score": 48,
+        "summary": "Ha README e duas rules Cursor alwaysApply, mas o contrato local de frontend nao coincide com o job de CI.",
+        "findingRefs": [
+          "readme-frontend-gate-omits-ci-contract",
+          "cursor-rule-ci-contract-drift"
+        ]
+      },
+      {
+        "id": "controlled-execution",
+        "label": "Controlled Execution",
+        "score": 54,
+        "summary": "Setup Compose, Maven e Node estao documentados; permissao e startup limpo nao foram exercitados nesta revisao.",
+        "findingRefs": []
+      },
+      {
+        "id": "change-validation",
+        "label": "Change Validation",
+        "score": 44,
+        "summary": "Ha verify e cobertura Vitest, mas os rejeites 403/413 do filtro e o rollback otimista do store nao tem check focado.",
+        "findingRefs": [
+          "security-filter-reject-untested",
+          "dashboard-store-rollback-untested"
+        ]
+      },
+      {
+        "id": "reliable-delivery",
+        "label": "Reliable Delivery",
+        "score": 50,
+        "summary": "CI e runbook de backup existem; protecao de main, aceite no revision atual e recuperacao ligada ao deploy ficaram nao observados.",
+        "findingRefs": []
+      },
+      {
+        "id": "learning-capture",
+        "label": "Learning Capture",
+        "score": 35,
+        "summary": "A janela Cursor nao admitiu Task Episodes comparaveis; Learning Capture permanece N/A neste recorte session-limited.",
+        "findingRefs": []
+      }
+    ],
+    "assignmentSummaries": [
+      {
+        "findingId": "readme-frontend-gate-omits-ci-contract",
+        "revision": 1,
+        "locale": "en",
+        "title": "README Frontend gate now matches the CI frontend job",
+        "body": "The README Frontend command block now lists lint, production build, build:ssg, test:coverage, and validate-api-contract.mjs contract-report.txt with the same literals as the frontend job in ci.yml. The focused check compared those five commands in both files; the rest of the README was left unchanged.",
+        "outputs": [
+          {
+            "action": "updated",
+            "artifact": "Document",
+            "name": "README Frontend verification block",
+            "scope": "Project",
+            "path": "README.md",
+            "summary": "Replaced npm run test -- --run with npm run test:coverage and added node ../scripts/ci/validate-api-contract.mjs contract-report.txt in the Frontend command block."
+          }
+        ]
+      },
+      {
+        "findingId": "cursor-rule-ci-contract-drift",
+        "revision": 1,
+        "locale": "en",
+        "title": "The alwaysApply rule now mirrors the inspected CI jobs",
+        "body": "The Cursor local-verification rule now describes the same docker builds, Caddy-backed SEO check, e2e:critical Playwright trigger, and API-contract argument as the frontend, seo, playwright-critical, and docker jobs in ci.yml. The focused diff confirmed those literals and that the rule still requires the complete gate of the touched surface; no parallel AGENTS.md was added.",
+        "outputs": [
+          {
+            "action": "updated",
+            "artifact": "Rule",
+            "name": "Cursor alwaysApply local verification rule",
+            "scope": "Project",
+            "path": ".cursor/rules/verificacao-local-antes-de-push.mdc",
+            "summary": "Aligned the alwaysApply rule to ci.yml: two docker builds (default and --target caddy-runtime), SEO validation behind Caddy 2.11 with SEO_BASE_URL, Playwright trigger on the e2e:critical script, and validate-api-contract.mjs contract-report.txt."
+          }
+        ]
+      },
+      {
+        "findingId": "security-filter-reject-untested",
+        "revision": 1,
+        "locale": "en",
+        "title": "Filter 403/413 rejects now have REST coverage and a correlatable abort log",
+        "body": "SecurityBoundaryFilter.abort() logs status and the problem slug without leaking the CSRF token. BackendResourceTest now covers authenticated 403 host, origin, and CSRF rejects plus 413 oversized body; 401 and 415 stayed green on the focused Maven run. The test profile uses a 1024-byte JSON limit so the 413 hits the filter rather than the 64K HTTP layer.",
+        "outputs": [
+          {
+            "action": "updated",
+            "artifact": "Code",
+            "name": "SecurityBoundaryFilter abort logging",
+            "scope": "Project",
+            "path": "backend/src/main/java/com/folhea/security/SecurityBoundaryFilter.java",
+            "summary": "abort() now logs status and the problem slug without request headers or CSRF tokens."
+          },
+          {
+            "action": "updated",
+            "artifact": "Test",
+            "name": "BackendResourceTest filter rejects",
+            "scope": "Project",
+            "path": "backend/src/test/java/com/folhea/api/BackendResourceTest.java",
+            "summary": "Added authenticated REST cases for 403 invalid-host, csrf-origin, csrf-invalid and 413 body-too-large."
+          },
+          {
+            "action": "created",
+            "artifact": "Test",
+            "name": "SecurityBoundaryFilterLogTest",
+            "scope": "Project",
+            "path": "backend/src/test/java/com/folhea/security/SecurityBoundaryFilterLogTest.java",
+            "summary": "Asserts rejectLog names status and problem and does not contain a CSRF token."
+          },
+          {
+            "action": "updated",
+            "artifact": "Config",
+            "name": "Test JSON body limit",
+            "scope": "Project",
+            "path": "backend/src/main/resources/application.properties",
+            "summary": "Set %test.folhea.security.max-json-body-bytes=1024 so 413 reaches the filter below the 64K HTTP limit."
+          },
+          {
+            "action": "updated",
+            "artifact": "Document",
+            "name": "Testing strategy filter coverage",
+            "scope": "Project",
+            "path": "docs/testing-strategy.md",
+            "summary": "Documents the 403/413 REST coverage and abort log contract."
+          }
+        ]
+      },
+      {
+        "findingId": "dashboard-store-rollback-untested",
+        "revision": 1,
+        "locale": "en",
+        "title": "DashboardStore optimistic rollback is now covered by the focused spec",
+        "body": "dashboard.store.spec.ts now fails HTTP 500 after optimistic addBook, finishBook, deleteBook, and addSession and asserts books/sessions restore with a visible mutation error. The focused Vitest run kept the original three cases green among seven passing tests; removing catchError from addBook failed the rollback assertion, then the store was restored unchanged.",
+        "outputs": [
+          {
+            "action": "updated",
+            "artifact": "Test",
+            "name": "DashboardStore rollback spec",
+            "scope": "Project",
+            "path": "frontend/src/app/core/state/dashboard.store.spec.ts",
+            "summary": "Added HTTP 500 cases for addBook, finishBook, deleteBook, and addSession that assert optimistic state, rollback of books/sessions, and a visible mutation error."
+          },
+          {
+            "action": "updated",
+            "artifact": "Document",
+            "name": "Testing strategy DashboardStore coverage",
+            "scope": "Project",
+            "path": "docs/testing-strategy.md",
+            "summary": "Documented the four DashboardStore optimistic-rollback HTTP 500 cases and that the store API was not widened."
+          }
+        ]
+      }
+    ]
+  },
+  "findings": [
+    {
+      "id": "readme-frontend-gate-omits-ci-contract",
+      "title": "O bloco Frontend do README omite cobertura e contrato da API exigidos pelo CI",
+      "severity": "Medium",
+      "reason": "O README diz que os comandos locais sao o contrato do CI, mas o bloco Frontend roda npm run test -- --run e omite npm run test:coverage e validate-api-contract.mjs, enquanto o job frontend de ci.yml executa os dois. Quem seguir so o README pode achar o gate local completo e falhar no merge-gate. Nao ha episodio Cursor que prove esse caminho; a divergencia e dos arquivos abertos.",
+      "dimensionRefs": [
+        "task-understanding"
+      ],
+      "subdimensionRefs": [
+        "relevant-context"
+      ],
+      "expectedArtifact": "Document",
+      "expectedOutput": [
+        "O bloco Frontend do README passa a listar os mesmos comandos do job frontend de ci.yml, incluindo test:coverage e validate-api-contract.mjs."
+      ],
+      "aiFixPrompt": "/better-harness fix this issue\n\nAlinhe o bloco Frontend em README.md ao job frontend de .github/workflows/ci.yml: troque o teste local por npm run test:coverage e inclua node ../scripts/ci/validate-api-contract.mjs contract-report.txt, sem alargar o restante do README.\n\n## Validation\n\n- Confirme que o bloco Frontend cita lint, build de producao, build:ssg, test:coverage e validate-api-contract\n- Confirme que esses passos continuam iguais aos do job frontend em ci.yml",
+      "actualOutputRevision": 1,
+      "actualOutput": [
+        {
+          "action": "updated",
+          "artifact": "Document",
+          "name": "README Frontend verification block",
+          "scope": "Project",
+          "path": "README.md",
+          "summary": "Replaced npm run test -- --run with npm run test:coverage and added node ../scripts/ci/validate-api-contract.mjs contract-report.txt in the Frontend command block."
+        }
+      ],
+      "assignmentSummary": {
+        "locale": "en",
+        "title": "README Frontend gate now matches the CI frontend job",
+        "body": "The README Frontend command block now lists lint, production build, build:ssg, test:coverage, and validate-api-contract.mjs contract-report.txt with the same literals as the frontend job in ci.yml. The focused check compared those five commands in both files; the rest of the README was left unchanged."
+      },
+      "postFixRepairReview": {
+        "modelId": "agent-work-loop-v4",
+        "findingId": "readme-frontend-gate-omits-ci-contract",
+        "status": "verified",
+        "summary": "The README Frontend block now lists the CI frontend commands, including test:coverage and validate-api-contract.mjs, matching the job literals.",
+        "reason": "The diff and target-owned comparison show lint, production build, build:ssg, test:coverage, and validate-api-contract.mjs contract-report.txt present with identical literals, the old npm run test -- --run line gone, scope not widened, and the asset-integrity review reported no findings.",
+        "confidence": "high",
+        "evidenceRefs": [
+          {
+            "kind": "fix-validation",
+            "id": "target-owned-validation"
+          },
+          {
+            "kind": "asset-integrity",
+            "id": "asset-integrity-review"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cursor-rule-ci-contract-drift",
+      "title": "A rule alwaysApply de verificacao local nao reproduz o contrato do ci.yml",
+      "severity": "Medium",
+      "reason": "A rule verificacao-local-antes-de-push.mdc afirma ser o contrato de ci.yml, mas o job docker da CI faz dois docker build (imagem padrao e target caddy-runtime) e a rule cita um so, so se Dockerfile/Caddyfile mudou. O job seo sobe Caddy 2.11 e chama validate-seo.mjs com SEO_BASE_URL; a rule aponta o dist sem servidor. Playwright na CI corre quando o script e2e:critical existe; a rule dispara so por path de e2e. validate-api-contract.mjs na CI recebe contract-report.txt; a rule omite o argumento. Todo agente Cursor recebe essa rule (alwaysApply). cd.yml e security.yml nao foram abertos.",
+      "dimensionRefs": [
+        "task-understanding"
+      ],
+      "subdimensionRefs": [
+        "relevant-context"
+      ],
+      "expectedArtifact": "Rule",
+      "expectedOutput": [
+        "A rule alwaysApply descreve os mesmos builds, SEO com Caddy, gatilho Playwright e argumento de contrato de API que ci.yml executa, ou deixa de se declarar como esse contrato."
+      ],
+      "aiFixPrompt": "/better-harness fix this issue\n\nAtualize .cursor/rules/verificacao-local-antes-de-push.mdc para espelhar o ci.yml inspecionado: dois docker build (padrao e --target caddy-runtime), validate-seo.mjs com o servidor Caddy/SEO_BASE_URL da CI, gatilho Playwright alinhado ao script e2e:critical, e validate-api-contract.mjs contract-report.txt. Nao invente um AGENTS.md paralelo.\n\n## Validation\n\n- Diff a rule contra os jobs docker, seo, playwright-critical e frontend de ci.yml\n- Confirme que a rule ainda pede o gate completo da superficie tocada",
+      "actualOutputRevision": 1,
+      "actualOutput": [
+        {
+          "action": "updated",
+          "artifact": "Rule",
+          "name": "Cursor alwaysApply local verification rule",
+          "scope": "Project",
+          "path": ".cursor/rules/verificacao-local-antes-de-push.mdc",
+          "summary": "Aligned the alwaysApply rule to ci.yml: two docker builds (default and --target caddy-runtime), SEO validation behind Caddy 2.11 with SEO_BASE_URL, Playwright trigger on the e2e:critical script, and validate-api-contract.mjs contract-report.txt."
+        }
+      ],
+      "assignmentSummary": {
+        "locale": "en",
+        "title": "The alwaysApply rule now mirrors the inspected CI jobs",
+        "body": "The Cursor local-verification rule now describes the same docker builds, Caddy-backed SEO check, e2e:critical Playwright trigger, and API-contract argument as the frontend, seo, playwright-critical, and docker jobs in ci.yml. The focused diff confirmed those literals and that the rule still requires the complete gate of the touched surface; no parallel AGENTS.md was added."
+      },
+      "postFixRepairReview": {
+        "modelId": "agent-work-loop-v4",
+        "findingId": "cursor-rule-ci-contract-drift",
+        "status": "verified",
+        "summary": "The alwaysApply local-verification rule now matches ci.yml on the two Docker builds, Caddy-backed SEO check, e2e:critical Playwright trigger, and API-contract argument, while still requiring the full touched-surface gate.",
+        "reason": "The bounded diff and target-owned comparison show the four original contract gaps closed with the same command literals as the frontend, seo, playwright-critical, and docker jobs, the complete-surface gate retained, no AGENTS.md created, and asset-integrity reporting zero findings.",
+        "confidence": "high",
+        "evidenceRefs": [
+          {
+            "kind": "fix-validation",
+            "id": "target-owned-validation"
+          },
+          {
+            "kind": "asset-integrity",
+            "id": "asset-integrity-review"
+          }
+        ]
+      }
+    },
+    {
+      "id": "security-filter-reject-untested",
+      "title": "Rejeites 403 e 413 do filtro de API nao tem teste REST nem log da decisao",
+      "severity": "Medium",
+      "reason": "SecurityBoundaryFilter aborta host invalido, origem CSRF, CSRF invalido (403) e corpo grande (413) via abort() sem logger. BackendResourceTest cobre 401 anonimo e 415 de content-type com CSRF valido no BeforeEach; nao ha classe de teste do filtro nem assert 403/413. CsrfTokenServiceTest e SecurityPolicyTest exercitam ticket e host fora do filtro. Access log declarado desligado. Sem isso, uma mudanca nesses ramos pode passar em verify e um 403 em runtime nao diz qual ramificacao falhou. Runtime nao foi executado nesta revisao.",
+      "dimensionRefs": [
+        "change-validation"
+      ],
+      "subdimensionRefs": [
+        "relevant-check"
+      ],
+      "expectedArtifact": "Test",
+      "expectedOutput": [
+        "BackendResourceTest (ou teste de filtro equivalente) falha 403/413 nos ramos de host, origem, CSRF e corpo, e o abort registra o motivo correlacionavel."
+      ],
+      "aiFixPrompt": "/better-harness fix this issue\n\nEm SecurityBoundaryFilter, faca abort() registrar o status e o problema (host, origem, CSRF, corpo) sem vazar token. Em BackendResourceTest, adicione casos autenticados que esperem 403 para host/origem/CSRF invalidos e 413 para corpo acima do limite, reusando o CSRF valido so nos casos positivos ja existentes.\n\n## Validation\n\n- Rode o teste REST focado do backend que cobre os novos 403/413\n- Confirme que 401 e 415 continuam verdes e que o abort deixa um motivo correlacionavel",
+      "actualOutputRevision": 1,
+      "actualOutput": [
+        {
+          "action": "updated",
+          "artifact": "Code",
+          "name": "SecurityBoundaryFilter abort logging",
+          "scope": "Project",
+          "path": "backend/src/main/java/com/folhea/security/SecurityBoundaryFilter.java",
+          "summary": "abort() now logs status and the problem slug without request headers or CSRF tokens."
+        },
+        {
+          "action": "updated",
+          "artifact": "Test",
+          "name": "BackendResourceTest filter rejects",
+          "scope": "Project",
+          "path": "backend/src/test/java/com/folhea/api/BackendResourceTest.java",
+          "summary": "Added authenticated REST cases for 403 invalid-host, csrf-origin, csrf-invalid and 413 body-too-large."
+        },
+        {
+          "action": "created",
+          "artifact": "Test",
+          "name": "SecurityBoundaryFilterLogTest",
+          "scope": "Project",
+          "path": "backend/src/test/java/com/folhea/security/SecurityBoundaryFilterLogTest.java",
+          "summary": "Asserts rejectLog names status and problem and does not contain a CSRF token."
+        },
+        {
+          "action": "updated",
+          "artifact": "Config",
+          "name": "Test JSON body limit",
+          "scope": "Project",
+          "path": "backend/src/main/resources/application.properties",
+          "summary": "Set %test.folhea.security.max-json-body-bytes=1024 so 413 reaches the filter below the 64K HTTP limit."
+        },
+        {
+          "action": "updated",
+          "artifact": "Document",
+          "name": "Testing strategy filter coverage",
+          "scope": "Project",
+          "path": "docs/testing-strategy.md",
+          "summary": "Documents the 403/413 REST coverage and abort log contract."
+        }
+      ],
+      "assignmentSummary": {
+        "locale": "en",
+        "title": "Filter 403/413 rejects now have REST coverage and a correlatable abort log",
+        "body": "SecurityBoundaryFilter.abort() logs status and the problem slug without leaking the CSRF token. BackendResourceTest now covers authenticated 403 host, origin, and CSRF rejects plus 413 oversized body; 401 and 415 stayed green on the focused Maven run. The test profile uses a 1024-byte JSON limit so the 413 hits the filter rather than the 64K HTTP layer."
+      },
+      "postFixRepairReview": {
+        "modelId": "agent-work-loop-v4",
+        "findingId": "security-filter-reject-untested",
+        "status": "verified",
+        "summary": "Focused REST tests now cover 403 host, origin, and CSRF rejects plus 413 oversized body, while abort logs a correlatable problem slug and 401/415 stay green.",
+        "reason": "The expected 403/413 branches and abort-log contract are present in BackendResourceTest and SecurityBoundaryFilterLogTest, the target-owned Maven run passed 8/8 with WARN lines naming status and problem without tokens, and asset-integrity reported zero findings.",
+        "confidence": "high",
+        "evidenceRefs": [
+          {
+            "kind": "fix-validation",
+            "id": "target-owned-validation"
+          },
+          {
+            "kind": "asset-integrity",
+            "id": "asset-integrity-review"
+          }
+        ]
+      }
+    },
+    {
+      "id": "dashboard-store-rollback-untested",
+      "title": "Rollback otimista do DashboardStore nao e exercitado pelo spec focado",
+      "severity": "Medium",
+      "reason": "dashboard.store.ts aplica atualizacao otimista e reverte em catchError/error para cadastro, edicao, finish, delete e sessao. dashboard.store.spec.ts tem tres casos (selectableBooks, retry de load 500 e stats all) e nao chama addSession, finishBook, deleteBook nem asserta rollback. E2E critico usa API mockada, entao nao fecha esse buraco. Uma regressao no rollback pode passar no Vitest focado. Outro spec de componente nao foi aberto.",
+      "dimensionRefs": [
+        "change-validation"
+      ],
+      "subdimensionRefs": [
+        "relevant-check"
+      ],
+      "expectedArtifact": "Test",
+      "expectedOutput": [
+        "O spec do DashboardStore falha um mutate otimista e confirma que o estado volta ao anterior com o erro de mutacao visivel."
+      ],
+      "aiFixPrompt": "/better-harness fix this issue\n\nEstenda dashboard.store.spec.ts com casos de falha HTTP para addBook, finishBook, deleteBook e addSession: aplique a mutacao otimista, flush 500, e asserta que books/sessions voltam ao estado anterior e setMutationError fica visivel. Nao alargue o store.\n\n## Validation\n\n- Rode o spec do DashboardStore no frontend\n- Confirme que os tres casos atuais continuam verdes e que pelo menos um rollback de mutacao falha se o catchError for removido",
+      "actualOutputRevision": 1,
+      "actualOutput": [
+        {
+          "action": "updated",
+          "artifact": "Test",
+          "name": "DashboardStore rollback spec",
+          "scope": "Project",
+          "path": "frontend/src/app/core/state/dashboard.store.spec.ts",
+          "summary": "Added HTTP 500 cases for addBook, finishBook, deleteBook, and addSession that assert optimistic state, rollback of books/sessions, and a visible mutation error."
+        },
+        {
+          "action": "updated",
+          "artifact": "Document",
+          "name": "Testing strategy DashboardStore coverage",
+          "scope": "Project",
+          "path": "docs/testing-strategy.md",
+          "summary": "Documented the four DashboardStore optimistic-rollback HTTP 500 cases and that the store API was not widened."
+        }
+      ],
+      "assignmentSummary": {
+        "locale": "en",
+        "title": "DashboardStore optimistic rollback is now covered by the focused spec",
+        "body": "dashboard.store.spec.ts now fails HTTP 500 after optimistic addBook, finishBook, deleteBook, and addSession and asserts books/sessions restore with a visible mutation error. The focused Vitest run kept the original three cases green among seven passing tests; removing catchError from addBook failed the rollback assertion, then the store was restored unchanged."
+      },
+      "postFixRepairReview": {
+        "modelId": "agent-work-loop-v4",
+        "findingId": "dashboard-store-rollback-untested",
+        "status": "verified",
+        "summary": "The DashboardStore spec now exercises HTTP 500 optimistic rollback for addBook, finishBook, deleteBook, and addSession, with mutation error visible and the store left unwiden.",
+        "reason": "The Test artifact matches the locked expected output and repair prompt, the focused Vitest run kept the three original cases green among seven passing tests, the catchError-removal diagnostic failed the addBook rollback as required then restored a clean store, and asset-integrity reported zero findings.",
+        "confidence": "high",
+        "evidenceRefs": [
+          {
+            "kind": "fix-validation",
+            "id": "target-owned-validation"
+          },
+          {
+            "kind": "asset-integrity",
+            "id": "asset-integrity-review"
+          }
+        ]
+      }
+    }
+  ]
+}
