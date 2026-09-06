@@ -1,0 +1,104 @@
+package com.folhea.reading;
+
+import com.folhea.book.BookRepository;
+import com.folhea.identity.CurrentUser;
+import com.folhea.shared.ProblemException;
+import io.quarkus.security.Authenticated;
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.PATCH;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.tags.Tag;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+
+@Path("/api/v1/sessions")
+@Authenticated
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+@Tag(name = "Reading sessions")
+public class ReadingSessionResource {
+    @Inject CurrentUser currentUser;
+    @Inject ReadingSessionRepository sessions;
+    @Inject BookRepository books;
+
+    @GET
+    @Operation(summary = "Lista sessões do usuário")
+    public List<SessionResponse> list(@QueryParam("from") LocalDate from, @QueryParam("to") LocalDate to) {
+        var userId = currentUser.get().id;
+        if (from == null && to == null) return sessions.allOwned(userId).stream().map(SessionResponse::from).toList();
+        if (from == null || to == null || from.isAfter(to)) invalid("O período informado é inválido.");
+        return sessions.findOwned(userId, from, to).stream().map(SessionResponse::from).toList();
+    }
+
+    @POST @Transactional
+    @Operation(summary = "Registra uma sessão de leitura")
+    public Response create(CreateSessionRequest request) {
+        var user = currentUser.get();
+        validateProgress(request == null ? null : request.pages(), request == null ? null : request.minutes());
+        if (request.readingDate() == null) invalid("Informe a data da leitura.");
+        ensureBookOwned(user.id, request.bookId());
+        ReadingSessionEntity session = new ReadingSessionEntity();
+        session.userId = user.id;
+        session.bookId = request.bookId();
+        session.readingDate = request.readingDate();
+        session.pages = request.pages();
+        session.minutes = request.minutes();
+        sessions.persist(session);
+        return Response.status(Response.Status.CREATED).entity(SessionResponse.from(session)).build();
+    }
+
+    @PATCH @Path("/{id}") @Transactional
+    public SessionResponse update(@PathParam("id") UUID id, UpdateSessionRequest request) {
+        var user = currentUser.get();
+        ReadingSessionEntity session = findOwned(user.id, id);
+        if (request == null) invalid("Informe ao menos um campo para alterar.");
+        if (request.bookId() != null) { ensureBookOwned(user.id, request.bookId()); session.bookId = request.bookId(); }
+        if (request.readingDate() != null) session.readingDate = request.readingDate();
+        if (request.pages() != null) session.pages = request.pages();
+        if (request.minutes() != null) session.minutes = request.minutes();
+        validateProgress(session.pages, session.minutes);
+        return SessionResponse.from(session);
+    }
+
+    @DELETE @Path("/{id}") @Transactional
+    public Response delete(@PathParam("id") UUID id) { sessions.delete(findOwned(currentUser.get().id, id)); return Response.noContent().build(); }
+
+    private ReadingSessionEntity findOwned(UUID userId, UUID id) {
+        if (id == null) invalid("Identificador de sessão inválido.");
+        ReadingSessionEntity session = sessions.findOwned(userId, id);
+        if (session == null) throw new ProblemException(404, "https://folhea.com.br/problems/session-not-found", "Sessão não encontrada", "Sessão inexistente ou não pertencente ao usuário.");
+        return session;
+    }
+
+    private void ensureBookOwned(UUID userId, UUID bookId) {
+        if (bookId == null || books.findOwned(userId, bookId) == null) {
+            throw new ProblemException(404, "https://folhea.com.br/problems/book-not-found", "Livro não encontrado", "Livro inexistente ou não pertencente ao usuário.");
+        }
+    }
+
+    private static void validateProgress(Integer pages, Integer minutes) {
+        if (pages == null || minutes == null || pages < 0 || minutes < 0 || (pages == 0 && minutes == 0)) {
+            invalid("Informe páginas, minutos ou ambos; os valores não podem ser negativos.");
+        }
+    }
+    private static void invalid(String detail) { throw new ProblemException(400, "https://folhea.com.br/problems/invalid-reading-session", "Sessão de leitura inválida", detail); }
+
+    public record CreateSessionRequest(UUID bookId, LocalDate readingDate, int pages, int minutes) { }
+    public record UpdateSessionRequest(UUID bookId, LocalDate readingDate, Integer pages, Integer minutes) { }
+    public record SessionResponse(UUID id, UUID bookId, LocalDate readingDate, int pages, int minutes) {
+        static SessionResponse from(ReadingSessionEntity session) { return new SessionResponse(session.id, session.bookId, session.readingDate, session.pages, session.minutes); }
+    }
+}

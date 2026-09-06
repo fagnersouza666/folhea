@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: folhea
+      POSTGRES_USER: folhea
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-folhea}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - folhea-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U folhea -d folhea"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  folhea-postgres:
