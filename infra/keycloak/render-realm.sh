@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -eu
 
 template="${KEYCLOAK_REALM_TEMPLATE:-/templates/folhea-realm.template.json}"
@@ -9,6 +9,17 @@ if [ -z "${OIDC_CLIENT_SECRET:-}" ]; then
   exit 1
 fi
 
-export OIDC_CLIENT_SECRET
-envsubst '${OIDC_CLIENT_SECRET}' < "$template" > "$output"
+mkdir -p "$(dirname "$output")"
+# The Keycloak image has no gettext. Build a sed script so the secret is
+# copied literally and never expanded as shell.
+sed_script=$(mktemp)
+trap 'rm -f "$sed_script"' EXIT
+{
+  printf 's/'
+  printf '%s' '${OIDC_CLIENT_SECRET}' | sed 's/[/\\&]/\\&/g'
+  printf '/'
+  printf '%s' "$OIDC_CLIENT_SECRET" | sed 's/[/\\&]/\\&/g'
+  printf '/g\n'
+} > "$sed_script"
+sed -f "$sed_script" "$template" > "$output"
 exec /opt/keycloak/bin/kc.sh "$@"

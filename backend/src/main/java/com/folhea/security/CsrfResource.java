@@ -18,18 +18,19 @@ import java.security.SecureRandom;
 @Produces(MediaType.APPLICATION_JSON)
 public class CsrfResource {
     @Inject CsrfTokenService csrfTokens;
+    @Inject SessionCookieSettings sessionCookies;
     @Inject SecureRandom random;
 
     @GET
     public Response token(@jakarta.ws.rs.core.Context HttpHeaders headers) {
-        Cookie existing = headers.getCookies().get(SessionCookiePolicy.NAME);
+        Cookie existing = headers.getCookies().get(sessionCookies.name());
         String ticket = existing == null || !SessionCookiePolicy.isValidTicket(existing.getValue())
                 ? SessionCookiePolicy.newTicket(random)
                 : existing.getValue();
         String csrf = csrfTokens.getOrIssue(ticket);
         Response.ResponseBuilder response = Response.ok(new CsrfResponse(csrf)).cacheControl(noStore());
         if (existing == null || !ticket.equals(existing.getValue())) {
-            response.cookie(SessionCookiePolicy.issue(ticket));
+            response.cookie(sessionCookies.issue(ticket));
         }
         return response.build();
     }

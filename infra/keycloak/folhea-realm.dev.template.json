@@ -28,10 +28,12 @@
       },
       "redirectUris": [
         "http://localhost:8080/auth/callback",
+        "http://localhost:4200/auth/callback",
         "https://localhost:8443/auth/callback"
       ],
       "webOrigins": [
         "http://localhost:8080",
+        "http://localhost:4200",
         "https://localhost:8443"
       ],
       "protocolMappers": [

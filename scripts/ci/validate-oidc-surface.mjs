@@ -39,7 +39,17 @@ requireText(compose, 'OIDC_PUBLIC_LOGOUT_URL: ${OIDC_PUBLIC_LOGOUT_URL:?', 'Comp
 requireText(compose, 'OIDC_TOKEN_ISSUER: ${OIDC_PUBLIC_ISSUER:?', 'Compose public issuer');
 requireText(compose, 'OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?', 'Compose OIDC client secret');
 requireText(compose, 'KC_HOSTNAME: ${OIDC_PUBLIC_ORIGIN:?', 'Keycloak public hostname');
-requireText(compose, 'render-realm.sh', 'Keycloak realm render entrypoint');
+requireText(compose, '["/bin/bash", "/opt/keycloak/render-realm.sh"]', 'Keycloak realm render entrypoint');
+const renderRealm = read('infra/keycloak/render-realm.sh');
+requireText(renderRealm, 'mkdir -p', 'Keycloak realm import directory must exist before secret substitution');
+assert.ok(!/\benvsubst\b/.test(renderRealm), 'Keycloak image has no gettext; render the realm in bash');
+requireText(renderRealm, 'folhea_render_oidc_secret', 'Keycloak realm secret substitution is a testable helper');
+requireText(renderRealm, 'escaped=${escaped//&/\\\\&}', 'Bash replacement must escape & in OIDC_CLIENT_SECRET');
+requireText(renderRealm, '\\$\\{OIDC_CLIENT_SECRET\\}', 'Keycloak realm secret placeholder');
+const localOverride = read('docker-compose.override.example.yml');
+requireText(localOverride, '127.0.0.1:5433:5432', 'Local Postgres publish for quarkus:dev');
+requireText(localOverride, '127.0.0.1:8180:8080', 'Local Keycloak publish for quarkus:dev');
+requireText(localOverride, 'KC_HOSTNAME: http://localhost:8180', 'Local Keycloak hostname for ng serve OIDC');
 requireText(prodCompose, 'KC_HOSTNAME_STRICT: "true"', 'Production Keycloak hostname strict');
 requireText(prodCompose, 'folhea-realm.prod.template.json', 'Production realm template');
 assert.ok(!/\n\s+ports:/.test(keycloak), 'Keycloak must not publish host ports');
@@ -83,8 +93,15 @@ assert.deepEqual(prodClient.webOrigins, ['https://folhea.com.br'], 'Production w
 assert.ok(!prodClient.redirectUris.some((uri) => uri.includes('localhost')), 'Production realm must not include localhost');
 
 const devClient = assertClient(devRealm, 'Development realm');
-for (const redirectUri of ['http://localhost:8080/auth/callback', 'https://localhost:8443/auth/callback']) {
+for (const redirectUri of [
+  'http://localhost:8080/auth/callback',
+  'http://localhost:4200/auth/callback',
+  'https://localhost:8443/auth/callback'
+]) {
   assert.ok(devClient.redirectUris.includes(redirectUri), `Development redirect URI is missing ${redirectUri}`);
+}
+for (const origin of ['http://localhost:8080', 'http://localhost:4200', 'https://localhost:8443']) {
+  assert.ok(devClient.webOrigins.includes(origin), `Development web origin is missing ${origin}`);
 }
 
 console.log('OIDC Compose/Caddy surface: valid');

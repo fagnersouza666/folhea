@@ -7,14 +7,17 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Optional;
 
 /** Provides one application clock so date-based rules can be replaced in tests. */
 @ApplicationScoped
 public class ClockProducer {
     @Produces
     @ApplicationScoped
-    Clock systemClock(@ConfigProperty(name = "folhea.clock.fixed-instant", defaultValue = "") String fixedInstant) {
-        if (fixedInstant == null || fixedInstant.isBlank()) return Clock.systemUTC();
-        return Clock.fixed(Instant.parse(fixedInstant), ZoneOffset.UTC);
+    Clock systemClock(@ConfigProperty(name = "folhea.clock.fixed-instant") Optional<String> fixedInstant) {
+        return fixedInstant
+                .filter(value -> !value.isBlank())
+                .map(value -> Clock.fixed(Instant.parse(value), ZoneOffset.UTC))
+                .orElseGet(Clock::systemUTC);
     }
 }

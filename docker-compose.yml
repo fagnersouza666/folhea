@@ -26,7 +26,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.3@sha256:88943b6ad06d6293a239f0dfca5acec64218c9b3ab327bf9c936acf408a6ae3b
     restart: unless-stopped
-    entrypoint: ["/bin/sh", "/opt/keycloak/render-realm.sh"]
+    entrypoint: ["/bin/bash", "/opt/keycloak/render-realm.sh"]
     command: ["start-dev", "--http-port=8080", "--http-management-port=9000", "--import-realm"]
     environment:
       KC_DB: postgres

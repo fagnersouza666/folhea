@@ -1,6 +1,8 @@
 package com.folhea.security;
 
 import io.quarkus.oidc.AuthorizationCodeTokens;
+import jakarta.annotation.Priority;
+import jakarta.enterprise.inject.Alternative;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -10,10 +12,16 @@ import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ServerTokenStateManagerTest {
+    @Test void replacesDefaultQuarkusCookieTokenStateManager() {
+        assertNotNull(ServerTokenStateManager.class.getAnnotation(Alternative.class));
+        assertEquals(1, ServerTokenStateManager.class.getAnnotation(Priority.class).value());
+    }
+
     @Test void browserReferenceDoesNotContainAuthorizationTokens() {
         ServerTokenStateManager manager = new ServerTokenStateManager();
         AuthorizationCodeTokens original = new AuthorizationCodeTokens(

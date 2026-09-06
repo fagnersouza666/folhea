@@ -11,7 +11,7 @@ Frontend (`frontend/package.json`), backend (`backend/pom.xml`) e OpenAPI
 chore, teste ou infra sem mudança de produto não incrementam. Detalhe em
 `.cursor/rules/versionamento.mdc`.
 
-Versão atual: **0.3.0**
+Versão atual: **0.3.2**
 
 ## Backend
 
@@ -39,6 +39,17 @@ cd backend
 set -a && . ../.env && set +a
 ./mvnw quarkus:dev
 ```
+
+O Postgres do Compose fica na rede Docker, sem porta no host. O `quarkus:dev`
+usa `localhost`. Nesta máquina o `:5432` costuma ser o PostgreSQL do sistema, não
+o container `folhea-postgres-1`. O perfil `%dev` usa `jdbc:postgresql://localhost:5433/folhea` por padrão, a porta
+do override local. `localhost:5432` costuma ser o PostgreSQL do sistema. O mesmo
+override publica o Keycloak em `127.0.0.1:8180` e define `KC_HOSTNAME` para
+`http://localhost:8180`, para o clique em Entrar abrir o login OIDC sem Caddy.
+
+O perfil `%dev` não define `folhea.clock.fixed-instant`; o relógio da aplicação
+é o UTC do sistema. Só o perfil `%test` fixa o instante para testes
+determinísticos.
 
 A raiz da API é `/api/v1`; o OpenAPI fica em `/api/openapi` em dev/test (em
 produção o spec é desligado no Quarkus e bloqueado no Caddy). Configure Redis,
@@ -73,6 +84,21 @@ Se `java -version` mostrar 21, o Maven usa o JDK errado. Exporte o JDK 25
 antes de `./mvnw` (em Debian/Ubuntu/Pop!_OS: `/usr/lib/jvm/java-25-openjdk-amd64`).
 
 ### Frontend
+
+Com o BFF em `http://localhost:8080` (`./mvnw quarkus:dev`), o hot reload local é:
+
+```bash
+cd frontend
+npm start
+```
+
+O `ng serve` na porta 4200 encaminha `/api` e `/auth` ao Quarkus, como o Caddy
+faz na borda pública, e envia `X-Forwarded-Host: localhost:4200` para o
+callback OIDC voltar à SPA. A tela de entrar é `/entrar`; `/auth/login` inicia o
+fluxo OIDC no BFF e não é rota Angular. O perfil `%dev` fala com o Keycloak em
+`http://localhost:8180` (porta publicada pelo override local). Crie um usuário
+no realm `folhea` pelo console em `http://localhost:8180` (credenciais
+`KEYCLOAK_ADMIN_*` do `.env`).
 
 ```bash
 cd frontend

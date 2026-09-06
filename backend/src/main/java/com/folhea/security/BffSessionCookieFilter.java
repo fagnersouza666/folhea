@@ -19,6 +19,7 @@ import java.security.SecureRandom;
 public class BffSessionCookieFilter implements ContainerResponseFilter {
     @Inject SecurityIdentity identity;
     @Inject CsrfTokenService csrfTokens;
+    @Inject SessionCookieSettings sessionCookies;
     @Inject SecureRandom random;
 
     @Override
@@ -26,15 +27,15 @@ public class BffSessionCookieFilter implements ContainerResponseFilter {
         String path = request.getUriInfo().getPath();
         if (path != null && path.startsWith("/")) path = path.substring(1);
         if (path == null) return;
-        Cookie current = request.getCookies().get(SessionCookiePolicy.NAME);
+        Cookie current = request.getCookies().get(sessionCookies.name());
         if (path.equals("auth/callback") && identity != null && !identity.isAnonymous()) {
             String next = SessionCookiePolicy.newTicket(random);
             if (current != null && SessionCookiePolicy.isValidTicket(current.getValue())) csrfTokens.revoke(current.getValue());
             csrfTokens.getOrIssue(next);
-            response.getHeaders().add(HttpHeaders.SET_COOKIE, SessionCookiePolicy.issue(next));
+            response.getHeaders().add(HttpHeaders.SET_COOKIE, sessionCookies.issue(next));
         } else if (path.equals("auth/logout")) {
             if (current != null) csrfTokens.revoke(current.getValue());
-            response.getHeaders().add(HttpHeaders.SET_COOKIE, SessionCookiePolicy.clear());
+            response.getHeaders().add(HttpHeaders.SET_COOKIE, sessionCookies.clear());
         }
     }
 }

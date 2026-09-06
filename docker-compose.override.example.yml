@@ -1,0 +1,26 @@
+# Local-only: publish Postgres and Keycloak on the host so `quarkus:dev`
+# and `ng serve` can reach them. Copy to docker-compose.override.yml
+# (gitignored). Do not use in production.
+# Host 5432 is often a system PostgreSQL; 5433 avoids that clash.
+# Keycloak 8180 is the %dev OIDC discovery and browser authorization host.
+# `default` is required for host port publish; Compose `network_mode` of only
+# `private` leaves HostConfig.PortBindings unused.
+# KC_HOSTNAME must match the published URL. The base compose uses
+# OIDC_PUBLIC_ORIGIN (Caddy :8443); this override is for Maven + ng serve
+# without Caddy.
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5433:5432"
+    networks:
+      - private
+      - default
+  keycloak:
+    ports:
+      - "127.0.0.1:8180:8080"
+    environment:
+      KC_HOSTNAME: http://localhost:8180
+    networks:
+      - private
+      - default

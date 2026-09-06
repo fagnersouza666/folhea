@@ -7,6 +7,7 @@ import com.folhea.reading.ReadingSessionRepository;
 import com.folhea.reading.ReadingSessionResource;
 import com.folhea.security.CsrfTokenService;
 import com.folhea.security.SessionCookiePolicy;
+import com.folhea.security.SessionCookieSettings;
 import com.folhea.security.store.TokenStateStore;
 import com.folhea.shared.ProblemException;
 import io.quarkus.security.Authenticated;
@@ -46,6 +47,7 @@ public class UserResource {
     @Inject BookRepository books;
     @Inject ReadingSessionRepository sessions;
     @Inject CsrfTokenService csrfTokens;
+    @Inject SessionCookieSettings sessionCookies;
     @Inject TokenStateStore tokenStateStore;
 
     @GET
@@ -83,11 +85,11 @@ public class UserResource {
         users.delete(user);
         revokeSession(headers);
         LOG.infof("Account deleted userId=%s", userId);
-        return Response.noContent().cookie(SessionCookiePolicy.clear()).build();
+        return Response.noContent().cookie(sessionCookies.clear()).build();
     }
 
     private void revokeSession(HttpHeaders headers) {
-        Cookie sessionCookie = headers.getCookies().get(SessionCookiePolicy.NAME);
+        Cookie sessionCookie = headers.getCookies().get(sessionCookies.name());
         if (sessionCookie == null || !SessionCookiePolicy.isValidTicket(sessionCookie.getValue())) return;
         String ticket = sessionCookie.getValue();
         csrfTokens.revoke(ticket);

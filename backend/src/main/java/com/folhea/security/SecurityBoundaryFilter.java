@@ -29,6 +29,7 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
     @Inject SecurityIdentity identity;
     @Inject SecurityPolicy policy;
     @Inject CsrfTokenService csrfTokens;
+    @Inject SessionCookieSettings sessionCookies;
 
     @Inject
     @ConfigProperty(name = "folhea.security.max-json-body-bytes", defaultValue = "65536")
@@ -85,7 +86,7 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
     }
 
     private boolean validCsrf(ContainerRequestContext context) {
-        Cookie sessionCookie = context.getCookies().get(SessionCookiePolicy.NAME);
+        Cookie sessionCookie = context.getCookies().get(sessionCookies.name());
         String ticket = sessionCookie == null ? null : sessionCookie.getValue();
         String token = context.getHeaderString(CSRF_HEADER);
         return csrfTokens.isValid(ticket, token);

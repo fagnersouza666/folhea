@@ -46,6 +46,22 @@ class OidcConfigurationTest {
     }
 
     @Test
+    void developmentProfileEnablesAuthorizationCodeFlowOverHttp() {
+        assertEquals("true", CONFIG.getProperty("%dev.quarkus.oidc.enabled"));
+        assertEquals("false", CONFIG.getProperty("%test.quarkus.oidc.enabled"));
+        assertEquals("true", CONFIG.getProperty("%prod.quarkus.oidc.enabled"));
+        assertEquals("false", CONFIG.getProperty("%dev.quarkus.oidc.authentication.force-redirect-https-scheme"));
+        assertEquals("false", CONFIG.getProperty("%dev.quarkus.oidc.authentication.cookie-force-secure"));
+        assertEquals("false", CONFIG.getProperty("%dev.folhea.security.cookie-secure"));
+        assertEquals("http://localhost:8180/realms/folhea", CONFIG.getProperty("%dev.quarkus.oidc.token.issuer"));
+        assertEquals(
+                "http://localhost:8180/realms/folhea/protocol/openid-connect/auth",
+                CONFIG.getProperty("%dev.quarkus.oidc.authorization-path"));
+        assertTrue(CONFIG.getProperty("%dev.folhea.security.allowed-origins").contains("http://localhost:4200"));
+        assertTrue(CONFIG.getProperty("%dev.folhea.security.allowed-origins").contains("http://localhost:8080"));
+    }
+
+    @Test
     void tokenValidationRequiresPublicIssuerAudienceAzpAndSubject() {
         assertEquals("${OIDC_TOKEN_ISSUER:https://folhea.com.br/realms/folhea}",
                 CONFIG.getProperty("quarkus.oidc.token.issuer"));

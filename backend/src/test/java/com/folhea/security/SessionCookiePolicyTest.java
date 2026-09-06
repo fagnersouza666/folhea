@@ -22,4 +22,19 @@ class SessionCookiePolicyTest {
         assertTrue(cookie.toString().startsWith("__Host-folhea_session="));
         assertFalse(cookie.toString().contains("Domain="));
     }
+
+    @Test void httpDevelopmentCookieDropsHostPrefixAndSecureFlag() {
+        String ticket = SessionCookiePolicy.newTicket(new SecureRandom());
+        var cookie = SessionCookiePolicy.issue(ticket, false);
+
+        assertEquals("folhea_session", SessionCookiePolicy.cookieName(false));
+        assertEquals("folhea_session", cookie.getName());
+        assertEquals("/", cookie.getPath());
+        assertFalse(cookie.isSecure());
+        assertTrue(cookie.isHttpOnly());
+        assertEquals(jakarta.ws.rs.core.NewCookie.SameSite.LAX, cookie.getSameSite());
+        assertFalse(cookie.toString().contains("Domain="));
+        assertFalse(SessionCookiePolicy.clear(false).isSecure());
+        assertEquals("folhea_session", SessionCookiePolicy.clear(false).getName());
+    }
 }

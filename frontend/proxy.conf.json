@@ -1,0 +1,20 @@
+{
+  "/api": {
+    "target": "http://localhost:8080",
+    "secure": false,
+    "headers": {
+      "X-Forwarded-Host": "localhost:4200",
+      "X-Forwarded-Proto": "http",
+      "X-Forwarded-Port": "4200"
+    }
+  },
+  "/auth": {
+    "target": "http://localhost:8080",
+    "secure": false,
+    "headers": {
+      "X-Forwarded-Host": "localhost:4200",
+      "X-Forwarded-Proto": "http",
+      "X-Forwarded-Port": "4200"
+    }
+  }
+}

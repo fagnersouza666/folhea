@@ -8,6 +8,7 @@ CLAUDE.md
 CLAUDE.local.md
 GEMINI.md
 .env
+docker-compose.override.yml
 backups/
 *.dump
 *.dump.gz

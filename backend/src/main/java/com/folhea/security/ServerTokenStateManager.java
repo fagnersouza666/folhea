@@ -8,7 +8,9 @@ import io.quarkus.oidc.OidcTenantConfig;
 import io.quarkus.oidc.TokenStateManager;
 import io.smallrye.mutiny.Uni;
 import io.vertx.ext.web.RoutingContext;
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Inject;
 
 import java.security.SecureRandom;
@@ -20,6 +22,8 @@ import java.util.Base64;
  * default Quarkus manager encrypts token state into a cookie; this manager
  * keeps access and refresh tokens out of browser storage entirely.
  */
+@Alternative
+@Priority(1)
 @ApplicationScoped
 public class ServerTokenStateManager implements TokenStateManager {
     private static final int TOKEN_REFERENCE_BYTES = 32;
