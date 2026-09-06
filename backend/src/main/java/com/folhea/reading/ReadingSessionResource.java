@@ -58,8 +58,8 @@ public class ReadingSessionResource {
         session.userId = user.id;
         session.bookId = request.bookId();
         session.readingDate = request.readingDate();
-        session.pages = request.pages();
-        session.minutes = request.minutes();
+        session.pages = request.pages() == null ? 0 : request.pages();
+        session.minutes = request.minutes() == null ? 0 : request.minutes();
         sessions.persist(session);
         return Response.status(Response.Status.CREATED).entity(SessionResponse.from(session)).build();
     }
@@ -94,7 +94,9 @@ public class ReadingSessionResource {
     }
 
     private static void validateProgress(Integer pages, Integer minutes) {
-        if (pages == null || minutes == null || pages < 0 || minutes < 0 || (pages == 0 && minutes == 0)) {
+        int pageCount = pages == null ? 0 : pages;
+        int minuteCount = minutes == null ? 0 : minutes;
+        if (pageCount < 0 || minuteCount < 0 || (pageCount == 0 && minuteCount == 0)) {
             invalid("Informe páginas, minutos ou ambos; os valores não podem ser negativos.");
         }
     }
@@ -103,8 +105,8 @@ public class ReadingSessionResource {
     public record CreateSessionRequest(
             @NotNull(message = "Informe o livro da sessão.") UUID bookId,
             @NotNull(message = "Informe a data da leitura.") LocalDate readingDate,
-            @NotNull(message = "Informe páginas ou minutos.") @Min(value = 0, message = "Páginas não podem ser negativas.") Integer pages,
-            @NotNull(message = "Informe páginas ou minutos.") @Min(value = 0, message = "Minutos não podem ser negativos.") Integer minutes) { }
+            @Min(value = 0, message = "Páginas não podem ser negativas.") Integer pages,
+            @Min(value = 0, message = "Minutos não podem ser negativos.") Integer minutes) { }
 
     public record UpdateSessionRequest(
             UUID bookId,
