@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { DashboardStore } from '../../core/state/dashboard.store';
 import { StatsPeriod } from '../../core/models/models';
 import { addDays } from '../../core/state/reading-statistics';
+import { AnalyticsService } from '../../core/analytics/analytics.service';
 
 @Component({
   selector: 'folhea-progress',
@@ -23,8 +24,10 @@ import { addDays } from '../../core/state/reading-statistics';
 })
 export class ProgressComponent {
   readonly store = inject(DashboardStore);
+  private readonly analytics = inject(AnalyticsService);
   readonly periods: { id: StatsPeriod; label: string }[] = [{ id: 'today', label: 'Hoje' }, { id: '7', label: '7 dias' }, { id: '30', label: '30 dias' }, { id: 'all', label: 'Tudo' }];
   readonly weekDays = computed(() => Array.from({ length: 7 }, (_, index) => { const date = addDays(this.store.today(), index - 6); return { date, read: this.store.sessions().some((session) => session.readingDate === date && (session.pages > 0 || session.minutes > 0)), label: new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(new Date(`${date}T12:00:00`)) }; }));
+  constructor() { this.analytics.track('stats_viewed', { screen: 'progress' }); }
   formatMinutes(minutes: number): string { return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60 ? `${minutes % 60}min` : ''}` : `${minutes}min`; }
   formatDate(date: string): string { return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(new Date(`${date}T12:00:00`)); }
 }

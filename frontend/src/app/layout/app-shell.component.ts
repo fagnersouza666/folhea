@@ -4,6 +4,7 @@ import { AuthService } from '../core/auth/auth.service';
 import { DashboardStore } from '../core/state/dashboard.store';
 import { SeoService } from '../core/services/seo.service';
 import { PwaService } from '../core/services/pwa.service';
+import { AnalyticsService } from '../core/analytics/analytics.service';
 
 @Component({
   selector: 'folhea-app-shell', standalone: true, imports: [RouterOutlet, RouterLink, RouterLinkActive], changeDetection: ChangeDetectionStrategy.OnPush,
@@ -33,5 +34,12 @@ export class AppShellComponent {
   readonly auth = inject(AuthService);
   readonly store = inject(DashboardStore);
   readonly pwa = inject(PwaService);
-  constructor() { this.store.load(); inject(SeoService).update('Folhea — Seu progresso', 'Área pessoal do Folhea.', '/app', false); }
+  private readonly analytics = inject(AnalyticsService);
+  constructor() {
+    this.store.load();
+    inject(SeoService).update('Folhea — Seu progresso', 'Área pessoal do Folhea.', '/app', false);
+    if (typeof window !== 'undefined') window.addEventListener('appinstalled', this.onInstalled);
+  }
+
+  private readonly onInstalled = (): void => this.analytics.track('pwa_installed');
 }

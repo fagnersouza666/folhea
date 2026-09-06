@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { DashboardStore } from '../../core/state/dashboard.store';
 import { CardGeneratorService, CardTemplate } from '../../core/services/card-generator.service';
 import { StatsPeriod } from '../../core/models/models';
+import { AnalyticsService } from '../../core/analytics/analytics.service';
 
 @Component({
   selector: 'folhea-cards',
@@ -31,6 +32,7 @@ import { StatsPeriod } from '../../core/models/models';
 export class CardsComponent implements OnDestroy {
   readonly store = inject(DashboardStore);
   private readonly generator = inject(CardGeneratorService);
+  private readonly analytics = inject(AnalyticsService);
   readonly periods: { id: StatsPeriod; label: string }[] = [{ id: 'today', label: 'Hoje' }, { id: '7', label: '7 dias' }, { id: '30', label: '30 dias' }, { id: 'all', label: 'Tudo' }];
   readonly templates: { id: CardTemplate; label: string }[] = [{ id: 'minimal', label: 'Minimal' }, { id: 'photo', label: 'Foto' }, { id: 'dark', label: 'Dark' }];
   readonly metrics = computed(() => { const stats = this.store.stats(); const dashboard = this.store.dashboard(); return { streak: stats?.currentStreakDays ?? dashboard?.currentStreakDays ?? 0, pages: stats?.pages ?? dashboard?.week.pages ?? 0, minutes: stats?.minutes ?? dashboard?.week.minutes ?? 0, booksFinished: stats?.booksFinished ?? dashboard?.week.booksFinished ?? 0 }; });
@@ -44,10 +46,11 @@ export class CardsComponent implements OnDestroy {
   error: string | null = null;
   private blob: Blob | null = null;
   private blobUrl: string | null = null;
+  private cardCreatedTracked = false;
 
   get periodLabel(): string { return this.periods.find((period) => period.id === this.store.period())?.label ?? '7 dias'; }
-  selectPeriod(period: StatsPeriod): void { this.store.selectPeriod(period); }
-  chooseTemplate(template: CardTemplate): void { this.template = template; this.blob = null; }
+  selectPeriod(period: StatsPeriod): void { this.store.selectPeriod(period); this.blob = null; this.cardCreatedTracked = false; }
+  chooseTemplate(template: CardTemplate): void { this.template = template; this.blob = null; this.cardCreatedTracked = false; }
   selectBackground(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -58,6 +61,7 @@ export class CardsComponent implements OnDestroy {
     this.backgroundUrl = URL.createObjectURL(file);
     this.template = 'photo';
     this.blob = null;
+    this.cardCreatedTracked = false;
     this.error = null;
   }
 
@@ -70,6 +74,7 @@ export class CardsComponent implements OnDestroy {
     link.href = this.objectUrl(blob);
     link.download = 'folhea-card.png';
     link.click();
+    this.analytics.track('card_downloaded');
   }
 
   async share(): Promise<void> {
@@ -78,9 +83,10 @@ export class CardsComponent implements OnDestroy {
     const file = new File([blob], 'folhea-card.png', { type: 'image/png' });
     const canShare = typeof navigator.share === 'function' && (!navigator.canShare || navigator.canShare({ files: [file] }));
     if (canShare) {
-      try { await navigator.share({ title: 'Meu progresso no Folhea', text: 'Cada página conta.', files: [file] }); return; } catch (error) { if (error instanceof DOMException && error.name === 'AbortError') return; }
+      try { await navigator.share({ title: 'Meu progresso no Folhea', text: 'Cada página conta.', files: [file] }); this.analytics.track('card_shared', { method: 'native' }); return; } catch (error) { if (error instanceof DOMException && error.name === 'AbortError') return; }
     }
     await this.download();
+    this.analytics.track('card_shared', { method: 'download' });
   }
 
   ngOnDestroy(): void { if (this.backgroundUrl) URL.revokeObjectURL(this.backgroundUrl); if (this.blobUrl) URL.revokeObjectURL(this.blobUrl); }
@@ -89,7 +95,11 @@ export class CardsComponent implements OnDestroy {
     if (this.blob) return this.blob;
     this.busy = true;
     this.error = null;
-    try { this.blob = await this.generator.render({ ...this.metrics(), period: this.periodLabel }, { template: this.template, background: this.background, cropX: this.cropX, cropY: this.cropY, overlay: this.overlay }); return this.blob; }
+    try {
+      this.blob = await this.generator.render({ ...this.metrics(), period: this.periodLabel }, { template: this.template, background: this.background, cropX: this.cropX, cropY: this.cropY, overlay: this.overlay });
+      if (!this.cardCreatedTracked) { this.analytics.track('card_created', { source: 'cards' }); this.cardCreatedTracked = true; }
+      return this.blob;
+    }
     catch { this.error = 'Não foi possível gerar o card neste dispositivo.'; return null; }
     finally { this.busy = false; }
   }

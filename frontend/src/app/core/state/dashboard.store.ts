@@ -118,7 +118,11 @@ export class DashboardStore {
     this.booksState.update((books) => [optimistic, ...books]);
     this.syncCurrentBook();
     this.api.createBook({ title, author: author || undefined }).subscribe({
-      next: (book) => { this.booksState.update((books) => books.map((item) => item.id === optimistic.id ? { ...optimistic, ...book } : item)); this.syncCurrentBook(); },
+      next: (book) => {
+        this.booksState.update((books) => books.map((item) => item.id === optimistic.id ? { ...optimistic, ...book } : item));
+        this.syncCurrentBook();
+        this.analytics.track('book_created');
+      },
       error: (error: unknown) => { this.booksState.update((books) => books.filter((item) => item.id !== optimistic.id)); this.syncCurrentBook(); this.setMutationError(error, 'Não foi possível cadastrar o livro.'); }
     });
     return optimistic;
@@ -138,7 +142,7 @@ export class DashboardStore {
     this.booksState.update((books) => books.map((book) => book.id === id ? { ...book, status: 'FINISHED', finishedOn } : book));
     this.syncCurrentBook();
     this.api.finishBook(id, finishedOn).subscribe({
-      next: (book) => { this.booksState.update((books) => books.map((item) => item.id === id ? { ...item, ...book } : item)); this.syncCurrentBook(); },
+      next: (book) => { this.booksState.update((books) => books.map((item) => item.id === id ? { ...item, ...book } : item)); this.syncCurrentBook(); this.analytics.track('book_finished'); },
       error: (error: unknown) => { this.booksState.set(previous); this.syncCurrentBook(); this.setMutationError(error, 'Não foi possível finalizar o livro.'); }
     });
   }
@@ -148,7 +152,7 @@ export class DashboardStore {
     this.booksState.update((books) => books.map((book) => book.id === id ? { ...book, status: 'READING', finishedOn: undefined } : book));
     this.syncCurrentBook();
     this.api.reopenBook(id).subscribe({
-      next: (book) => { this.booksState.update((books) => books.map((item) => item.id === id ? { ...item, ...book } : item)); this.syncCurrentBook(); },
+      next: (book) => { this.booksState.update((books) => books.map((item) => item.id === id ? { ...item, ...book } : item)); this.syncCurrentBook(); this.analytics.track('book_reopened'); },
       error: (error: unknown) => { this.booksState.set(previous); this.syncCurrentBook(); this.setMutationError(error, 'Não foi possível reabrir o livro.'); }
     });
   }
@@ -171,7 +175,10 @@ export class DashboardStore {
     this.recalculateDashboard();
     this.calculateVisibleStats();
     this.api.createSession(draft).subscribe({
-      next: (session) => this.sessionsState.update((sessions) => sessions.map((item) => item.id === optimistic.id ? { ...optimistic, ...session } : item)),
+      next: (session) => {
+        this.sessionsState.update((sessions) => sessions.map((item) => item.id === optimistic.id ? { ...optimistic, ...session } : item));
+        this.analytics.track('reading_session_created', { pages: draft.pages, minutes: draft.minutes });
+      },
       error: (error: unknown) => { this.sessionsState.update((sessions) => sessions.filter((item) => item.id !== optimistic.id)); this.recalculateDashboard(); this.calculateVisibleStats(); this.setMutationError(error, 'Não foi possível registrar a leitura.'); }
     });
     return optimistic;
@@ -183,7 +190,10 @@ export class DashboardStore {
     this.recalculateDashboard();
     this.calculateVisibleStats();
     this.api.updateSession(id, patch).subscribe({
-      next: (session) => this.sessionsState.update((sessions) => sessions.map((item) => item.id === id ? { ...item, ...session } : item)),
+      next: (session) => {
+        this.sessionsState.update((sessions) => sessions.map((item) => item.id === id ? { ...item, ...session } : item));
+        this.analytics.track('reading_session_updated', { pages: patch.pages, minutes: patch.minutes });
+      },
       error: (error: unknown) => { this.sessionsState.set(previous); this.recalculateDashboard(); this.calculateVisibleStats(); this.setMutationError(error, 'Não foi possível editar a sessão.'); }
     });
   }
@@ -194,6 +204,7 @@ export class DashboardStore {
     this.recalculateDashboard();
     this.calculateVisibleStats();
     this.api.deleteSession(id).subscribe({
+      next: () => this.analytics.track('reading_session_deleted'),
       error: (error: unknown) => { this.sessionsState.set(previous); this.recalculateDashboard(); this.calculateVisibleStats(); this.setMutationError(error, 'Não foi possível excluir a sessão.'); }
     });
   }

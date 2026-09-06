@@ -92,7 +92,9 @@ jobs:
       - run: npm run lint
       - run: npm run build -- --configuration production
       - run: npm run build:ssg -- --configuration production
-      - run: npm run test -- --run
+      - run: npm run test:coverage
+      - name: Validate frontend/backend API contract
+        run: node ../scripts/ci/validate-api-contract.mjs contract-report.txt
       - name: Upload frontend test evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -101,6 +103,7 @@ jobs:
           path: |
             frontend/coverage/
             frontend/dist/
+            frontend/contract-report.txt
           if-no-files-found: ignore
           retention-days: 14
 
@@ -129,6 +132,7 @@ jobs:
           path: |
             backend/target/surefire-reports/
             backend/target/failsafe-reports/
+            backend/target/surefire-reports/*.xml
           if-no-files-found: ignore
           retention-days: 14
 

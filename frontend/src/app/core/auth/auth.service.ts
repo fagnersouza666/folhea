@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../api/api-client.service';
 import { User } from '../models/models';
+import { AnalyticsService } from '../analytics/analytics.service';
 
 /**
  * The browser never owns an access token. Authentication is represented by
@@ -13,6 +14,7 @@ import { User } from '../models/models';
 export class AuthService {
   private readonly api = inject(ApiClient);
   private readonly router = inject(Router);
+  private readonly analytics = inject(AnalyticsService);
   private readonly userState = signal<User | null>(null);
   private readonly loadingState = signal(false);
   private readonly initializedState = signal(false);
@@ -44,9 +46,11 @@ export class AuthService {
    * identity provider is configured yet; it does not persist credentials.
    */
   signIn(email: string): void {
+    const isNewAccount = this.userState() === null;
     this.userState.set({ id: 'session-user', email, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo' });
     this.initializedState.set(true);
     this.errorState.set(null);
+    if (isNewAccount) this.analytics.track('account_created');
     void this.router.navigate(['/app/inicio']);
   }
 

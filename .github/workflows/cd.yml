@@ -1,0 +1,98 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+  JAVA_VERSION: '25'
+
+jobs:
+  release:
+    name: build release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Frontend lint and unit tests
+        run: |
+          npm run lint
+          npm run test -- --run
+        working-directory: frontend
+      - name: Generate production and SSG bundles
+        run: |
+          npm run build -- --configuration production
+          npm run build:ssg -- --configuration production
+        working-directory: frontend
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - name: Backend build and tests
+        run: ./mvnw -B clean verify
+        working-directory: backend
+      - name: Build Docker image
+        if: hashFiles('infra/Dockerfile') != ''
+        run: docker build --file infra/Dockerfile --tag folhea:${{ github.sha }} .
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence
+          path: |
+            frontend/dist/
+            frontend/coverage/
+            backend/target/surefire-reports/
+            backend/target/failsafe-reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  deploy:
+    name: deploy production
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger production deployment
+        env:
+          DEPLOY_HOOK: ${{ secrets.PRODUCTION_DEPLOY_HOOK }}
+        if: env.DEPLOY_HOOK != ''
+        run: curl --fail --silent --show-error --retry 2 -X POST "$DEPLOY_HOOK"
+      - name: Explain local deployment contract
+        env:
+          DEPLOY_HOOK: ${{ secrets.PRODUCTION_DEPLOY_HOOK }}
+        if: env.DEPLOY_HOOK == ''
+        run: echo 'PRODUCTION_DEPLOY_HOOK is not configured; release artifacts were built but no deployment was triggered.'
+
+  health-check:
+    name: production health check
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Verify liveness and readiness
+        env:
+          HEALTHCHECK_URL: ${{ vars.PRODUCTION_HEALTH_URL }}
+          HEALTHCHECK_PATHS: ${{ vars.PRODUCTION_HEALTH_PATHS || '/q/health/live,/q/health/ready' }}
+        if: env.HEALTHCHECK_URL != ''
+        run: node scripts/ci/health-check.mjs
+      - name: Explain health-check contract
+        env:
+          HEALTHCHECK_URL: ${{ vars.PRODUCTION_HEALTH_URL }}
+        if: env.HEALTHCHECK_URL == ''
+        run: echo 'PRODUCTION_HEALTH_URL is not configured; configure it to make deployment health checks blocking.'

@@ -27,6 +27,11 @@ Os testes de domínio devem cobrir explicitamente:
 Casos de data devem usar um relógio injetável e timezone explícito. Assim, o
 resultado não depende do fuso horário ou do horário do runner do CI.
 
+Os cenários E2E usam Playwright com fixtures em memória. A fixture intercepta a
+API em `/api/v1/**` e mantém livros e sessões em estado isolado por teste; não
+há dependência de serviços externos para validar a jornada crítica. O relatório
+Playwright inclui HTML, JUnit, trace e evidências de falha.
+
 ## Contratos do CI
 
 Cada comando abaixo deve retornar código diferente de zero em caso de falha:
@@ -36,7 +41,9 @@ frontend: npm ci && npm run lint
 frontend: npm run build -- --configuration production
 frontend: npm run build:ssg -- --configuration production
 frontend: npm run test -- --run
+frontend: npm run test:coverage
 frontend: node ../scripts/ci/validate-seo.mjs dist seo-report/seo-validation.txt
+frontend: node ../scripts/ci/validate-api-contract.mjs contract-report.txt
 backend:  ./mvnw -B clean verify
 e2e:      npm run e2e:critical
 docker:   docker build -f infra/Dockerfile .
@@ -55,6 +62,11 @@ job disponível falho, cancelado ou interrompido deixa o gate vermelho, e o
 detector também é obrigatório. Isso permite a entrega incremental do monorepo
 sem transformar diretórios ausentes em falhas de setup/cache/build, mantendo a
 execução completa assim que cada contrato estiver presente.
+
+O job frontend também valida a correspondência entre métodos do client Angular
+e resources Quarkus. Se `OPENAPI_FILE` ou `OPENAPI_URL` estiver definido, o
+validador confere os mesmos paths no documento OpenAPI. A cobertura V8 do
+Vitest e os relatórios JUnit/Surefire são publicados como artefatos.
 
 ## SEO e HTTP
 

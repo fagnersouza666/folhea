@@ -5,6 +5,12 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     setupFiles: ['./src/test-setup.ts'],
-    include: ['src/**/*.spec.ts']
+    include: ['src/**/*.spec.ts'],
+    coverage: {
+      provider: 'v8',
+      reportsDirectory: './coverage',
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.spec.ts', 'src/main.ts', 'src/main.server.ts', 'src/server.ts']
+    }
   }
 });
