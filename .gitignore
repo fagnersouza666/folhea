@@ -1,0 +1,9 @@
+# Local Gas Town and agent runtime state.
+.beads/
+.runtime/
+.claude/
+.opencode/
+.logs/
+CLAUDE.md
+CLAUDE.local.md
+GEMINI.md

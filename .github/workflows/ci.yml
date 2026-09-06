@@ -1,0 +1,166 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+  JAVA_VERSION: '25'
+
+jobs:
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: test -f package.json && test -f package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build -- --configuration production
+      - run: npm run build:ssg -- --configuration production
+      - run: npm run test -- --run
+      - name: Upload frontend test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-evidence
+          path: |
+            frontend/coverage/
+            frontend/dist/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  backend:
+    name: backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - run: test -x mvnw
+      - run: ./mvnw -B clean verify
+      - name: Upload backend test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-evidence
+          path: |
+            backend/target/surefire-reports/
+            backend/target/failsafe-reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  seo:
+    name: seo
+    runs-on: ubuntu-latest
+    needs: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Download SSG artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-test-evidence
+          path: frontend
+      - name: Serve SSG output for HTTP checks
+        run: |
+          mkdir -p seo-report
+          npx --yes serve frontend/dist --listen 4173 > seo-report/server.log 2>&1 &
+          echo $! > seo-report/server.pid
+          for attempt in $(seq 1 20); do
+            curl --fail --silent http://127.0.0.1:4173/ >/dev/null && break
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:4173/ >/dev/null
+      - name: Validate generated SEO and HTTP responses
+        run: node scripts/ci/validate-seo.mjs frontend/dist seo-report/seo-validation.txt
+        env:
+          SEO_BASE_URL: http://127.0.0.1:4173
+          SEO_REDIRECT_PATH: ${{ vars.SEO_REDIRECT_PATH }}
+          SEO_REDIRECT_TARGET: ${{ vars.SEO_REDIRECT_TARGET }}
+      - name: Upload SEO evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: seo-evidence
+          path: seo-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  playwright:
+    name: playwright-critical
+    runs-on: ubuntu-latest
+    needs: [frontend, backend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run e2e:critical
+        working-directory: frontend
+      - name: Upload Playwright evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-evidence
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  docker:
+    name: docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --file infra/Dockerfile --tag folhea:ci .
+
+  merge-gate:
+    name: merge-gate
+    if: ${{ always() }}
+    needs: [frontend, backend, seo, playwright, docker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every gate to pass
+        env:
+          FRONTEND: ${{ needs.frontend.result }}
+          BACKEND: ${{ needs.backend.result }}
+          SEO: ${{ needs.seo.result }}
+          PLAYWRIGHT: ${{ needs.playwright.result }}
+          DOCKER: ${{ needs.docker.result }}
+        run: |
+          printf 'frontend=%s\nbackend=%s\nseo=%s\nplaywright=%s\ndocker=%s\n' \
+            "$FRONTEND" "$BACKEND" "$SEO" "$PLAYWRIGHT" "$DOCKER"
+          test "$FRONTEND" = success
+          test "$BACKEND" = success
+          test "$SEO" = success
+          test "$PLAYWRIGHT" = success
+          test "$DOCKER" = success
