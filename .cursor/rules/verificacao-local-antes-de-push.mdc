@@ -1,0 +1,48 @@
+---
+description: Prova local obrigatória da superfície tocada (CI do Folhea) antes de commit e push
+alwaysApply: true
+---
+
+# Verificação local antes de commit e push
+
+Nunca faça `git commit` ou `git push` sem a prova local da superfície tocada. A CI não substitui a verificação local. Os comandos abaixo são o contrato de `.github/workflows/ci.yml`.
+
+Pré-requisitos: Node.js 22+, Java 25 e Docker (Dev Services/Testcontainers e builds de imagem).
+
+## Obrigatório
+
+Rode o **gate completo** da superfície, não um subconjunto. Só prossiga com tudo verde.
+
+- Mexeu em `frontend/**` → em `frontend/`:
+  `npm run lint`
+  `npm run test:coverage`
+  `npm run build -- --configuration production`
+  `npm run build:ssg -- --configuration production`
+  `node ../scripts/ci/validate-api-contract.mjs`
+- Mexeu em `frontend/e2e/**`, `frontend/playwright.config.ts` ou jornada crítica de UI → também `npx playwright install --with-deps chromium` (se o browser não estiver instalado) e `npm run e2e:critical`
+- Mexeu em páginas públicas, SSG ou `infra/Caddyfile` → depois do `build:ssg`, `node ../scripts/ci/validate-seo.mjs dist seo-report/seo-validation.txt`
+- Mexeu em `backend/**` → em `backend/`: `./mvnw -B clean verify` (exige Docker)
+- Mexeu em `infra/**`, `docker-compose.yml`, `docker-compose.prod.yml` ou `infra/Dockerfile` → na raiz:
+  `node scripts/ci/validate-oidc-surface.mjs`
+  `docker compose --env-file .env.example config --quiet`
+  Se mexeu em Dockerfile/Caddyfile: `docker build --file infra/Dockerfile .`
+- Mexeu em `scripts/ci/**` → execute o validador alterado
+- Mexeu em `scripts/ops/**` → execute o script/teste correspondente em `scripts/ops/` (não use `validate-production-compose.sh` sem `.env`; o gate de CI usa `.env.example`)
+- Mexeu em `scripts/versao.sh` ou `scripts/tests/test-versao.sh` → `./scripts/tests/test-versao.sh`
+- Mexeu em mais de uma superfície → rode todos os gates correspondentes
+- Mexeu só em `docs/**` sem código → declare isso no resumo da entrega em vez de rodar os gates
+
+Se `frontend/package-lock.json` mudou, rode `npm ci` em `frontend/` antes do gate.
+
+## Anti-padrão
+
+`npm run lint` verde ou `./mvnw compile` verde **não** autoriza commit. O job de CI do frontend inclui lint, build de produção, SSG, cobertura Vitest e contrato da API; o do backend é `./mvnw -B clean verify`, não só compile.
+
+Lição: o gate é o job completo da superfície, não uma etapa dele.
+
+## Se a CI falhar
+
+1. Reproduzir localmente com o gate correspondente antes de qualquer correção.
+2. Corrigir a causa raiz, não o sintoma.
+3. Rodar o gate inteiro de novo até ficar verde.
+4. Só então commitar e dar push.
