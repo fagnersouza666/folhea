@@ -1,0 +1,32 @@
+# Baseline de borda do Folhea v1.
+# Caddy gerencia HTTPS automático para o domínio. API e Keycloak não devem
+# publicar portas diretamente na Internet; API_UPSTREAM aponta para a rede
+# privada do serviço Quarkus.
+
+folhea.com.br {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; script-src 'self'; style-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		-Server
+	}
+
+	# Respostas de API são privadas e nunca podem entrar em cache público.
+	@api path /api/*
+	header @api Cache-Control "no-store"
+	reverse_proxy @api {$API_UPSTREAM}
+
+	# O BFF pode expor o início/callback OIDC sob /auth; não encaminhar o
+	# console administrativo do Keycloak para este host.
+	@auth path /auth/*
+	reverse_proxy @auth {$API_UPSTREAM}
+
+	root * {$STATIC_ROOT}
+	try_files {path} {path}/ /index.html
+	file_server
+}
