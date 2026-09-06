@@ -113,6 +113,23 @@ describe('critical form DOM states', () => {
     expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain('Não foi possível');
   });
 
+  it('keeps the reading form available while sessions are offline', () => {
+    const store = createStore({ sessionsError: signal('Não foi possível carregar suas sessões.') });
+    TestBed.configureTestingModule({
+      imports: [ReadingComponent],
+      providers: [provideRouter([]), { provide: DashboardStore, useValue: store }]
+    });
+
+    const fixture = TestBed.createComponent(ReadingComponent);
+    fixture.detectChanges();
+    const retry = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((button) => button.textContent.includes('Tentar')) as HTMLButtonElement;
+    retry.click();
+
+    expect(fixture.nativeElement.querySelector('form')).not.toBeNull();
+    expect(store.loadSessions).toHaveBeenCalledOnce();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain('conexão');
+  });
+
   it('distinguishes loading and empty library states without losing the next action', () => {
     const booksLoading = signal(true);
     const store = createStore({ books: signal<Book[]>([]), booksLoading });
