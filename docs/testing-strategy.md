@@ -60,13 +60,22 @@ execução completa assim que cada contrato estiver presente.
 
 O teste SEO deve examinar somente páginas públicas indexáveis e garantir que:
 
-- cada página pública tenha `title`, meta description e canonical correta;
+- cada rota pública (`/`, `/como-funciona`, `/recursos`, `/sobre`,
+  `/privacidade` e `/termos`) responda HTTP 200 com `title`, meta description,
+  canonical, `h1`, `lang="pt-BR"` e Open Graph coerentes;
 - páginas públicas não recebam `noindex` acidentalmente;
 - `robots.txt` exista e não seja usado como único mecanismo de proteção da
   área privada;
 - `sitemap.xml` exista e contenha apenas URLs públicas indexáveis;
-- exista uma resposta 404 e redirects tenham status e destino esperados;
-- a área privada use `noindex,nofollow`.
+- `/app` e seus deep links entreguem o shell privado com proteção
+  `noindex,nofollow`;
+- wildcard inexistente entregue o documento 404 com status HTTP 404, sem
+  repetir o conteúdo da landing (soft 404);
+- redirects configurados tenham status permanente 301 ou 308 e destino exato.
+
+No CI, `scripts/ci/serve-seo.mjs` serve o artefato SSG com as mesmas decisões
+de borda relevantes: shell para `/app/**`, arquivos prerenderizados para
+rotas públicas e 404 real para caminhos ausentes.
 
 Quando houver uma rota de redirect configurada, defina as variáveis de
 repositório `SEO_REDIRECT_PATH` e `SEO_REDIRECT_TARGET`. O CI fará a requisição

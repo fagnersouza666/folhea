@@ -60,8 +60,10 @@ node ../scripts/ci/validate-seo.mjs dist seo-report/seo-validation.txt
 ```
 
 O build SSG deve gerar as páginas públicas. O teste de SEO executado no CI
-verifica o artefato gerado, incluindo `title`, description, canonical,
-`robots.txt`, `sitemap.xml`, `noindex`, status 404 e redirects.
+serve o artefato e verifica as rotas públicas (`title`, description,
+canonical, `h1`, `lang`, Open Graph), `robots.txt`, `sitemap.xml`, o shell
+privado `/app`, um 404 real sem soft-404 e redirects permanentes quando
+configurados.
 
 ### Backend
 

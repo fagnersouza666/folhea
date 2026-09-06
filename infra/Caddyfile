@@ -34,6 +34,24 @@
 	reverse_proxy @auth {$API_UPSTREAM}
 
 	root * {$STATIC_ROOT}
-	try_files {path} {path}/ /index.html
+	# The authenticated area is client-rendered. It needs the application shell
+	# for deep links, while keeping the whole area out of search indexes.
+	@private path /app /app/*
+	handle @private {
+		header X-Robots-Tag "noindex, nofollow"
+		header Cache-Control "no-store"
+		rewrite * /index.html
+		file_server
+	}
+
+	# SSG emits an index.html for every public route. Do not fall back to the
+	# landing page for unknown URLs: that would create a soft 404.
+	try_files {path} {path}/
 	file_server
+
+	# Keep the branded 404 document while preserving the original 404 status.
+	handle_errors {
+		rewrite * /404.html
+		file_server
+	}
 }
