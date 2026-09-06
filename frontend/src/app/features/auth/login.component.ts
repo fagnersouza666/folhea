@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { SeoService } from '../../core/services/seo.service';
 
 @Component({ selector: 'folhea-login', standalone: true, imports: [ReactiveFormsModule, RouterLink], changeDetection: ChangeDetectionStrategy.OnPush, template: `
   <main class="auth-page"><a routerLink="/" class="brand" aria-label="Voltar para Folhea"><span class="brand-mark">F</span><span>folhea</span></a><section class="auth-card surface"><p class="eyebrow">Bem-vindo de volta</p><h1>Continue sua leitura.</h1><p class="auth-intro">Entre para registrar sua próxima sessão e acompanhar seu progresso.</p><form [formGroup]="form" (ngSubmit)="submit()" novalidate><label class="field">E-mail<input type="email" formControlName="email" placeholder="voce@email.com" autocomplete="email" [attr.aria-invalid]="email.invalid && email.touched" aria-describedby="email-error" />@if (email.invalid && email.touched) { <span id="email-error" class="field-error">Informe um e-mail válido.</span> }</label><label class="field">Senha<input type="password" formControlName="password" placeholder="Sua senha" autocomplete="current-password" [attr.aria-invalid]="password.invalid && password.touched" />@if (password.invalid && password.touched) { <span class="field-error">A senha é obrigatória.</span> }</label><button class="button button-primary submit-button" type="submit">Entrar <span aria-hidden="true">→</span></button></form><p class="auth-footnote">Ainda não tem uma conta? <a href="mailto:oi@folhea.com.br">Fale com a gente</a></p></section><p class="auth-legal">Ao continuar, você concorda com nossos <a routerLink="/termos">termos</a> e <a routerLink="/privacidade">política de privacidade</a>.</p></main>
@@ -12,5 +13,6 @@ export class LoginComponent {
   readonly form = this.fb.group({ email: ['', [Validators.required, Validators.email]], password: ['', Validators.required] });
   get email() { return this.form.controls.email; }
   get password() { return this.form.controls.password; }
+  constructor() { inject(SeoService).update('Entrar — Folhea', 'Entre no Folhea para registrar sua leitura e acompanhar seu progresso.', '/entrar', false); }
   submit(): void { this.form.markAllAsTouched(); if (this.form.valid) this.auth.signIn(this.email.value); }
 }
