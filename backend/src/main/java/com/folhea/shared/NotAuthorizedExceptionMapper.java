@@ -1,7 +1,6 @@
 package com.folhea.shared;
 
 import jakarta.ws.rs.NotAuthorizedException;
-import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
@@ -12,7 +11,7 @@ public class NotAuthorizedExceptionMapper implements ExceptionMapper<NotAuthoriz
     @Override
     public Response toResponse(NotAuthorizedException exception) {
         return Response.status(Response.Status.UNAUTHORIZED)
-                .type(MediaType.valueOf("application/problem+json"))
+                .header("Content-Type", "application/problem+json")
                 .header("Cache-Control", "no-store")
                 .entity(new ProblemResponse(URI.create("https://folhea.com.br/problems/unauthorized"),
                         "Não autenticado", 401, "É necessário autenticar-se."))

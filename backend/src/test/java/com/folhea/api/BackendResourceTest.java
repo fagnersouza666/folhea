@@ -95,6 +95,7 @@ class BackendResourceTest {
                 .when().get("/api/v1/me")
                 .then().statusCode(401)
                 .contentType("application/problem+json")
+                .header("Content-Type", equalTo("application/problem+json"))
                 .body("type", equalTo("https://folhea.com.br/problems/unauthorized"))
                 .body("status", equalTo(401));
     }
