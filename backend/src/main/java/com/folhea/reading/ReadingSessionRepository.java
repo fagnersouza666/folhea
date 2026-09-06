@@ -18,4 +18,29 @@ public class ReadingSessionRepository implements PanacheRepositoryBase<ReadingSe
         ReadingSessionEntity first = find("userId = ?1 order by readingDate asc, createdAt asc", userId).firstResult();
         return first == null ? null : first.readingDate;
     }
+
+    public List<LocalDate> recentReadingDates(UUID userId, LocalDate today, int limit) {
+        return getEntityManager()
+                .createQuery("SELECT DISTINCT r.readingDate FROM ReadingSessionEntity r WHERE r.userId = :userId AND r.readingDate <= :today ORDER BY r.readingDate DESC", LocalDate.class)
+                .setParameter("userId", userId)
+                .setParameter("today", today)
+                .setMaxResults(limit)
+                .getResultList();
+    }
+
+    public long sumPagesOwned(UUID userId) {
+        Long total = getEntityManager()
+                .createQuery("SELECT COALESCE(SUM(r.pages), 0) FROM ReadingSessionEntity r WHERE r.userId = :userId", Long.class)
+                .setParameter("userId", userId)
+                .getSingleResult();
+        return total == null ? 0 : total;
+    }
+
+    public long sumMinutesOwned(UUID userId) {
+        Long total = getEntityManager()
+                .createQuery("SELECT COALESCE(SUM(r.minutes), 0) FROM ReadingSessionEntity r WHERE r.userId = :userId", Long.class)
+                .setParameter("userId", userId)
+                .getSingleResult();
+        return total == null ? 0 : total;
+    }
 }

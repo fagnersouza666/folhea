@@ -194,10 +194,25 @@ class BackendResourceTest {
         given().when().get("/api/v1/stats?period=today").then().statusCode(200)
                 .body("pages", equalTo(25)).body("minutes", equalTo(15));
 
-        given().contentType(ContentType.JSON).body("{\"pages\":0,\"minutes\":0}")
+        given().contentType(ContentType.JSON)
+                .body("{\"bookId\":\"" + bookId + "\",\"readingDate\":\"" + TODAY + "\",\"pages\":0,\"minutes\":0}")
                 .when().post("/api/v1/sessions")
                 .then().statusCode(400).contentType("application/problem+json")
                 .body("type", equalTo("https://folhea.com.br/problems/invalid-reading-session"));
+
+        given().contentType(ContentType.JSON)
+                .body("{\"readingDate\":\"" + TODAY + "\",\"pages\":1,\"minutes\":1}")
+                .when().post("/api/v1/sessions")
+                .then().statusCode(400).contentType("application/problem+json");
+
+        given().contentType(ContentType.JSON)
+                .body("{\"bookId\":\"" + bookId + "\",\"readingDate\":\"" + TODAY + "\",\"pages\":10001,\"minutes\":1}")
+                .when().post("/api/v1/sessions")
+                .then().statusCode(400).contentType("application/problem+json");
+
+        given().contentType(ContentType.JSON).body("{\"title\":\"\"}")
+                .when().post("/api/v1/books")
+                .then().statusCode(400).contentType("application/problem+json");
 
         given().when().delete("/api/v1/sessions/{id}", yesterdaySession).then().statusCode(204);
         given().when().get("/api/v1/stats?period=today").then().statusCode(200)
@@ -309,6 +324,23 @@ class BackendResourceTest {
         given().when().get("/api/v1/stats?period=unknown")
                 .then().statusCode(400).contentType("application/problem+json")
                 .body("type", equalTo("https://folhea.com.br/problems/invalid-period"));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
+    void streakUsesDistinctDatesWithoutLoadingEverySession() {
+        UUID bookId = createBook("Streak longo");
+        for (int day = 0; day < 120; day++) {
+            createSession(bookId, TODAY.minusDays(day), 1, 1);
+        }
+
+        given().when().get("/api/v1/stats?period=today").then().statusCode(200)
+                .body("currentStreakDays", equalTo(120));
+        given().when().get("/api/v1/sessions").then().statusCode(200)
+                .body("size()", equalTo(120));
     }
 
     @Test

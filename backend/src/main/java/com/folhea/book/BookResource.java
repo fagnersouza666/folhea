@@ -8,6 +8,7 @@ import com.folhea.shared.TimeProvider;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import jakarta.ws.rs.DELETE;
@@ -51,7 +52,7 @@ public class BookResource {
     @POST
     @Transactional
     @Operation(summary = "Cadastra um livro")
-    public Response create(CreateBookRequest request) {
+    public Response create(@Valid CreateBookRequest request) {
         if (request == null || request.title() == null || request.title().isBlank()) invalid("Informe o título do livro.");
         validateTextLength(request.title(), request.author());
         var user = currentUser.get();
@@ -68,7 +69,7 @@ public class BookResource {
     public BookResponse get(@PathParam("id") UUID id) { return BookResponse.from(findOwned(id)); }
 
     @PATCH @Path("/{id}") @Transactional
-    public BookResponse update(@PathParam("id") UUID id, UpdateBookRequest request) {
+    public BookResponse update(@PathParam("id") UUID id, @Valid UpdateBookRequest request) {
         BookEntity book = findOwned(id);
         if (request == null || (request.title() == null && request.author() == null)) invalid("Informe ao menos um campo para alterar.");
         if (request.title() != null) {

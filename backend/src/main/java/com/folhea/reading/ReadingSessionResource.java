@@ -6,6 +6,8 @@ import com.folhea.shared.ProblemException;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.Consumes;
@@ -34,6 +36,9 @@ import java.util.UUID;
 @Tag(name = "Reading sessions")
 @SecurityRequirement(name = "bearerAuth")
 public class ReadingSessionResource {
+    private static final int MAX_PAGES = 10_000;
+    private static final int MAX_MINUTES = 24 * 60;
+
     @Inject CurrentUser currentUser;
     @Inject ReadingSessionRepository sessions;
     @Inject BookRepository books;
@@ -49,10 +54,9 @@ public class ReadingSessionResource {
 
     @POST @Transactional
     @Operation(summary = "Registra uma sessão de leitura")
-    public Response create(CreateSessionRequest request) {
+    public Response create(@Valid CreateSessionRequest request) {
         var user = currentUser.get();
-        validateProgress(request == null ? null : request.pages(), request == null ? null : request.minutes());
-        if (request.readingDate() == null) invalid("Informe a data da leitura.");
+        validateProgress(request.pages(), request.minutes());
         ensureBookOwned(user.id, request.bookId());
         ReadingSessionEntity session = new ReadingSessionEntity();
         session.userId = user.id;
@@ -65,7 +69,7 @@ public class ReadingSessionResource {
     }
 
     @PATCH @Path("/{id}") @Transactional
-    public SessionResponse update(@PathParam("id") UUID id, UpdateSessionRequest request) {
+    public SessionResponse update(@PathParam("id") UUID id, @Valid UpdateSessionRequest request) {
         var user = currentUser.get();
         ReadingSessionEntity session = findOwned(user.id, id);
         if (request == null || request.isEmpty()) invalid("Informe ao menos um campo para alterar.");
@@ -88,7 +92,8 @@ public class ReadingSessionResource {
     }
 
     private void ensureBookOwned(UUID userId, UUID bookId) {
-        if (bookId == null || books.findOwned(userId, bookId) == null) {
+        if (bookId == null) invalid("Informe o livro da sessão.");
+        if (books.findOwned(userId, bookId) == null) {
             throw new ProblemException(404, "https://folhea.com.br/problems/book-not-found", "Livro não encontrado", "Livro inexistente ou não pertencente ao usuário.");
         }
     }
@@ -99,20 +104,31 @@ public class ReadingSessionResource {
         if (pageCount < 0 || minuteCount < 0 || (pageCount == 0 && minuteCount == 0)) {
             invalid("Informe páginas, minutos ou ambos; os valores não podem ser negativos.");
         }
+        if (pageCount > MAX_PAGES || minuteCount > MAX_MINUTES) {
+            invalid("Páginas ou minutos excedem o limite permitido para uma sessão.");
+        }
     }
     private static void invalid(String detail) { throw new ProblemException(400, "https://folhea.com.br/problems/invalid-reading-session", "Sessão de leitura inválida", detail); }
 
     public record CreateSessionRequest(
             @NotNull(message = "Informe o livro da sessão.") UUID bookId,
             @NotNull(message = "Informe a data da leitura.") LocalDate readingDate,
-            @Min(value = 0, message = "Páginas não podem ser negativas.") Integer pages,
-            @Min(value = 0, message = "Minutos não podem ser negativos.") Integer minutes) { }
+            @Min(value = 0, message = "Páginas não podem ser negativas.")
+            @Max(value = MAX_PAGES, message = "Páginas excedem o limite permitido.")
+            Integer pages,
+            @Min(value = 0, message = "Minutos não podem ser negativos.")
+            @Max(value = MAX_MINUTES, message = "Minutos excedem o limite permitido.")
+            Integer minutes) { }
 
     public record UpdateSessionRequest(
             UUID bookId,
             LocalDate readingDate,
-            @Min(value = 0, message = "Páginas não podem ser negativas.") Integer pages,
-            @Min(value = 0, message = "Minutos não podem ser negativos.") Integer minutes) {
+            @Min(value = 0, message = "Páginas não podem ser negativas.")
+            @Max(value = MAX_PAGES, message = "Páginas excedem o limite permitido.")
+            Integer pages,
+            @Min(value = 0, message = "Minutos não podem ser negativos.")
+            @Max(value = MAX_MINUTES, message = "Minutos excedem o limite permitido.")
+            Integer minutes) {
         boolean isEmpty() { return bookId == null && readingDate == null && pages == null && minutes == null; }
     }
 
