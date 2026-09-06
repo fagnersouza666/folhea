@@ -93,6 +93,11 @@ class BackendResourceTest {
         given().contentType(ContentType.URLENC).when().post("/api/v1/books/{id}/finish", bookId)
                 .then().statusCode(200).body("finishedOn", equalTo(explicitFinishedOn.toString()));
 
+        given().contentType(ContentType.JSON).body("{not-json")
+                .when().post("/api/v1/books/{id}/finish", bookId)
+                .then().statusCode(400).contentType("application/problem+json")
+                .body("type", equalTo("https://folhea.com.br/problems/invalid-json"));
+
         given().when().delete("/api/v1/books/{id}/finish", bookId)
                 .then().statusCode(200).body("status", equalTo("READING"))
                 .body("finishedOn", equalTo(null));

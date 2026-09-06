@@ -1,5 +1,7 @@
 package com.folhea.book;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.folhea.identity.CurrentUser;
 import com.folhea.shared.ProblemException;
 import com.folhea.shared.TimeProvider;
@@ -38,6 +40,7 @@ public class BookResource {
     @Inject CurrentUser currentUser;
     @Inject BookRepository books;
     @Inject TimeProvider time;
+    @Inject ObjectMapper objectMapper;
 
     @GET
     @Operation(summary = "Lista os livros do usuário autenticado")
@@ -83,7 +86,8 @@ public class BookResource {
     @POST @Path("/{id}/finish") @Transactional
     @Consumes(MediaType.WILDCARD)
     @Operation(summary = "Finaliza um livro de forma idempotente")
-    public BookResponse finish(@PathParam("id") UUID id, FinishRequest request) {
+    public BookResponse finish(@PathParam("id") UUID id, String requestBody) throws JsonProcessingException {
+        FinishRequest request = parseFinishRequest(requestBody);
         var user = currentUser.get();
         BookEntity book = findOwned(id);
         LocalDate date = request != null && request.finishedOn() != null
@@ -94,6 +98,11 @@ public class BookResource {
         book.status = BookStatus.FINISHED;
         book.finishedOn = date;
         return BookResponse.from(book);
+    }
+
+    private FinishRequest parseFinishRequest(String requestBody) throws JsonProcessingException {
+        if (requestBody == null || requestBody.isBlank()) return null;
+        return objectMapper.readValue(requestBody, FinishRequest.class);
     }
 
     @DELETE @Path("/{id}/finish") @Transactional
