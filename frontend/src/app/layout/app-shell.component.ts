@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../core/auth/auth.service';
 import { DashboardStore } from '../core/state/dashboard.store';
+import { SeoService } from '../core/services/seo.service';
 
 @Component({
   selector: 'folhea-app-shell', standalone: true, imports: [RouterOutlet, RouterLink, RouterLinkActive], changeDetection: ChangeDetectionStrategy.OnPush,
@@ -25,5 +26,5 @@ import { DashboardStore } from '../core/state/dashboard.store';
 export class AppShellComponent {
   readonly auth = inject(AuthService);
   readonly store = inject(DashboardStore);
-  constructor() { this.store.load(); }
+  constructor() { this.store.load(); inject(SeoService).update('Folhea — Seu progresso', 'Área pessoal do Folhea.', '/app', false); }
 }
