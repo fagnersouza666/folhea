@@ -1,4 +1,4 @@
-# Artefatos locais do ambiente Gas Town/agent
+# Local Gas Town runtime state and agent instructions are not project source.
 .beads/
 .runtime/
 CLAUDE.md
