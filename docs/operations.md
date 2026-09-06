@@ -25,13 +25,20 @@ Keycloak. PostgreSQL e Keycloak ficam somente na rede privada do Compose; a
    docker compose --env-file .env ps
    ```
 
+   Em produção, use o overlay `docker-compose.prod.yml` para o Keycloak em modo
+   otimizado:
+
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d --build
+   ```
+
    A imagem possui dois targets: `backend-runtime` (Quarkus/JVM) e
    `caddy-runtime` (Angular estático/Caddy). Nenhum runtime contém Node.js.
 5. Em produção, defina `PUBLIC_BIND_ADDRESS=0.0.0.0`, use um domínio HTTPS em
    `PUBLIC_DOMAIN`, mantenha `DB_PASSWORD`, `KEYCLOAK_DB_PASSWORD` e
-   `KEYCLOAK_ADMIN_PASSWORD` fora do Git e substitua `start-dev` do Keycloak por
-   uma imagem otimizada (`start --optimized`) construída pela equipe de
-   plataforma. Defina também `OIDC_PUBLIC_ORIGIN`, `OIDC_PUBLIC_ISSUER`,
+   `KEYCLOAK_ADMIN_PASSWORD` fora do Git e suba o Keycloak com
+   `docker compose -f docker-compose.yml -f docker-compose.prod.yml` (modo
+   `start --optimized`). Defina também `OIDC_PUBLIC_ORIGIN`, `OIDC_PUBLIC_ISSUER`,
    `OIDC_PUBLIC_AUTHORIZATION_URL` e `OIDC_PUBLIC_LOGOUT_URL` para o mesmo
    domínio público HTTPS. O backend continua usando `http://keycloak:8080`
    somente no back-channel; Caddy publica apenas as rotas de login/logout e

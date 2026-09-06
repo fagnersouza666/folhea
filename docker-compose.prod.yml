@@ -1,0 +1,11 @@
+# Production overlay for docker compose.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d --build
+
+services:
+  keycloak:
+    command:
+      - start
+      - --optimized
+      - --http-port=8080
+      - --http-management-port=9000
+      - --import-realm

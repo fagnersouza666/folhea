@@ -11,6 +11,13 @@ cp .env.example .env
 docker compose --env-file .env up -d --build
 ```
 
+Para produção, use o overlay `docker-compose.prod.yml` (Keycloak
+`start --optimized`):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d --build
+```
+
 The public edge is available at `https://localhost:8443` (Caddy's local
 certificate may need to be trusted once). To run only the backend from Maven,
 start PostgreSQL and Keycloak with `docker compose --env-file .env up -d
@@ -129,6 +136,8 @@ dispara `PRODUCTION_DEPLOY_HOOK` e verifica liveness/readiness em
 `PRODUCTION_HEALTH_URL`. O contrato completo de release, métricas de produto,
 eventos analytics e a política de privacidade ficam em
 [`docs/quality-and-release.md`](docs/quality-and-release.md).
+O relatório da última varredura de bugs (modo full) está em
+[`docs/bug-report.md`](docs/bug-report.md).
 
 Em Settings → Branches → Branch protection rules, configure `main` para exigir
 pull request, exigir `CI / merge-gate`, exigir branch atualizada e bloquear
