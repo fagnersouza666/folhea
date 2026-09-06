@@ -30,21 +30,50 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Scan source and dependency manifests
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
           scanners: vuln,secret,misconfig
           severity: CRITICAL,HIGH
           ignore-unfixed: false
-          exit-code: '1'
+          exit-code: "1"
 
   dependency-review:
     name: Dependency review
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
+      # Dependency Review uses GitHub's Dependency Graph API. A repository
+      # without that feature gets a 403 before the action can run. Skip only
+      # this API-backed delta check in that case; Trivy remains a blocking
+      # vulnerability scan for the complete checkout above.
+      - name: Detect Dependency Graph support
+        id: dependency-graph
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          response="$(
+            gh api --include \
+              "repos/${{ github.repository }}/dependency-graph/compare/${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}" \
+              2>&1
+          )"
+          status=$?
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$response" | grep -Eq '"message"[[:space:]]*:[[:space:]]*"Forbidden"'; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Dependency Graph is not available for this repository; skipping Dependency Review. Trivy remains blocking for vulnerabilities, secrets, and misconfigurations."
+          else
+            printf '%s\n' "$response" >&2
+            exit "$status"
+          fi
+
       - name: Review introduced dependencies
+        if: steps.dependency-graph.outputs.enabled == 'true'
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
