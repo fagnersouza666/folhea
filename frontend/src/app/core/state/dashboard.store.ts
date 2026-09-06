@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { ApiClient } from '../api/api-client.service';
 import { Book, Dashboard, ReadingSession, Stats } from '../models/models';
+import { AnalyticsService } from '../analytics/analytics.service';
 
 const demoBooks: Book[] = [{ id: 'hobbit', userId: 'demo-user', title: 'O Hobbit', author: 'J. R. R. Tolkien', status: 'READING', createdAt: '2026-08-01T00:00:00Z', updatedAt: '2026-09-05T00:00:00Z' }];
 const demoDashboard: Dashboard = { currentStreakDays: 17, currentBook: { id: 'hobbit', title: 'O Hobbit' }, week: { pages: 134, minutes: 138, booksFinished: 1 } };
@@ -8,6 +9,7 @@ const demoDashboard: Dashboard = { currentStreakDays: 17, currentBook: { id: 'ho
 @Injectable({ providedIn: 'root' })
 export class DashboardStore {
   private readonly api = inject(ApiClient);
+  private readonly analytics = inject(AnalyticsService);
   private readonly dashboardState = signal<Dashboard | null>(null);
   private readonly booksState = signal<Book[]>([]);
   private readonly statsState = signal<Stats | null>(null);
@@ -35,6 +37,7 @@ export class DashboardStore {
     const fallback: Book = { id: `book-${Date.now()}`, userId: 'demo-user', title, author: author || undefined, status: 'READING', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     this.booksState.update((books) => [...books, fallback]);
     this.dashboardState.update((dashboard) => dashboard ? { ...dashboard, currentBook: { id: fallback.id, title: fallback.title } } : { ...demoDashboard, currentBook: { id: fallback.id, title: fallback.title } });
+    this.analytics.track('book_created');
     this.api.createBook({ title, author: author || undefined }).subscribe({ next: (book) => this.booksState.update((books) => books.map((item) => item.id === fallback.id ? book : item)), error: () => undefined });
     return fallback;
   }
@@ -44,6 +47,7 @@ export class DashboardStore {
       const current = dashboard ?? demoDashboard;
       return { ...current, currentStreakDays: current.currentStreakDays + (session.readingDate === this.today() ? 1 : 0), week: { ...current.week, pages: current.week.pages + session.pages, minutes: current.week.minutes + session.minutes } };
     });
+    this.analytics.track('reading_session_created', { pages: session.pages, minutes: session.minutes });
     this.api.createSession({ ...session }).subscribe({ error: () => undefined });
   }
 
