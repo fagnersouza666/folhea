@@ -9,3 +9,8 @@ services:
       - --http-port=8080
       - --http-management-port=9000
       - --import-realm
+    environment:
+      KC_HOSTNAME_STRICT: "true"
+    volumes:
+      - ./infra/keycloak/render-realm.sh:/opt/keycloak/render-realm.sh:ro
+      - ./infra/keycloak/folhea-realm.prod.template.json:/templates/folhea-realm.template.json:ro

@@ -19,6 +19,11 @@
 	@health path /healthz
 	respond @health 200
 
+	# OpenAPI is disabled in production Quarkus and must not be reachable at the
+	# public edge even if misconfigured upstream.
+	@openapi path /api/openapi /api/openapi/*
+	respond @openapi 404
+
 	# API responses are private and must never be cached by a browser or proxy.
 	@api path /api/*
 	header @api Cache-Control "no-store"
