@@ -27,6 +27,14 @@ folhea.com.br {
 	reverse_proxy @auth {$API_UPSTREAM}
 
 	root * {$STATIC_ROOT}
-	try_files {path} {path}/ /index.html
+	# SSG emits an index.html for every public route. Serve only files that
+	# exist so an unknown URL remains a real 404 instead of a soft 404 home page.
+	try_files {path} {path}/
 	file_server
+
+	# Keep the branded 404 document while preserving the error status.
+	handle_errors {
+		rewrite * /404.html
+		file_server
+	}
 }

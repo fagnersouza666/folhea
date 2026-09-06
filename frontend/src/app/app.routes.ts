@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { AppShellComponent } from './layout/app-shell.component';
 import { LandingComponent } from './public/landing/landing.component';
+import { NotFoundComponent } from './public/not-found.component';
 import { PublicPageComponent } from './public/public-page.component';
 
 export const routes: Routes = [
@@ -21,5 +22,5 @@ export const routes: Routes = [
     { path: 'ler/feedback', loadComponent: () => import('./features/reading/feedback.component').then((m) => m.FeedbackComponent), title: 'Leitura registrada — Folhea' },
     { path: 'progresso', loadComponent: () => import('./features/progress/progress.component').then((m) => m.ProgressComponent), title: 'Progresso — Folhea' }
   ] },
-  { path: '**', redirectTo: '' }
+  { path: '**', component: NotFoundComponent, title: 'Página não encontrada — Folhea' }
 ];
