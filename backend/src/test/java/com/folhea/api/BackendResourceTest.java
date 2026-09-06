@@ -90,7 +90,7 @@ class BackendResourceTest {
                 .body("finishedOn", equalTo(explicitFinishedOn.toString()));
 
         // Omitting the body retains the existing date, making retries idempotent.
-        given().when().post("/api/v1/books/{id}/finish", bookId)
+        given().contentType(ContentType.URLENC).when().post("/api/v1/books/{id}/finish", bookId)
                 .then().statusCode(200).body("finishedOn", equalTo(explicitFinishedOn.toString()));
 
         given().contentType(ContentType.JSON).body("{not-json")
