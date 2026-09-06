@@ -1,12 +1,14 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ApiClient } from '../api/api-client.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { Book, BookPatch, Dashboard, ReadingDraft, ReadingSession, ReadingSessionPatch, Stats, StatsPeriod } from '../models/models';
 import { addDays, currentStreak, periodStats, startOfPeriod } from './reading-statistics';
 
 @Injectable({ providedIn: 'root' })
 export class DashboardStore {
   private readonly api = inject(ApiClient);
+  private readonly analytics = inject(AnalyticsService);
   private readonly dashboardState = signal<Dashboard | null>(null);
   private readonly booksState = signal<Book[]>([]);
   private readonly sessionsState = signal<ReadingSession[]>([]);
