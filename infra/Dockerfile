@@ -18,7 +18,7 @@ WORKDIR /workspace/backend
 COPY backend/ ./
 RUN chmod +x mvnw && ./mvnw -B package -DskipTests
 
-FROM caddy:2.10-alpine AS caddy-runtime
+FROM caddy:2.10.0-alpine AS caddy-runtime
 COPY --from=frontend-build /workspace/frontend/dist/folhea/browser /srv
 COPY infra/Caddyfile /etc/caddy/Caddyfile
 ENV PUBLIC_DOMAIN=localhost \

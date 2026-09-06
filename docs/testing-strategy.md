@@ -85,9 +85,12 @@ O teste SEO deve examinar somente páginas públicas indexáveis e garantir que:
   repetir o conteúdo da landing (soft 404);
 - redirects configurados tenham status permanente 301 ou 308 e destino exato.
 
-No CI, `scripts/ci/serve-seo.mjs` serve o artefato SSG com as mesmas decisões
-de borda relevantes: shell para `/app/**`, arquivos prerenderizados para
-rotas públicas e 404 real para caminhos ausentes.
+No CI, o artefato SSG é montado em um container Caddy 2.10.0 usando o mesmo
+`infra/Caddyfile` da imagem de produção. O validador faz as requisições contra
+essa borda real, cobrindo shell para `/app/**`, arquivos prerenderizados para
+rotas públicas, 404 real para caminhos ausentes e redirects configurados. O
+servidor Node `scripts/ci/serve-seo.mjs` permanece disponível apenas para
+debug local e não é usado como substituto do Caddy no gate.
 
 Quando houver uma rota de redirect configurada, defina as variáveis de
 repositório `SEO_REDIRECT_PATH` e `SEO_REDIRECT_TARGET`. O CI fará a requisição
