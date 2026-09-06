@@ -1,7 +1,9 @@
 # Modelo de ameaças do Folhea v1
 
-**Status:** baseline aprovado para implementação dos endpoints mutáveis  
-**Escopo:** aplicação web responsiva/PWA, Caddy, BFF Quarkus, Keycloak e PostgreSQL  
+**Status:** baseline aprovado para implementação dos endpoints mutáveis
+
+**Escopo:** aplicação web responsiva/PWA, Caddy, BFF Quarkus, Keycloak e PostgreSQL
+
 **Última revisão:** 2026-09-06
 
 Este documento é o contrato de segurança do v1. Um endpoint novo só pode ser
