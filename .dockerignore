@@ -1,0 +1,10 @@
+.git
+.beads
+.runtime
+.env
+backups
+frontend/node_modules
+frontend/dist
+backend/target
+**/*.dump
+**/*.dump.gz

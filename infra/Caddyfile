@@ -1,9 +1,7 @@
-# Baseline de borda do Folhea v1.
-# Caddy gerencia HTTPS automático para o domínio. API e Keycloak não devem
-# publicar portas diretamente na Internet; API_UPSTREAM aponta para a rede
-# privada do serviço Quarkus.
+# Public edge for Folhea. API and authentication stay on the private Docker
+# network; only Caddy publishes ports to the host.
 
-folhea.com.br {
+{$PUBLIC_DOMAIN} {
 	encode zstd gzip
 
 	header {
@@ -16,14 +14,23 @@ folhea.com.br {
 		-Server
 	}
 
-	# Respostas de API são privadas e nunca podem entrar em cache público.
+	# A small edge health endpoint lets Docker verify Caddy independently of
+	# the backend. Backend readiness is checked on the backend container.
+	@health path /healthz
+	respond @health 200
+
+	# API responses are private and must never be cached by a browser or proxy.
 	@api path /api/*
 	header @api Cache-Control "no-store"
+	request_body @api {
+		max_size 64KB
+	}
 	reverse_proxy @api {$API_UPSTREAM}
 
-	# O BFF pode expor o início/callback OIDC sob /auth; não encaminhar o
-	# console administrativo do Keycloak para este host.
+	# The BFF owns the OIDC start/callback/logout endpoints. There is no route
+	# to the Keycloak admin console or to its internal realm-management API.
 	@auth path /auth/*
+	header @auth Cache-Control "no-store"
 	reverse_proxy @auth {$API_UPSTREAM}
 
 	root * {$STATIC_ROOT}
