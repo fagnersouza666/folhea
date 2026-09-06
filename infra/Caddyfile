@@ -57,6 +57,23 @@
 		header_up X-Forwarded-Proto {scheme}
 	}
 
+	# Keycloak is private by default. The browser only needs the authorization
+	# challenge, login actions, RP-initiated logout and static login resources;
+	# token, userinfo, introspection, certs, admin and realm-management paths
+	# remain unreachable from the public edge.
+	@oidc-public path /realms/folhea/protocol/openid-connect/auth /realms/folhea/protocol/openid-connect/logout /realms/folhea/login-actions/* /resources/*
+	reverse_proxy @oidc-public keycloak:8080 {
+		header_up -Forwarded
+		header_up -X-Forwarded-For
+		header_up -X-Forwarded-Host
+		header_up -X-Forwarded-Port
+		header_up -X-Forwarded-Proto
+		header_up -X-Forwarded-Ssl
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
 	root * {$STATIC_ROOT}
 	# The authenticated area is client-rendered. It needs the application shell
 	# for deep links, while keeping the whole area out of search indexes.

@@ -40,7 +40,13 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
             abort(context, 403, "https://folhea.com.br/problems/invalid-host", "Origem não permitida", "O host da requisição não é confiável.");
             return;
         }
-        if (identity == null || identity.isAnonymous()) return;
+        // API callers must never be sent to the browser login flow. The
+        // browser starts OIDC explicitly at /auth/login; an API request with
+        // no authenticated identity gets the machine-readable contract.
+        if (identity == null || identity.isAnonymous()) {
+            abort(context, 401, "https://folhea.com.br/problems/unauthorized", "Não autenticado", "É necessário autenticar-se.");
+            return;
+        }
 
         String method = context.getMethod();
         if (!isMutation(method)) return;

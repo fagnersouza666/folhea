@@ -232,6 +232,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Validate OIDC Compose/Caddy surface
+        run: node scripts/ci/validate-oidc-surface.mjs
       - name: Validate Compose configuration
         run: docker compose --env-file .env.example config --quiet
       - run: docker build --file infra/Dockerfile --tag folhea:ci .

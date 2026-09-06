@@ -86,6 +86,21 @@ class BackendResourceTest {
     }
 
     @Test
+    void anonymousApiRequestsReturnProblemJsonInsteadOfAnOidcRedirect() {
+        RestAssured.requestSpecification = new RequestSpecBuilder()
+                .addHeader("Host", "localhost:8081")
+                .build();
+
+        given().redirects().follow(false)
+                .when().get("/api/v1/me")
+                .then().statusCode(401)
+                .contentType("application/problem+json")
+                .header("Content-Type", equalTo("application/problem+json"))
+                .body("type", equalTo("https://folhea.com.br/problems/unauthorized"))
+                .body("status", equalTo(401));
+    }
+
+    @Test
     @TestSecurity(user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
