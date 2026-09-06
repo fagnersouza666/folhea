@@ -1,10 +1,10 @@
 # Folhea
 
-Folhea is a reading habit tracker. The backend is a Java 25 / Quarkus 3.33 monolith with PostgreSQL and Flyway.
+O Folhea é um rastreador de hábito de leitura. O backend é um monolito Java 25 / Quarkus 3.33 com PostgreSQL e Flyway.
 
 ## Backend
 
-Create a local environment file, then start the complete local stack:
+Crie um arquivo de ambiente local e suba a stack completa:
 
 ```bash
 cp .env.example .env
@@ -18,10 +18,10 @@ Para produção, use o overlay `docker-compose.prod.yml` (Keycloak
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d --build
 ```
 
-The public edge is available at `https://localhost:8443` (Caddy's local
-certificate may need to be trusted once). To run only the backend from Maven,
-start PostgreSQL and Keycloak with `docker compose --env-file .env up -d
-postgres keycloak`, then run:
+A borda pública fica em `https://localhost:8443` (talvez seja preciso
+confiar uma vez no certificado local do Caddy). Para rodar só o backend
+pelo Maven, suba o PostgreSQL e o Keycloak com
+`docker compose --env-file .env up -d postgres keycloak` e depois execute:
 
 ```bash
 cd backend
@@ -29,21 +29,23 @@ set -a && . ../.env && set +a
 ./mvnw quarkus:dev
 ```
 
-The API is rooted at `/api/v1`; OpenAPI is available at `/api/openapi`. Configure OIDC and database credentials through environment variables rather than committing secrets.
+A raiz da API é `/api/v1`; o OpenAPI fica em `/api/openapi`. Configure as
+credenciais de OIDC e do banco por variáveis de ambiente, sem gravar
+segredos no repositório.
 
-Operational deployment and health checks are documented in
-[docs/operations.md](docs/operations.md). Executable backup, restore, recovery
-verification, retention, and incident procedures are in
+O deploy operacional e os health checks estão em
+[docs/operations.md](docs/operations.md). Os procedimentos executáveis de
+backup, restore, verificação de recuperação, retenção e incidentes estão em
 [docs/backup-restore.md](docs/backup-restore.md).
 
-## License
+## Licença
 
-Licensed under the Apache License 2.0.
+Licenciado sob a Apache License 2.0.
 
-You are free to use, modify, distribute and commercialize this software.
+Você pode usar, modificar, distribuir e comercializar este software.
 
-Attribution to the original project and author must be preserved as described
-in the LICENSE and NOTICE files.
+A atribuição ao projeto original e ao autor deve ser preservada conforme
+descrito nos arquivos LICENSE e NOTICE.
 
 ## Desenvolvimento local
 
