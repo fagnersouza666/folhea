@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import java.util.Optional;
+import java.time.ZoneId;
 
 @ApplicationScoped
 public class CurrentUser {
@@ -25,9 +26,18 @@ public class CurrentUser {
             user = new UserEntity();
             user.identitySubject = subject;
             user.email = Optional.ofNullable(securityIdentity.getAttribute("email")).map(Object::toString).orElse(null);
-            user.timezone = Optional.ofNullable(securityIdentity.getAttribute("zoneinfo")).map(Object::toString).orElse("UTC");
+            user.timezone = validTimezone(Optional.ofNullable(securityIdentity.getAttribute("zoneinfo")).map(Object::toString).orElse("UTC"));
             users.persist(user);
         }
         return user;
+    }
+
+    private static String validTimezone(String candidate) {
+        try {
+            ZoneId.of(candidate);
+            return candidate;
+        } catch (RuntimeException ignored) {
+            return "UTC";
+        }
     }
 }

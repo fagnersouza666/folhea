@@ -77,7 +77,11 @@ public class BookResource {
     public BookResponse finish(@PathParam("id") UUID id, FinishRequest request) {
         var user = currentUser.get();
         BookEntity book = findOwned(id);
-        LocalDate date = request != null && request.finishedOn() != null ? request.finishedOn() : LocalDate.now(ZoneId.of(user.timezone));
+        LocalDate date = request != null && request.finishedOn() != null
+                ? request.finishedOn()
+                : (book.status == BookStatus.FINISHED && book.finishedOn != null
+                    ? book.finishedOn
+                    : LocalDate.now(ZoneId.of(user.timezone)));
         book.status = BookStatus.FINISHED;
         book.finishedOn = date;
         return BookResponse.from(book);

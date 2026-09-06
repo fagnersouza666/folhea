@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+MAVEN_VERSION=3.9.11
+CACHE_ROOT="${MAVEN_USER_HOME:-${XDG_CACHE_HOME:-/tmp}/folhea-maven}"
+MAVEN_DIR="$CACHE_ROOT/apache-maven-$MAVEN_VERSION"
+if [ ! -x "$MAVEN_DIR/bin/mvn" ]; then
+  archive="$CACHE_ROOT/apache-maven-$MAVEN_VERSION.tar.gz"
+  mkdir -p "$CACHE_ROOT"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/$MAVEN_VERSION/apache-maven-$MAVEN_VERSION-bin.tar.gz" -o "$archive"
+  else
+    wget -q "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/$MAVEN_VERSION/apache-maven-$MAVEN_VERSION-bin.tar.gz" -O "$archive"
+  fi
+  tar -xzf "$archive" -C "$CACHE_ROOT"
+fi
+exec "$MAVEN_DIR/bin/mvn" "$@"
