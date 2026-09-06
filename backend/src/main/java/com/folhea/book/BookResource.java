@@ -81,6 +81,7 @@ public class BookResource {
     public Response delete(@PathParam("id") UUID id) { books.delete(findOwned(id)); return Response.noContent().build(); }
 
     @POST @Path("/{id}/finish") @Transactional
+    @Consumes(MediaType.WILDCARD)
     @Operation(summary = "Finaliza um livro de forma idempotente")
     public BookResponse finish(@PathParam("id") UUID id, FinishRequest request) {
         var user = currentUser.get();
