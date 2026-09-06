@@ -31,7 +31,13 @@ Keycloak. PostgreSQL e Keycloak ficam somente na rede privada do Compose; a
    `PUBLIC_DOMAIN`, mantenha `DB_PASSWORD`, `KEYCLOAK_DB_PASSWORD` e
    `KEYCLOAK_ADMIN_PASSWORD` fora do Git e substitua `start-dev` do Keycloak por
    uma imagem otimizada (`start --optimized`) construída pela equipe de
-   plataforma. O console administrativo não é roteado pelo Caddy.
+   plataforma. Defina também `OIDC_PUBLIC_ORIGIN`, `OIDC_PUBLIC_ISSUER`,
+   `OIDC_PUBLIC_AUTHORIZATION_URL` e `OIDC_PUBLIC_LOGOUT_URL` para o mesmo
+   domínio público HTTPS. O backend continua usando `http://keycloak:8080`
+   somente no back-channel; Caddy publica apenas as rotas de login/logout e
+   recursos estáticos necessários ao navegador. O console administrativo,
+   token endpoint, introspection, JWKS e realm-management não são roteados pelo
+   Caddy.
 
 O primeiro boot do PostgreSQL cria duas bases independentes (`folhea` e
 `keycloak`). O script de inicialização roda apenas quando o volume é criado;

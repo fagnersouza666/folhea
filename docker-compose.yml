@@ -34,7 +34,9 @@ services:
       KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?KEYCLOAK_DB_PASSWORD must be provided by an external secret or .env}
       KC_HTTP_ENABLED: "true"
       KC_HTTP_MANAGEMENT_PORT: "9000"
-      KC_HOSTNAME: ${PUBLIC_DOMAIN:-localhost}
+      # Keycloak issues public URLs, while the backend uses the private
+      # keycloak:8080 address for discovery and token/JWKS back-channel calls.
+      KC_HOSTNAME: ${OIDC_PUBLIC_ORIGIN:?OIDC_PUBLIC_ORIGIN must be provided}
       KC_HOSTNAME_STRICT: "false"
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: "true"
@@ -72,7 +74,9 @@ services:
       OIDC_AUTH_SERVER_URL: http://keycloak:8080/realms/folhea
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-folhea-api}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
-      OIDC_TOKEN_ISSUER: ${OIDC_TOKEN_ISSUER:-http://keycloak:8080/realms/folhea}
+      OIDC_PUBLIC_AUTHORIZATION_URL: ${OIDC_PUBLIC_AUTHORIZATION_URL:?OIDC_PUBLIC_AUTHORIZATION_URL must be provided}
+      OIDC_PUBLIC_LOGOUT_URL: ${OIDC_PUBLIC_LOGOUT_URL:?OIDC_PUBLIC_LOGOUT_URL must be provided}
+      OIDC_TOKEN_ISSUER: ${OIDC_PUBLIC_ISSUER:?OIDC_PUBLIC_ISSUER must be provided}
       CORS_ENABLED: ${CORS_ENABLED:-false}
       SECURITY_CANONICAL_ORIGIN: ${SECURITY_CANONICAL_ORIGIN:?SECURITY_CANONICAL_ORIGIN must be provided}
       SECURITY_ALLOWED_ORIGINS: ${SECURITY_ALLOWED_ORIGINS:?SECURITY_ALLOWED_ORIGINS must be provided}
@@ -115,6 +119,9 @@ services:
     networks:
       edge:
         ipv4_address: 172.30.0.2
+      private:
+        aliases:
+          - caddy
     depends_on:
       backend:
         condition: service_healthy

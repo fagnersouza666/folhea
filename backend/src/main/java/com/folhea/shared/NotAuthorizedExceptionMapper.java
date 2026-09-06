@@ -13,6 +13,7 @@ public class NotAuthorizedExceptionMapper implements ExceptionMapper<NotAuthoriz
     public Response toResponse(NotAuthorizedException exception) {
         return Response.status(Response.Status.UNAUTHORIZED)
                 .type(MediaType.valueOf("application/problem+json"))
+                .header("Cache-Control", "no-store")
                 .entity(new ProblemResponse(URI.create("https://folhea.com.br/problems/unauthorized"),
                         "Não autenticado", 401, "É necessário autenticar-se."))
                 .build();
