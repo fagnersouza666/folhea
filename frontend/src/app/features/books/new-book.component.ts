@@ -9,5 +9,14 @@ import { DashboardStore } from '../../core/state/dashboard.store';
 export class NewBookComponent {
   private readonly fb = inject(NonNullableFormBuilder); private readonly router = inject(Router); private readonly store = inject(DashboardStore);
   readonly form = this.fb.group({ title: ['', Validators.required], author: [''] }); get title() { return this.form.controls.title; }
-  submit(): void { this.form.markAllAsTouched(); const title = this.title.value.trim(); if (!title) { this.title.setErrors({ required: true }); return; } if (this.form.valid) { this.store.addBook(title, this.form.controls.author.value.trim()); void this.router.navigate(['/app/ler']); } }
+  submit(): void {
+    this.form.markAllAsTouched();
+    const title = this.title.value.trim();
+    if (!title) { this.title.setErrors({ required: true }); return; }
+    if (!this.form.valid) return;
+    this.store.addBook(title, this.form.controls.author.value.trim()).subscribe({
+      next: () => void this.router.navigate(['/app/ler']),
+      error: () => undefined
+    });
+  }
 }

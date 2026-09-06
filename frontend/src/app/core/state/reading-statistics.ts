@@ -38,6 +38,10 @@ export function hasProgress(session: Pick<ReadingSession, 'pages' | 'minutes'>):
   return session.pages > 0 || session.minutes > 0;
 }
 
+export function calendarDate(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone }).format(date);
+}
+
 export function addDays(date: string, days: number): string {
   const value = new Date(`${date}T12:00:00Z`);
   value.setUTCDate(value.getUTCDate() + days);

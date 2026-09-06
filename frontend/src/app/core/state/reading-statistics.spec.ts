@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, currentStreak, periodStats } from './reading-statistics';
+import { addDays, calendarDate, currentStreak, periodStats } from './reading-statistics';
 import { Book, ReadingSession } from '../models/models';
 
 const session = (readingDate: string, pages = 10, minutes = 0): ReadingSession => ({ id: readingDate, bookId: 'book', readingDate, pages, minutes });
@@ -25,5 +25,11 @@ describe('reading statistics', () => {
 
   it('adds calendar days without local timezone drift', () => {
     expect(addDays('2026-03-01', -1)).toBe('2026-02-28');
+  });
+
+  it('formats today in the account timezone', () => {
+    const instant = new Date('2026-09-06T02:30:00Z');
+    expect(calendarDate(instant, 'America/Sao_Paulo')).toBe('2026-09-05');
+    expect(calendarDate(instant, 'UTC')).toBe('2026-09-06');
   });
 });

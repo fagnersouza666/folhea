@@ -3,6 +3,7 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DashboardStore } from '../../core/state/dashboard.store';
 import { readingSessionValidator } from './reading-session.validator';
+import { MAX_SESSION_MINUTES, MAX_SESSION_PAGES } from './reading-limits';
 
 @Component({
   selector: 'folhea-edit-session',
@@ -10,11 +11,13 @@ import { readingSessionValidator } from './reading-session.validator';
   imports: [ReactiveFormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (session(); as currentSession) {
+    @if (store.sessionsLoading() && !session()) {
+      <div class="loading surface" role="status">Carregando sessão…</div>
+    } @else if (session(); as currentSession) {
       <div class="form-page"><a routerLink="/app/progresso" class="back-link">← Seu progresso</a><p class="eyebrow">Ajustar registro</p><h1>Editar leitura</h1><p class="intro">Corrija os dados da sessão. Suas métricas serão atualizadas na hora.</p>
         <form class="surface form-card" [formGroup]="form" (ngSubmit)="save()" novalidate>
-          <label class="field" for="edit-book">Livro<select id="edit-book" formControlName="bookId" [attr.aria-invalid]="form.controls.bookId.invalid && form.controls.bookId.touched" [attr.aria-describedby]="form.controls.bookId.invalid && form.controls.bookId.touched ? 'edit-book-error' : null"><option value="" disabled>Escolha um livro</option>@for (book of store.books(); track book.id) { <option [value]="book.id">{{ book.title }}</option> }</select>@if (form.controls.bookId.invalid && form.controls.bookId.touched) { <span id="edit-book-error" class="field-error">Escolha um livro.</span> }</label>
-          <div class="field-row"><label class="field" for="edit-pages">Páginas<input id="edit-pages" type="number" min="0" inputmode="numeric" formControlName="pages" [attr.aria-invalid]="pages.invalid && pages.touched" [attr.aria-describedby]="pages.invalid && pages.touched ? 'edit-pages-error' : null" />@if (pages.invalid && pages.touched) { <span id="edit-pages-error" class="field-error">Use zero ou um número positivo.</span> }</label><label class="field" for="edit-minutes">Minutos<input id="edit-minutes" type="number" min="0" inputmode="numeric" formControlName="minutes" [attr.aria-invalid]="minutes.invalid && minutes.touched" [attr.aria-describedby]="minutes.invalid && minutes.touched ? 'edit-minutes-error' : null" />@if (minutes.invalid && minutes.touched) { <span id="edit-minutes-error" class="field-error">Use zero ou um número positivo.</span> }</label></div>
+          <label class="field" for="edit-book">Livro<select id="edit-book" formControlName="bookId" [attr.aria-invalid]="form.controls.bookId.invalid && form.controls.bookId.touched" [attr.aria-describedby]="form.controls.bookId.invalid && form.controls.bookId.touched ? 'edit-book-error' : null"><option value="" disabled>Escolha um livro</option>@for (book of store.selectableBooks(); track book.id) { <option [value]="book.id">{{ book.title }}</option> }</select>@if (form.controls.bookId.invalid && form.controls.bookId.touched) { <span id="edit-book-error" class="field-error">Escolha um livro.</span> }</label>
+          <div class="field-row"><label class="field" for="edit-pages">Páginas<input id="edit-pages" type="number" min="0" [max]="maxPages" inputmode="numeric" formControlName="pages" [attr.aria-invalid]="pages.invalid && pages.touched" [attr.aria-describedby]="pages.invalid && pages.touched ? 'edit-pages-error' : null" />@if (pages.invalid && pages.touched) { <span id="edit-pages-error" class="field-error">Use um valor entre 0 e {{ maxPages }}.</span> }</label><label class="field" for="edit-minutes">Minutos<input id="edit-minutes" type="number" min="0" [max]="maxMinutes" inputmode="numeric" formControlName="minutes" [attr.aria-invalid]="minutes.invalid && minutes.touched" [attr.aria-describedby]="minutes.invalid && minutes.touched ? 'edit-minutes-error' : null" />@if (minutes.invalid && minutes.touched) { <span id="edit-minutes-error" class="field-error">Use um valor entre 0 e {{ maxMinutes }}.</span> }</label></div>
           @if (form.hasError('emptyReading') && form.touched) { <div class="alert alert-error" role="alert">Informe páginas ou minutos para manter o registro.</div> }
           <label class="field" for="edit-date">Data<input id="edit-date" type="date" formControlName="readingDate" /></label>
           <button class="button button-primary" type="submit">Salvar registro</button>
@@ -32,7 +35,9 @@ export class EditSessionComponent {
   readonly store = inject(DashboardStore);
   readonly id = this.route.snapshot.paramMap.get('id');
   readonly session = computed(() => this.store.getSession(this.id));
-  readonly form = this.fb.group({ bookId: ['', Validators.required], readingDate: [this.store.today(), Validators.required], pages: [0, [Validators.min(0)]], minutes: [0, [Validators.min(0)]] }, { validators: readingSessionValidator });
+  readonly maxPages = MAX_SESSION_PAGES;
+  readonly maxMinutes = MAX_SESSION_MINUTES;
+  readonly form = this.fb.group({ bookId: ['', Validators.required], readingDate: [this.store.today(), Validators.required], pages: [0, [Validators.min(0), Validators.max(MAX_SESSION_PAGES)]], minutes: [0, [Validators.min(0), Validators.max(MAX_SESSION_MINUTES)]] }, { validators: readingSessionValidator });
   get pages() { return this.form.controls.pages; }
   get minutes() { return this.form.controls.minutes; }
 
@@ -46,13 +51,17 @@ export class EditSessionComponent {
   save(): void {
     this.form.markAllAsTouched();
     if (this.form.invalid || !this.id) return;
-    this.store.updateSession(this.id, this.form.getRawValue());
-    void this.router.navigate(['/app/progresso']);
+    this.store.updateSession(this.id, this.form.getRawValue()).subscribe({
+      next: () => void this.router.navigate(['/app/progresso']),
+      error: () => undefined
+    });
   }
 
   remove(): void {
     if (!this.id || !window.confirm('Excluir este registro de leitura?')) return;
-    this.store.deleteSession(this.id);
-    void this.router.navigate(['/app/progresso']);
+    this.store.deleteSession(this.id).subscribe({
+      next: () => void this.router.navigate(['/app/progresso']),
+      error: () => undefined
+    });
   }
 }

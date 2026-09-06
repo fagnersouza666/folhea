@@ -11,6 +11,7 @@ import { AppShellComponent } from '../layout/app-shell.component';
 import { AuthService } from '../core/auth/auth.service';
 import { DashboardStore } from '../core/state/dashboard.store';
 import { PwaService } from '../core/services/pwa.service';
+import { AnalyticsService } from '../core/analytics/analytics.service';
 import { Book } from '../core/models/models';
 
 const book: Book = {
@@ -20,18 +21,25 @@ const book: Book = {
   status: 'READING'
 };
 
-const createStore = (overrides: Record<string, unknown> = {}) => ({
-  books: signal<Book[]>([book]),
-  booksLoading: signal(false),
-  booksError: signal<string | null>(null),
-  sessionsError: signal<string | null>(null),
-  today: () => '2026-09-06',
-  addBook: vi.fn(),
-  addSession: vi.fn(),
-  loadSessions: vi.fn(),
-  reload: vi.fn(),
-  ...overrides
-});
+const createStore = (overrides: Record<string, unknown> = {}) => {
+  const booksSignal = (overrides.books as ReturnType<typeof signal<Book[]>>) ?? signal<Book[]>([book]);
+  const rest = { ...overrides };
+  delete rest.books;
+  delete rest.selectableBooks;
+  return {
+    books: booksSignal,
+    selectableBooks: () => booksSignal().filter((item) => !item.id.startsWith('local-')),
+    booksLoading: signal(false),
+    booksError: signal<string | null>(null),
+    sessionsError: signal<string | null>(null),
+    today: () => '2026-09-06',
+    addBook: vi.fn(),
+    addSession: vi.fn(),
+    loadSessions: vi.fn(),
+    reload: vi.fn(),
+    ...rest
+  };
+};
 
 describe('critical form DOM states', () => {
   afterEach(() => TestBed.resetTestingModule());
@@ -169,13 +177,15 @@ describe('critical form DOM states', () => {
     const store = createStore({ load: vi.fn(), error: signal(null) });
     const auth = { user: signal({ email: 'reader@example.com' }), signOut: vi.fn() };
     const pwa = { online: signal(true), updateAvailable: signal(false), activateUpdate: vi.fn() };
+    const analytics = { track: vi.fn() };
     TestBed.configureTestingModule({
       imports: [AppShellComponent],
       providers: [
         provideRouter([]),
         { provide: DashboardStore, useValue: store },
         { provide: AuthService, useValue: auth },
-        { provide: PwaService, useValue: pwa }
+        { provide: PwaService, useValue: pwa },
+        { provide: AnalyticsService, useValue: analytics }
       ]
     });
 

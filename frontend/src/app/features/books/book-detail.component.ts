@@ -9,7 +9,9 @@ import { DashboardStore } from '../../core/state/dashboard.store';
   imports: [ReactiveFormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (book(); as currentBook) {
+    @if (store.booksLoading() && !book()) {
+      <div class="loading surface" role="status">Carregando livro…</div>
+    } @else if (book(); as currentBook) {
       <div class="detail-page">
         <a routerLink="/app/livros" class="back-link">← Seus livros</a>
         <div class="detail-heading"><div class="book-thumb" aria-hidden="true">{{ currentBook.title[0] }}</div><div><p class="eyebrow">Livro</p><h1>{{ currentBook.title }}</h1><p class="muted">{{ currentBook.status === 'FINISHED' ? 'Finalizado' : 'Lendo agora' }}</p></div></div>
@@ -61,7 +63,9 @@ export class BookDetailComponent {
   reopen(): void { if (this.id) this.store.reopenBook(this.id); }
   remove(): void {
     if (!this.id || !window.confirm('Excluir este livro e suas sessões?')) return;
-    this.store.deleteBook(this.id);
-    void this.router.navigate(['/app/livros']);
+    this.store.deleteBook(this.id).subscribe({
+      next: () => void this.router.navigate(['/app/livros']),
+      error: () => undefined
+    });
   }
 }
