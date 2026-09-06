@@ -3,6 +3,8 @@ package com.folhea.reading;
 import com.folhea.book.BookRepository;
 import com.folhea.identity.CurrentUser;
 import com.folhea.shared.ProblemException;
+import com.folhea.shared.QueryLimits;
+import com.folhea.shared.TimeProvider;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -42,14 +44,25 @@ public class ReadingSessionResource {
     @Inject CurrentUser currentUser;
     @Inject ReadingSessionRepository sessions;
     @Inject BookRepository books;
+    @Inject TimeProvider time;
 
     @GET
     @Operation(summary = "Lista sessões do usuário")
-    public List<SessionResponse> list(@QueryParam("from") LocalDate from, @QueryParam("to") LocalDate to) {
-        var userId = currentUser.get().id;
-        if (from == null && to == null) return sessions.allOwned(userId).stream().map(SessionResponse::from).toList();
-        if (from == null || to == null || from.isAfter(to)) invalid("O período informado é inválido.");
-        return sessions.findOwned(userId, from, to).stream().map(SessionResponse::from).toList();
+    public List<SessionResponse> list(@QueryParam("from") LocalDate from,
+                                      @QueryParam("to") LocalDate to,
+                                      @QueryParam("limit") Integer limit,
+                                      @QueryParam("offset") Integer offset) {
+        var user = currentUser.get();
+        if ((from == null) != (to == null)) invalid("O período informado é inválido.");
+        LocalDate today = time.today(user.timezone);
+        LocalDate effectiveTo = to == null ? today : to;
+        LocalDate effectiveFrom = from == null ? QueryLimits.defaultRangeStart(today) : from;
+        if (effectiveFrom.isAfter(effectiveTo)) invalid("O período informado é inválido.");
+        QueryLimits.ensureMaxDateRange(effectiveFrom, effectiveTo);
+        int pageLimit = QueryLimits.clampLimit(limit);
+        int pageOffset = QueryLimits.sanitizeOffset(offset);
+        return sessions.findOwned(user.id, effectiveFrom, effectiveTo, pageLimit, pageOffset)
+                .stream().map(SessionResponse::from).toList();
     }
 
     @POST @Transactional
@@ -139,7 +152,7 @@ public class ReadingSessionResource {
             this(id, bookId, readingDate, pages, minutes, null, null);
         }
 
-        static SessionResponse from(ReadingSessionEntity session) {
+        public static SessionResponse from(ReadingSessionEntity session) {
             return new SessionResponse(session.id, session.bookId, session.readingDate,
                     session.pages, session.minutes, session.createdAt, session.updatedAt);
         }

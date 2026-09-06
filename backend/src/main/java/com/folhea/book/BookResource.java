@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.folhea.identity.CurrentUser;
 import com.folhea.shared.ProblemException;
+import com.folhea.shared.QueryLimits;
 import com.folhea.shared.TimeProvider;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
@@ -19,6 +20,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -45,8 +47,10 @@ public class BookResource {
 
     @GET
     @Operation(summary = "Lista os livros do usuário autenticado")
-    public List<BookResponse> list() {
-        return books.findOwned(currentUser.get().id).stream().map(BookResponse::from).toList();
+    public List<BookResponse> list(@QueryParam("limit") Integer limit, @QueryParam("offset") Integer offset) {
+        int pageLimit = QueryLimits.clampLimit(limit);
+        int pageOffset = QueryLimits.sanitizeOffset(offset);
+        return books.findOwned(currentUser.get().id, pageLimit, pageOffset).stream().map(BookResponse::from).toList();
     }
 
     @POST
@@ -152,7 +156,7 @@ public class BookResource {
             this(id, title, author, status, finishedOn, null, null);
         }
 
-        static BookResponse from(BookEntity book) {
+        public static BookResponse from(BookEntity book) {
             return new BookResponse(book.id, book.title, book.author, book.status,
                     book.finishedOn, book.createdAt, book.updatedAt);
         }

@@ -5,6 +5,7 @@ import com.folhea.book.BookRepository;
 import com.folhea.book.BookStatus;
 import com.folhea.reading.ReadingSessionEntity;
 import com.folhea.reading.ReadingSessionRepository;
+import com.folhea.shared.QueryLimits;
 import com.folhea.shared.TimeProvider;
 import com.folhea.user.UserEntity;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -33,6 +34,9 @@ public class StatisticsService {
         }
         LocalDate today = today(user);
         PeriodSelection selection = selectPeriod(user.id, today, from, to, periodName);
+        if (!selection.allTime) {
+            QueryLimits.ensureMaxDateRange(selection.from, selection.to);
+        }
         List<ReadingSessionEntity> period = selection.allTime
                 ? List.of()
                 : sessions.findOwned(user.id, selection.from, selection.to);

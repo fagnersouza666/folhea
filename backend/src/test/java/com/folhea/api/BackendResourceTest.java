@@ -5,6 +5,7 @@ import com.folhea.book.BookStatus;
 import com.folhea.reading.ReadingSessionEntity;
 import com.folhea.security.CsrfTokenService;
 import com.folhea.security.SessionCookiePolicy;
+import com.folhea.security.store.TokenStateStore;
 import com.folhea.user.UserEntity;
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
@@ -26,7 +27,11 @@ import java.util.UUID;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /** REST contract coverage backed by PostgreSQL Dev Services. */
 @QuarkusTest
@@ -37,6 +42,7 @@ class BackendResourceTest {
 
     @Inject EntityManager entityManager;
     @Inject CsrfTokenService csrfTokens;
+    @Inject TokenStateStore tokenStateStore;
     private UUID seededAliceBookId;
     private UUID seededBobBookId;
     private UUID seededBobSessionId;
@@ -340,7 +346,36 @@ class BackendResourceTest {
         given().when().get("/api/v1/stats?period=today").then().statusCode(200)
                 .body("currentStreakDays", equalTo(120));
         given().when().get("/api/v1/sessions").then().statusCode(200)
-                .body("size()", equalTo(120));
+                .body("size()", equalTo(100));
+        given().when().get("/api/v1/sessions?from=" + TODAY.minusDays(119) + "&to=" + TODAY + "&offset=100")
+                .then().statusCode(200).body("size()", equalTo(20));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
+    void listingsRejectOverlongIntervalsAndPaginateResults() {
+        UUID bookId = createBook("Paginação");
+        createSession(bookId, TODAY, 1, 1);
+        createSession(bookId, TODAY.minusDays(1), 2, 2);
+
+        given().when().get("/api/v1/sessions?from=" + TODAY.minusDays(400) + "&to=" + TODAY)
+                .then().statusCode(400).contentType("application/problem+json")
+                .body("type", equalTo("https://folhea.com.br/problems/invalid-period"));
+        given().when().get("/api/v1/sessions?from=" + TODAY + "&to=" + TODAY + "&limit=1&offset=1")
+                .then().statusCode(200).body("size()", equalTo(0));
+        given().when().get("/api/v1/sessions?from=" + TODAY.minusDays(1) + "&to=" + TODAY + "&limit=1")
+                .then().statusCode(200).body("size()", equalTo(1));
+
+        given().when().get("/api/v1/stats?from=" + TODAY.minusDays(400) + "&to=" + TODAY)
+                .then().statusCode(400).contentType("application/problem+json")
+                .body("type", equalTo("https://folhea.com.br/problems/invalid-period"));
+
+        createBook("Extra");
+        given().when().get("/api/v1/books?limit=1").then().statusCode(200).body("size()", equalTo(1));
+        given().when().get("/api/v1/books?limit=1&offset=1").then().statusCode(200).body("size()", equalTo(1));
     }
 
     @Test
@@ -386,6 +421,51 @@ class BackendResourceTest {
                 .body("size()", equalTo(1)).body("[0].pages", equalTo(99));
         given().when().get("/api/v1/stats?period=today").then().statusCode(200)
                 .body("pages", equalTo(99)).body("minutes", equalTo(40));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
+    void exportReturnsOnlyTheAuthenticatedUsersData() {
+        given().when().get("/api/v1/me/export")
+                .then().statusCode(200)
+                .body("user.email", equalTo("alice@example.test"))
+                .body("books", hasSize(1))
+                .body("books[0].id", equalTo(seededAliceBookId.toString()))
+                .body("books[0].title", equalTo("Livro de Alice"))
+                .body("sessions", hasSize(0));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
+    void deleteAccountRemovesOwnedBooksAndSessionsWhileOtherUsersRemain() {
+        given().contentType(ContentType.JSON).body("{\"confirm\":true}")
+                .when().delete("/api/v1/me")
+                .then().statusCode(204);
+
+        assertNull(findUserBySubject(ALICE));
+        assertEquals(0L, countBooksForSubject(ALICE));
+        assertEquals(0L, countSessionsForSubject(ALICE));
+        assertNotNull(findUserBySubject(BOB));
+        assertEquals(1L, countBooksForSubject(BOB));
+        assertEquals(1L, countSessionsForSubject(BOB));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
+    void deleteAccountRequiresExplicitConfirmation() {
+        given().contentType(ContentType.JSON).body("{\"confirm\":false}")
+                .when().delete("/api/v1/me")
+                .then().statusCode(400).contentType("application/problem+json")
+                .body("type", equalTo("https://folhea.com.br/problems/invalid-account-deletion"));
     }
 
     private UUID createBook(String title) {
@@ -435,5 +515,32 @@ class BackendResourceTest {
         session.pages = pages;
         session.minutes = minutes;
         return session;
+    }
+
+    @Transactional
+    UserEntity findUserBySubject(String subject) {
+        return entityManager.createQuery("select u from UserEntity u where u.identitySubject = :subject", UserEntity.class)
+                .setParameter("subject", subject)
+                .getResultStream()
+                .findFirst()
+                .orElse(null);
+    }
+
+    @Transactional
+    long countBooksForSubject(String subject) {
+        return entityManager.createQuery(
+                        "select count(b) from BookEntity b join UserEntity u on b.userId = u.id where u.identitySubject = :subject",
+                        Long.class)
+                .setParameter("subject", subject)
+                .getSingleResult();
+    }
+
+    @Transactional
+    long countSessionsForSubject(String subject) {
+        return entityManager.createQuery(
+                        "select count(s) from ReadingSessionEntity s join UserEntity u on s.userId = u.id where u.identitySubject = :subject",
+                        Long.class)
+                .setParameter("subject", subject)
+                .getSingleResult();
     }
 }
