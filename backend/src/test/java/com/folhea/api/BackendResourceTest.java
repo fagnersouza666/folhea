@@ -19,7 +19,8 @@ import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.not;
 
 /** REST contract coverage backed by PostgreSQL Dev Services. */
 @QuarkusTest
@@ -75,7 +76,7 @@ class BackendResourceTest {
         given().when().get("/api/v1/books/{id}", bookId)
                 .then().statusCode(200)
                 .body("id", equalTo(bookId.toString()))
-                .body("userId", notNullValue())
+                .body("$", not(hasKey("userId")))
                 .body("status", equalTo("READING"));
 
         given().contentType(ContentType.JSON).body("{\"title\":\"O Hobbit revisitado\",\"author\":\"Tolkien\"}")
@@ -319,7 +320,9 @@ class BackendResourceTest {
                 .body("{\"bookId\":\"" + bookId + "\",\"readingDate\":\"" + date
                         + "\",\"pages\":" + pages + ",\"minutes\":" + minutes + "}")
                 .when().post("/api/v1/sessions")
-                .then().statusCode(201).extract().path("id"));
+                .then().statusCode(201)
+                .body("$", not(hasKey("userId")))
+                .extract().path("id"));
     }
 
     private UUID findSessionId(LocalDate date) {

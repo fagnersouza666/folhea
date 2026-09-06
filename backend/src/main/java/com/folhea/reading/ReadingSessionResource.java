@@ -116,15 +116,15 @@ public class ReadingSessionResource {
         boolean isEmpty() { return bookId == null && readingDate == null && pages == null && minutes == null; }
     }
 
-    public record SessionResponse(UUID id, UUID userId, UUID bookId, LocalDate readingDate, int pages, int minutes,
+    public record SessionResponse(UUID id, UUID bookId, LocalDate readingDate, int pages, int minutes,
                                   java.time.Instant createdAt, java.time.Instant updatedAt) {
         /** Backwards-compatible constructor for callers that only need session progress. */
         public SessionResponse(UUID id, UUID bookId, LocalDate readingDate, int pages, int minutes) {
-            this(id, null, bookId, readingDate, pages, minutes, null, null);
+            this(id, bookId, readingDate, pages, minutes, null, null);
         }
 
         static SessionResponse from(ReadingSessionEntity session) {
-            return new SessionResponse(session.id, session.userId, session.bookId, session.readingDate,
+            return new SessionResponse(session.id, session.bookId, session.readingDate,
                     session.pages, session.minutes, session.createdAt, session.updatedAt);
         }
     }

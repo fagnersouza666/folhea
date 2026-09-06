@@ -134,15 +134,15 @@ public class BookResource {
 
     public record FinishRequest(LocalDate finishedOn) { }
 
-    public record BookResponse(UUID id, UUID userId, String title, String author, BookStatus status,
+    public record BookResponse(UUID id, String title, String author, BookStatus status,
                                LocalDate finishedOn, Instant createdAt, Instant updatedAt) {
         /** Backwards-compatible constructor for callers that only need the public book fields. */
         public BookResponse(UUID id, String title, String author, BookStatus status, LocalDate finishedOn) {
-            this(id, null, title, author, status, finishedOn, null, null);
+            this(id, title, author, status, finishedOn, null, null);
         }
 
         static BookResponse from(BookEntity book) {
-            return new BookResponse(book.id, book.userId, book.title, book.author, book.status,
+            return new BookResponse(book.id, book.title, book.author, book.status,
                     book.finishedOn, book.createdAt, book.updatedAt);
         }
     }

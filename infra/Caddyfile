@@ -25,13 +25,37 @@
 	request_body @api {
 		max_size 64KB
 	}
-	reverse_proxy @api {$API_UPSTREAM}
+	reverse_proxy @api {$API_UPSTREAM} {
+		# Caddy is the only trusted edge proxy. Strip client-supplied forwarding
+		# headers before setting the canonical values consumed by Quarkus.
+		header_up -Forwarded
+		header_up -X-Forwarded-For
+		header_up -X-Forwarded-Host
+		header_up -X-Forwarded-Port
+		header_up -X-Forwarded-Proto
+		header_up -X-Forwarded-Ssl
+		header_up -X-Forwarded-Prefix
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-Proto {scheme}
+	}
 
 	# The BFF owns the OIDC start/callback/logout endpoints. There is no route
 	# to the Keycloak admin console or to its internal realm-management API.
 	@auth path /auth/*
 	header @auth Cache-Control "no-store"
-	reverse_proxy @auth {$API_UPSTREAM}
+	reverse_proxy @auth {$API_UPSTREAM} {
+		header_up -Forwarded
+		header_up -X-Forwarded-For
+		header_up -X-Forwarded-Host
+		header_up -X-Forwarded-Port
+		header_up -X-Forwarded-Proto
+		header_up -X-Forwarded-Ssl
+		header_up -X-Forwarded-Prefix
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-Proto {scheme}
+	}
 
 	root * {$STATIC_ROOT}
 	try_files {path} {path}/ /index.html
