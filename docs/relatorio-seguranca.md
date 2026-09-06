@@ -1,7 +1,7 @@
 # Revisão de segurança — Folhea (projeto completo)
 
 > Sistema: Folhea (BFF Quarkus + Angular + Keycloak + PostgreSQL + Caddy)
-> Data: 06/09/2026 | Versão: backend 1.0.0-SNAPSHOT / frontend 0.1.0
+> Data: 06/09/2026 | Versão: 0.2.0
 > Stack: Java 25, Quarkus 3.33.3 (LTS), Angular 22.1.5, Keycloak 26.7.3, Caddy 2.11.x, PostgreSQL 18, Redis 7
 > Baseado em: OWASP Top 10:2021, LGPD (Lei 13.709/2018), CWE
 > Modo: audit (playbook completo + LGPD + threat modeling + superfície)

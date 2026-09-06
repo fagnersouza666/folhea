@@ -11,9 +11,7 @@ Frontend (`frontend/package.json`), backend (`backend/pom.xml`) e OpenAPI
 chore, teste ou infra sem mudança de produto não incrementam. Detalhe em
 `.cursor/rules/versionamento.mdc`.
 
-Hoje os números ainda divergem (`0.1.0` no frontend, `1.0.0-SNAPSHOT` no
-pom e `1.0` no OpenAPI). Na próxima alteração de produto, alinhe os três
-à mesma `X.Y.Z` e só então rode o script.
+Versão atual: **0.2.0**.
 
 ## Backend
 
