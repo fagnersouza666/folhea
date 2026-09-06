@@ -135,6 +135,11 @@ versionados como configuração sem segredos ou exportados por canal seguro.
 Rate limit não substitui validação, autorização ou proteção contra abuso
 distribuído; alertas devem acompanhar picos de `401`, `403` e `429`.
 
+O código mantém um fallback local fail-closed para desenvolvimento e testes,
+com contadores separados por IP e usuário. A publicação com mais de uma
+instância exige armazenamento compartilhado com TTL para sessão OIDC, CSRF e
+limites; o finding SEC-001 registra essa dependência operacional.
+
 ## 6. Segredos, dados e logs
 
 - Segredos chegam por secret manager/CI secrets ou variáveis de ambiente fora

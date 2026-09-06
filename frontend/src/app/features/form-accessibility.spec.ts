@@ -36,7 +36,7 @@ const createStore = (overrides: Record<string, unknown> = {}) => ({
 describe('critical form DOM states', () => {
   afterEach(() => TestBed.resetTestingModule());
 
-  it('associates login errors with both fields after submit', () => {
+  it('keeps the BFF sign-in hand-off keyboard reachable', () => {
     const auth = { signIn: vi.fn() };
     TestBed.configureTestingModule({
       imports: [LoginComponent],
@@ -45,17 +45,12 @@ describe('critical form DOM states', () => {
 
     const fixture = TestBed.createComponent(LoginComponent);
     fixture.detectChanges();
-    fixture.nativeElement.querySelector('form').dispatchEvent(new Event('submit'));
-    fixture.detectChanges();
-
-    const email = fixture.nativeElement.querySelector('#email') as HTMLInputElement;
-    const password = fixture.nativeElement.querySelector('#password') as HTMLInputElement;
-    expect(email.getAttribute('aria-invalid')).toBe('true');
-    expect(email.getAttribute('aria-describedby')).toBe('email-error');
-    expect(password.getAttribute('aria-invalid')).toBe('true');
-    expect(password.getAttribute('aria-describedby')).toBe('password-error');
-    expect(fixture.nativeElement.querySelector('#email-error')?.textContent).toContain('e-mail');
-    expect(fixture.nativeElement.querySelector('#password-error')?.textContent).toContain('obrigatória');
+    const submit = fixture.nativeElement.querySelector('.submit-button') as HTMLButtonElement;
+    expect(submit.type).toBe('button');
+    expect(submit.tabIndex).toBeGreaterThanOrEqual(0);
+    expect(fixture.nativeElement.querySelector('.auth-intro')?.textContent).toContain('servidor');
+    submit.click();
+    expect(auth.signIn).toHaveBeenCalledOnce();
   });
 
   it('keeps a blank book submission on the form and exposes its error', () => {

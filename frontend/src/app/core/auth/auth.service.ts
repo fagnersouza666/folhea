@@ -1,9 +1,9 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { isPlatformBrowser } from '@angular/common';
+import { Injectable, PLATFORM_ID, computed, inject, signal } from '@angular/core';
+import { firstValueFrom, catchError, map, Observable, of, tap } from 'rxjs';
+import { CsrfService } from '../api/csrf.service';
 import { ApiClient } from '../api/api-client.service';
 import { User } from '../models/models';
-import { AnalyticsService } from '../analytics/analytics.service';
 
 /**
  * The browser never owns an access token. Authentication is represented by
@@ -13,8 +13,8 @@ import { AnalyticsService } from '../analytics/analytics.service';
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly api = inject(ApiClient);
-  private readonly router = inject(Router);
-  private readonly analytics = inject(AnalyticsService);
+  private readonly platformId = inject(PLATFORM_ID);
+  private readonly csrf = inject(CsrfService);
   private readonly userState = signal<User | null>(null);
   private readonly loadingState = signal(false);
   private readonly initializedState = signal(false);
@@ -30,7 +30,7 @@ export class AuthService {
     if (this.loadingState()) return;
     this.loadingState.set(true);
     try {
-      this.userState.set(await firstValueFrom(this.api.getMe()));
+      await firstValueFrom(this.restore());
       this.errorState.set(null);
     } catch {
       this.userState.set(null);
@@ -40,23 +40,22 @@ export class AuthService {
     }
   }
 
-  /**
-   * The deployed BFF starts OIDC before this route. Keeping this small local
-   * hand-off also makes the dev shell and automated smoke flow usable when no
-   * identity provider is configured yet; it does not persist credentials.
-   */
-  signIn(email: string): void {
-    const isNewAccount = this.userState() === null;
-    this.userState.set({ id: 'session-user', email, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo' });
-    this.initializedState.set(true);
-    this.errorState.set(null);
-    if (isNewAccount) this.analytics.track('account_created');
-    void this.router.navigate(['/app/inicio']);
+  signIn(): void {
+    if (isPlatformBrowser(this.platformId)) window.location.assign('/auth/login');
   }
 
   signOut(): void {
     this.userState.set(null);
     this.initializedState.set(true);
-    void this.router.navigate(['/']);
+    this.csrf.clear();
+    if (isPlatformBrowser(this.platformId)) window.location.assign('/auth/logout');
+  }
+
+  restore(): Observable<boolean> {
+    return this.api.getMe().pipe(
+      tap((user) => this.userState.set(user)),
+      map(() => true),
+      catchError(() => { this.userState.set(null); return of(false); })
+    );
   }
 }
