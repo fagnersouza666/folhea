@@ -76,6 +76,9 @@ a { color: inherit; text-decoration: none; }
 .update-alert .button { min-height: 2.2rem; padding: .45rem .75rem; font-size: .75rem; }
 .dismiss { flex: none; border: 0; color: inherit; background: transparent; font-size: .7rem; font-weight: 800; text-decoration: underline; }
 @keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
 
 @media (min-width: 760px) {
   .container { width: min(100% - 4rem, 72rem); }

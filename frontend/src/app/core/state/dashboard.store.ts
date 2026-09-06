@@ -21,6 +21,7 @@ export class DashboardStore {
   private readonly sessionsErrorState = signal<string | null>(null);
   private readonly statsErrorState = signal<string | null>(null);
   private hasLoaded = false;
+  private sessionsLoaded = false;
 
   readonly dashboard = this.dashboardState.asReadonly();
   readonly books = this.booksState.asReadonly();
@@ -66,7 +67,7 @@ export class DashboardStore {
     this.booksLoadingState.set(true);
     this.booksErrorState.set(null);
     this.api.getBooks().subscribe({
-      next: (books) => { this.booksState.set(books); this.booksLoadingState.set(false); this.calculateVisibleStats(); },
+      next: (books) => { this.booksState.set(books); this.booksLoadingState.set(false); this.recalculateDashboard(); this.calculateVisibleStats(); },
       error: (error: unknown) => { this.booksLoadingState.set(false); this.booksErrorState.set(this.errorMessage(error, 'Não foi possível carregar seus livros.')); }
     });
   }
@@ -75,7 +76,7 @@ export class DashboardStore {
     this.sessionsLoadingState.set(true);
     this.sessionsErrorState.set(null);
     this.api.getSessions().subscribe({
-      next: (sessions) => { this.sessionsState.set(sessions); this.sessionsLoadingState.set(false); this.recalculateDashboard(); this.calculateVisibleStats(); if (this.periodState() === 'all') this.loadStats('all'); },
+      next: (sessions) => { this.sessionsState.set(sessions); this.sessionsLoaded = true; this.sessionsLoadingState.set(false); this.recalculateDashboard(); this.calculateVisibleStats(); if (this.periodState() === 'all') this.loadStats('all'); },
       error: (error: unknown) => { this.sessionsLoadingState.set(false); this.sessionsErrorState.set(this.errorMessage(error, 'Não foi possível carregar suas sessões.')); }
     });
   }
@@ -102,7 +103,7 @@ export class DashboardStore {
 
   private requestStats(from: string, to: string): void {
     this.api.getStats(from, to).subscribe({
-      next: (stats) => { this.statsState.set({ ...stats, currentStreakDays: this.currentStreak() }); this.statsLoadingState.set(false); },
+      next: (stats) => { this.statsState.set({ ...stats, currentStreakDays: this.sessionsLoaded ? this.currentStreak() : stats.currentStreakDays }); this.statsLoadingState.set(false); },
       error: (error: unknown) => {
         this.statsState.set(periodStats(this.sessionsState(), this.booksState(), from, to, this.currentStreak()));
         this.statsLoadingState.set(false);

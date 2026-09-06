@@ -11,7 +11,12 @@ export class SeoService {
     this.meta('robots', indexable ? 'index, follow' : 'noindex, nofollow');
     this.metaProperty('og:title', title);
     this.metaProperty('og:description', description);
+    this.metaProperty('og:type', 'website');
+    this.metaProperty('og:image', 'https://folhea.com.br/icon-512.svg');
     this.metaProperty('og:url', `https://folhea.com.br${path}`);
+    this.meta('twitter:card', 'summary');
+    this.meta('twitter:title', title);
+    this.meta('twitter:description', description);
     let canonical = this.document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     if (!canonical) { canonical = this.document.createElement('link'); canonical.rel = 'canonical'; this.document.head.appendChild(canonical); }
     canonical.href = `https://folhea.com.br${path}`;
