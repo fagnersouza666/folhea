@@ -49,8 +49,10 @@ card_downloaded, pwa_installed
 O `AnalyticsService` aceita somente dimensões anônimas (`screen`, `source`,
 `method`, `days`, `pages`, `minutes` e contagens). Título, autor, foto,
 conteúdo privado, e-mail, token e IDs são descartados antes do envio. Eventos
-usam `sendBeacon` quando possível e falhas de telemetria nunca interrompem o
-fluxo do usuário.
+somente são enviados após consentimento explícito (`AnalyticsService.setConsent`)
+e não são enfileirados quando o dispositivo está offline; a ausência de
+conexão ou falha de telemetria nunca interrompe o fluxo do usuário. `sendBeacon`
+é usado quando possível, com fallback para `fetch`.
 
 ## Métricas de produto e release
 
