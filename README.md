@@ -4,14 +4,28 @@ Folhea is a reading habit tracker. The backend is a Java 25 / Quarkus 3.33 monol
 
 ## Backend
 
-Start PostgreSQL locally with `docker compose up -d postgres`, then run:
+Create a local environment file, then start the complete local stack:
+
+```bash
+cp .env.example .env
+docker compose --env-file .env up -d --build
+```
+
+The public edge is available at `https://localhost:8443` (Caddy's local
+certificate may need to be trusted once). To run only the backend from Maven,
+start PostgreSQL and Keycloak with `docker compose --env-file .env up -d
+postgres keycloak`, then run:
 
 ```bash
 cd backend
+set -a && . ../.env && set +a
 ./mvnw quarkus:dev
 ```
 
 The API is rooted at `/api/v1`; OpenAPI is available at `/api/openapi`. Configure OIDC and database credentials through environment variables rather than committing secrets.
+
+Operational deployment, health checks, daily backups, retention, and restore
+procedures are documented in [docs/operations.md](docs/operations.md).
 
 ## License
 

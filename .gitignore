@@ -7,3 +7,7 @@
 CLAUDE.md
 CLAUDE.local.md
 GEMINI.md
+.env
+backups/
+*.dump
+*.dump.gz
