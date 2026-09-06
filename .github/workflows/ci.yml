@@ -218,6 +218,7 @@ jobs:
       - name: Validate Compose configuration
         run: docker compose --env-file .env.example config --quiet
       - run: docker build --file infra/Dockerfile --tag folhea:ci .
+      - run: docker build --file infra/Dockerfile --target caddy-runtime --tag folhea:caddy-ci .
 
   merge-gate:
     name: merge-gate

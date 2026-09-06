@@ -18,6 +18,10 @@ RUN chmod +x mvnw && ./mvnw -B package -DskipTests
 FROM caddy:2.10-alpine AS caddy-runtime
 COPY --from=frontend-build /workspace/frontend/dist/folhea/browser /srv
 COPY infra/Caddyfile /etc/caddy/Caddyfile
+ENV PUBLIC_DOMAIN=localhost \
+    API_UPSTREAM=http://backend:8080 \
+    STATIC_ROOT=/srv
+RUN caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 EXPOSE 80 443
 
 FROM eclipse-temurin:25-jre-alpine AS backend-runtime
