@@ -1,4 +1,5 @@
 export type BookStatus = 'READING' | 'FINISHED';
+export type StatsPeriod = 'today' | '7' | '30' | 'all';
 
 export interface User {
   id: string;
@@ -8,22 +9,24 @@ export interface User {
 
 export interface Book {
   id: string;
-  userId: string;
+  userId?: string;
   title: string;
   author?: string;
   status: BookStatus;
   finishedOn?: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ReadingSession {
   id: string;
-  userId: string;
+  userId?: string;
   bookId: string;
   readingDate: string;
   pages: number;
   minutes: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface WeekStats {
@@ -48,6 +51,14 @@ export interface ReadingDraft {
   readingDate: string;
   pages: number;
   minutes: number;
+}
+
+export interface BookPatch { title?: string; author?: string; }
+export interface ReadingSessionPatch {
+  bookId?: string;
+  readingDate?: string;
+  pages?: number;
+  minutes?: number;
 }
 
 export interface ProblemDetails {
