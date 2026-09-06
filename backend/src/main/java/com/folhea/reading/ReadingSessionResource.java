@@ -6,7 +6,6 @@ import com.folhea.shared.ProblemException;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.Consumes;
@@ -21,6 +20,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
 import java.time.LocalDate;
@@ -32,6 +32,7 @@ import java.util.UUID;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 @Tag(name = "Reading sessions")
+@SecurityRequirement(name = "bearerAuth")
 public class ReadingSessionResource {
     @Inject CurrentUser currentUser;
     @Inject ReadingSessionRepository sessions;
@@ -48,7 +49,7 @@ public class ReadingSessionResource {
 
     @POST @Transactional
     @Operation(summary = "Registra uma sessão de leitura")
-    public Response create(@Valid CreateSessionRequest request) {
+    public Response create(CreateSessionRequest request) {
         var user = currentUser.get();
         validateProgress(request == null ? null : request.pages(), request == null ? null : request.minutes());
         if (request.readingDate() == null) invalid("Informe a data da leitura.");
@@ -64,7 +65,7 @@ public class ReadingSessionResource {
     }
 
     @PATCH @Path("/{id}") @Transactional
-    public SessionResponse update(@PathParam("id") UUID id, @Valid UpdateSessionRequest request) {
+    public SessionResponse update(@PathParam("id") UUID id, UpdateSessionRequest request) {
         var user = currentUser.get();
         ReadingSessionEntity session = findOwned(user.id, id);
         if (request == null || request.isEmpty()) invalid("Informe ao menos um campo para alterar.");
@@ -115,6 +116,11 @@ public class ReadingSessionResource {
 
     public record SessionResponse(UUID id, UUID userId, UUID bookId, LocalDate readingDate, int pages, int minutes,
                                   java.time.Instant createdAt, java.time.Instant updatedAt) {
+        /** Backwards-compatible constructor for callers that only need session progress. */
+        public SessionResponse(UUID id, UUID bookId, LocalDate readingDate, int pages, int minutes) {
+            this(id, null, bookId, readingDate, pages, minutes, null, null);
+        }
+
         static SessionResponse from(ReadingSessionEntity session) {
             return new SessionResponse(session.id, session.userId, session.bookId, session.readingDate,
                     session.pages, session.minutes, session.createdAt, session.updatedAt);

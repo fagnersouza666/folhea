@@ -22,6 +22,7 @@ import java.util.UUID;
 public class BookEntity {
     @Id @GeneratedValue(strategy = GenerationType.UUID)
     public UUID id;
+    @NotNull
     @Column(name = "user_id", nullable = false) public UUID userId;
     @NotBlank
     @Size(max = 500)

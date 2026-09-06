@@ -9,6 +9,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
 import java.time.LocalDate;
@@ -17,6 +18,7 @@ import java.time.LocalDate;
 @Authenticated
 @Produces(MediaType.APPLICATION_JSON)
 @Tag(name = "Statistics")
+@SecurityRequirement(name = "bearerAuth")
 public class StatisticsResource {
     @Inject CurrentUser currentUser;
     @Inject StatisticsService statistics;
@@ -39,4 +41,9 @@ public class StatisticsResource {
     @GET @Path("/dashboard")
     @Operation(summary = "Retorna os dados resumidos da home")
     public StatisticsService.DashboardResponse dashboard() { return statistics.dashboard(currentUser.get()); }
+
+    /** Convenience overload retained for callers using the explicit date-range API. */
+    public StatisticsService.StatsResponse stats(LocalDate from, LocalDate to) {
+        return stats(from, to, null, null);
+    }
 }

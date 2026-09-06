@@ -10,7 +10,8 @@ public final class StreakCalculator {
     private StreakCalculator() { }
 
     public static int current(Collection<LocalDate> readingDates, LocalDate today) {
-        Set<LocalDate> dates = new HashSet<>(readingDates);
+        if (readingDates == null || today == null) return 0;
+        Set<LocalDate> dates = readingDates.stream().filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toCollection(HashSet::new));
         LocalDate cursor = dates.contains(today) ? today : today.minusDays(1);
         if (!dates.contains(cursor)) return 0;
         int streak = 0;

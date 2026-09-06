@@ -13,6 +13,33 @@ cd backend
 
 The API is rooted at `/api/v1`; OpenAPI is available at `/api/openapi`. Configure OIDC and database credentials through environment variables rather than committing secrets.
 
+### Backend API
+
+The authenticated endpoints are:
+
+| Resource | Endpoints |
+| --- | --- |
+| User | `GET /api/v1/me` |
+| Books | `GET/POST /api/v1/books`, `GET/PATCH/DELETE /api/v1/books/{id}`, `POST/DELETE /api/v1/books/{id}/finish` |
+| Reading sessions | `GET/POST /api/v1/sessions`, `PATCH/DELETE /api/v1/sessions/{id}` |
+| Statistics | `GET /api/v1/stats`, `GET /api/v1/dashboard` |
+
+`/api/v1/stats` accepts either an explicit inclusive `from`/`to` date range or
+`period=today`, `period=7`, `period=30`, or `period=all` (Portuguese aliases
+`hoje`, `semana`, `mês`, and `tudo` are also accepted). The streak is always
+calculated from the user's complete history and the user's stored IANA
+timezone; it is not shortened by a statistics filter.
+
+Successful mutations return `201`, `200`, or `204` according to the operation.
+Validation, authentication, missing resources, and unexpected failures use
+`application/problem+json`. PostgreSQL-backed health probes are available at
+`/q/health/live` and `/q/health/ready`.
+
+In production, `DB_USERNAME`, `DB_PASSWORD`, `DB_JDBC_URL`,
+`OIDC_AUTH_SERVER_URL`, and `OIDC_CLIENT_ID` are required environment
+variables. Local development disables OIDC only to allow the test-security
+profile; production never falls back to a local identity provider.
+
 ## License
 
 Licensed under the Apache License 2.0.

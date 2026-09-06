@@ -19,7 +19,9 @@ import java.util.UUID;
 public class ReadingSessionEntity {
     @Id @GeneratedValue(strategy = GenerationType.UUID)
     public UUID id;
+    @NotNull
     @Column(name = "user_id", nullable = false) public UUID userId;
+    @NotNull
     @Column(name = "book_id", nullable = false) public UUID bookId;
     @NotNull
     @Column(name = "reading_date", nullable = false) public LocalDate readingDate;

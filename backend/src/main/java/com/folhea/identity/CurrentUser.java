@@ -30,7 +30,7 @@ public class CurrentUser {
             user = new UserEntity();
             user.identitySubject = subject;
             user.email = Optional.ofNullable(securityIdentity.getAttribute("email")).map(Object::toString).orElse(null);
-            user.timezone = validTimezone(Optional.ofNullable(securityIdentity.getAttribute("zoneinfo")).map(Object::toString).orElse("UTC"));
+            user.timezone = validTimezone(identityTimezone());
             users.persist(user);
         } else {
             // Claims are the source of truth for identity metadata. Do not replace
@@ -38,14 +38,21 @@ public class CurrentUser {
             String email = Optional.ofNullable(securityIdentity.getAttribute("email"))
                     .map(Object::toString).orElse(null);
             if (email != null && !email.isBlank()) user.email = email;
-            String timezone = Optional.ofNullable(securityIdentity.getAttribute("zoneinfo"))
-                    .map(Object::toString).orElse(null);
+            String timezone = identityTimezone();
             if (timezone != null && !timezone.isBlank()) user.timezone = validTimezone(timezone);
         }
         return user;
     }
 
+    private String identityTimezone() {
+        Object zoneinfo = securityIdentity.getAttribute("zoneinfo");
+        if (zoneinfo != null && !zoneinfo.toString().isBlank()) return zoneinfo.toString();
+        Object timezone = securityIdentity.getAttribute("timezone");
+        return timezone == null ? null : timezone.toString();
+    }
+
     private static String validTimezone(String candidate) {
+        if (candidate == null || candidate.isBlank()) return "UTC";
         try {
             ZoneId.of(candidate);
             return candidate;

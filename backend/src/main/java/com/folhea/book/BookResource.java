@@ -6,7 +6,6 @@ import com.folhea.shared.TimeProvider;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import jakarta.ws.rs.DELETE;
@@ -21,6 +20,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
 import java.time.LocalDate;
@@ -33,6 +33,7 @@ import java.util.UUID;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 @Tag(name = "Books")
+@SecurityRequirement(name = "bearerAuth")
 public class BookResource {
     @Inject CurrentUser currentUser;
     @Inject BookRepository books;
@@ -47,8 +48,9 @@ public class BookResource {
     @POST
     @Transactional
     @Operation(summary = "Cadastra um livro")
-    public Response create(@Valid CreateBookRequest request) {
+    public Response create(CreateBookRequest request) {
         if (request == null || request.title() == null || request.title().isBlank()) invalid("Informe o título do livro.");
+        validateTextLength(request.title(), request.author());
         var user = currentUser.get();
         BookEntity book = new BookEntity();
         book.userId = user.id;
@@ -63,13 +65,14 @@ public class BookResource {
     public BookResponse get(@PathParam("id") UUID id) { return BookResponse.from(findOwned(id)); }
 
     @PATCH @Path("/{id}") @Transactional
-    public BookResponse update(@PathParam("id") UUID id, @Valid UpdateBookRequest request) {
+    public BookResponse update(@PathParam("id") UUID id, UpdateBookRequest request) {
         BookEntity book = findOwned(id);
         if (request == null || (request.title() == null && request.author() == null)) invalid("Informe ao menos um campo para alterar.");
         if (request.title() != null) {
             if (request.title().isBlank()) invalid("O título não pode ficar vazio.");
             book.title = request.title().trim();
         }
+        validateTextLength(request.title(), request.author());
         if (request.author() != null) book.author = blankToNull(request.author());
         return BookResponse.from(book);
     }
@@ -109,6 +112,10 @@ public class BookResource {
     }
 
     private static String blankToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
+    private static void validateTextLength(String title, String author) {
+        if (title != null && title.length() > 500) invalid("O título pode ter no máximo 500 caracteres.");
+        if (author != null && author.length() > 500) invalid("O autor pode ter no máximo 500 caracteres.");
+    }
     private static void invalid(String detail) { throw new ProblemException(400, "https://folhea.com.br/problems/invalid-book", "Livro inválido", detail); }
 
     public record CreateBookRequest(
@@ -129,6 +136,11 @@ public class BookResource {
 
     public record BookResponse(UUID id, UUID userId, String title, String author, BookStatus status,
                                LocalDate finishedOn, Instant createdAt, Instant updatedAt) {
+        /** Backwards-compatible constructor for callers that only need the public book fields. */
+        public BookResponse(UUID id, String title, String author, BookStatus status, LocalDate finishedOn) {
+            this(id, null, title, author, status, finishedOn, null, null);
+        }
+
         static BookResponse from(BookEntity book) {
             return new BookResponse(book.id, book.userId, book.title, book.author, book.status,
                     book.finishedOn, book.createdAt, book.updatedAt);
