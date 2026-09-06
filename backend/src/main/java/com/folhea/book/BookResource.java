@@ -2,9 +2,12 @@ package com.folhea.book;
 
 import com.folhea.identity.CurrentUser;
 import com.folhea.shared.ProblemException;
+import com.folhea.shared.TimeProvider;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PATCH;
@@ -17,10 +20,11 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
 import java.time.LocalDate;
-import java.time.ZoneId;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,9 +33,11 @@ import java.util.UUID;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 @Tag(name = "Books")
+@SecurityRequirement(name = "bearerAuth")
 public class BookResource {
     @Inject CurrentUser currentUser;
     @Inject BookRepository books;
+    @Inject TimeProvider time;
 
     @GET
     @Operation(summary = "Lista os livros do usuário autenticado")
@@ -44,9 +50,10 @@ public class BookResource {
     @Operation(summary = "Cadastra um livro")
     public Response create(CreateBookRequest request) {
         if (request == null || request.title() == null || request.title().isBlank()) invalid("Informe o título do livro.");
-        UserEntityAndId user = new UserEntityAndId(currentUser.get().id);
+        validateTextLength(request.title(), request.author());
+        var user = currentUser.get();
         BookEntity book = new BookEntity();
-        book.userId = user.id();
+        book.userId = user.id;
         book.title = request.title().trim();
         book.author = blankToNull(request.author());
         book.status = BookStatus.READING;
@@ -65,6 +72,7 @@ public class BookResource {
             if (request.title().isBlank()) invalid("O título não pode ficar vazio.");
             book.title = request.title().trim();
         }
+        validateTextLength(request.title(), request.author());
         if (request.author() != null) book.author = blankToNull(request.author());
         return BookResponse.from(book);
     }
@@ -81,7 +89,7 @@ public class BookResource {
                 ? request.finishedOn()
                 : (book.status == BookStatus.FINISHED && book.finishedOn != null
                     ? book.finishedOn
-                    : LocalDate.now(ZoneId.of(user.timezone)));
+                    : time.today(user.timezone));
         book.status = BookStatus.FINISHED;
         book.finishedOn = date;
         return BookResponse.from(book);
@@ -104,13 +112,38 @@ public class BookResource {
     }
 
     private static String blankToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
+    private static void validateTextLength(String title, String author) {
+        if (title != null && title.length() > 500) invalid("O título pode ter no máximo 500 caracteres.");
+        if (author != null && author.length() > 500) invalid("O autor pode ter no máximo 500 caracteres.");
+    }
     private static void invalid(String detail) { throw new ProblemException(400, "https://folhea.com.br/problems/invalid-book", "Livro inválido", detail); }
 
-    private record UserEntityAndId(UUID id) { }
-    public record CreateBookRequest(@Schema(required = true) String title, String author) { }
-    public record UpdateBookRequest(String title, String author) { }
+    public record CreateBookRequest(
+            @Schema(required = true, description = "Título não vazio do livro")
+            @NotBlank(message = "Informe o título do livro.")
+            @Size(max = 500, message = "O título pode ter no máximo 500 caracteres.")
+            String title,
+            @Size(max = 500, message = "O autor pode ter no máximo 500 caracteres.")
+            String author) { }
+
+    public record UpdateBookRequest(
+            @Size(max = 500, message = "O título pode ter no máximo 500 caracteres.")
+            String title,
+            @Size(max = 500, message = "O autor pode ter no máximo 500 caracteres.")
+            String author) { }
+
     public record FinishRequest(LocalDate finishedOn) { }
-    public record BookResponse(UUID id, String title, String author, BookStatus status, LocalDate finishedOn) {
-        static BookResponse from(BookEntity book) { return new BookResponse(book.id, book.title, book.author, book.status, book.finishedOn); }
+
+    public record BookResponse(UUID id, String title, String author, BookStatus status,
+                               LocalDate finishedOn, Instant createdAt, Instant updatedAt) {
+        /** Backwards-compatible constructor for callers that only need the public book fields. */
+        public BookResponse(UUID id, String title, String author, BookStatus status, LocalDate finishedOn) {
+            this(id, title, author, status, finishedOn, null, null);
+        }
+
+        static BookResponse from(BookEntity book) {
+            return new BookResponse(book.id, book.title, book.author, book.status,
+                    book.finishedOn, book.createdAt, book.updatedAt);
+        }
     }
 }

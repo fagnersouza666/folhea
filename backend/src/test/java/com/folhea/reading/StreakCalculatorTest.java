@@ -24,4 +24,11 @@ class StreakCalculatorTest {
         assertEquals(3, StreakCalculator.current(List.of(TODAY, TODAY, TODAY.minusDays(1), TODAY.minusDays(2)), TODAY));
         assertEquals(0, StreakCalculator.current(List.of(TODAY.minusDays(2)), TODAY));
     }
+
+    @Test void missingDatesAndNullEntriesDoNotCreateAStreak() {
+        assertEquals(0, StreakCalculator.current(java.util.Arrays.asList(TODAY.minusDays(2), null), TODAY));
+        assertEquals(0, StreakCalculator.current(List.of(), TODAY));
+        assertEquals(0, StreakCalculator.current(null, TODAY));
+        assertEquals(0, StreakCalculator.current(List.of(TODAY), null));
+    }
 }
