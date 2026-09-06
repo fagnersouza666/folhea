@@ -42,9 +42,19 @@ e2e:      npm run e2e:critical
 docker:   docker build -f infra/Dockerfile .
 ```
 
-O workflow mantém jobs separados para diagnóstico, mas `CI / merge-gate`
-agrega seus resultados. Um job falho ou interrompido deixa o aggregate gate
-vermelho; não existe caminho de sucesso que ignore um job obrigatório.
+O workflow mantém jobs separados para diagnóstico e começa pelo job
+`components`, que detecta os contratos disponíveis na revisão. Frontend só é
+considerado disponível com `package.json`, lockfile e os scripts de lint, build,
+SSG e teste; backend precisa de `pom.xml` e `mvnw`; Docker precisa de
+`infra/Dockerfile`; SEO depende do frontend e do validador; Playwright depende
+do frontend, backend e do script `e2e:critical`.
+
+O `CI / merge-gate` agrega os resultados usando essa expectativa: componente
+disponível exige `success`, componente ausente ou parcial exige `skipped`. Um
+job disponível falho, cancelado ou interrompido deixa o gate vermelho, e o
+detector também é obrigatório. Isso permite a entrega incremental do monorepo
+sem transformar diretórios ausentes em falhas de setup/cache/build, mantendo a
+execução completa assim que cada contrato estiver presente.
 
 ## SEO e HTTP
 

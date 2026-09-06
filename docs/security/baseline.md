@@ -161,6 +161,14 @@ prazo de expiração, impacto, justificativa e mitigação. Supressão deve ser
 específica para arquivo/regra e revisada; não desabilitar scanner globalmente.
 Dependências devem ser atualizadas ou substituídas antes do prazo do aceite.
 
+O job de Dependency Review consulta a API do Dependency Graph antes de executar
+a revisão incremental. Se o repositório não tiver o Dependency Graph habilitado,
+o job registra um aviso e pula somente essa revisão; o Trivy continua bloqueante
+para vulnerabilidades, segredos e misconfigurações no checkout completo. Erros
+da API diferentes da indisponibilidade explícita do recurso continuam falhando o
+job. Habilitar o Dependency Graph restaura a revisão incremental sem alterar os
+limites de severidade.
+
 ## 8. Checklist antes de liberar endpoint mutável
 
 - [ ] rota está na matriz de autorização e tem teste com dois usuários;
