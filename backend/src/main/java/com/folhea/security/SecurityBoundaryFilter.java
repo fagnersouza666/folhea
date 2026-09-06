@@ -51,7 +51,8 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
         }
         MediaType mediaType = context.getMediaType();
         boolean json = mediaType != null && MediaType.APPLICATION_JSON_TYPE.isCompatible(mediaType);
-        if (!json && !isEmptyFinishForm(context, mediaType)) {
+        boolean emptyWithoutContentType = mediaType == null && !context.hasEntity() && context.getLength() <= 0;
+        if (!json && !emptyWithoutContentType && !isEmptyFinishForm(context, mediaType)) {
             abort(context, 415, "https://folhea.com.br/problems/unsupported-content-type", "Tipo de conteúdo não suportado", "Mutações autenticadas aceitam somente application/json.");
             return;
         }

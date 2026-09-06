@@ -95,7 +95,8 @@ class BackendResourceTest {
 
         // Forms remain rejected for generic mutations; only the empty finish
         // request below is retained for backwards-compatible retries.
-        given().contentType(ContentType.URLENC).when().post("/api/v1/books").then().statusCode(415);
+        given().contentType(ContentType.URLENC).body("title=x")
+                .when().post("/api/v1/books").then().statusCode(415);
 
         given().when().get("/api/v1/books/{id}", bookId)
                 .then().statusCode(200)
