@@ -6,6 +6,7 @@ import com.folhea.user.UserRepository;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.persistence.PersistenceException;
 import jakarta.transaction.Transactional;
 import java.util.Optional;
 import java.time.ZoneId;
@@ -28,11 +29,17 @@ public class CurrentUser {
         String email = Optional.ofNullable(securityIdentity.getAttribute("email")).map(Object::toString).orElse(null);
         UserEntity user = users.findByIdentitySubject(subject);
         if (user == null) {
-            user = new UserEntity();
-            user.identitySubject = subject;
-            user.email = email;
-            user.timezone = validTimezone(identityTimezone());
-            users.persist(user);
+            try {
+                user = new UserEntity();
+                user.identitySubject = subject;
+                user.email = email;
+                user.timezone = validTimezone(identityTimezone());
+                users.persistAndFlush(user);
+            } catch (PersistenceException ex) {
+                users.getEntityManager().clear();
+                user = users.findByIdentitySubject(subject);
+                if (user == null) throw ex;
+            }
         } else {
             // Claims are the source of truth for identity metadata. Do not replace
             // existing values with null when a provider omits an optional claim.
