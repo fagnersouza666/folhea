@@ -80,7 +80,8 @@ npm ci
 npm run lint
 npm run build -- --configuration production
 npm run build:ssg -- --configuration production
-npm run test -- --run
+npm run test:coverage
+node ../scripts/ci/validate-api-contract.mjs contract-report.txt
 node ../scripts/ci/validate-seo.mjs dist seo-report/seo-validation.txt
 ```
 
