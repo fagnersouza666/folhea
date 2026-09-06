@@ -86,8 +86,18 @@ docker build -f infra/Dockerfile .
 ## Gate de merge
 
 Todo pull request deve passar pelo workflow `CI`. O job `CI / merge-gate` é o
-único status check necessário para a proteção de `main` e só fica verde quando
-todos estes gates terminam com sucesso:
+único status check necessário para a proteção de `main`. O workflow primeiro
+detecta os contratos dos componentes: frontend exige `package.json`, lockfile e
+os scripts de lint, build, SSG e teste; backend exige `pom.xml` e `mvnw`; SEO
+exige o validador; Playwright exige frontend, backend e `e2e:critical`; Docker
+exige `infra/Dockerfile`.
+
+Um componente ausente ou ainda parcial tem seu job marcado como `skipped`, e o
+merge-gate aceita esse resultado somente para o componente que foi detectado
+como indisponível. Quando o contrato existe, a execução completa continua
+obrigatória e qualquer falha ou cancelamento deixa o gate vermelho. Assim,
+branches que entregam o monorepo por etapas não falham por diretórios ausentes,
+sem ocultar falhas de componentes disponíveis. Os gates completos são:
 
 - frontend lint, build de produção, build SSG e Vitest;
 - backend build e testes;
