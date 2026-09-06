@@ -1,4 +1,6 @@
+import { HttpClient } from '@angular/common/http';
 import { Injectable, InjectionToken, inject } from '@angular/core';
+import { EMPTY, catchError } from 'rxjs';
 
 export const ANALYTICS_ENDPOINT = new InjectionToken<string>('ANALYTICS_ENDPOINT', {
   providedIn: 'root',
@@ -46,30 +48,19 @@ export function safeAnalyticsProperties(properties: AnalyticsProperties = {}): R
 
 @Injectable({ providedIn: 'root' })
 export class AnalyticsService {
+  private readonly http = inject(HttpClient);
   private readonly endpoint = inject(ANALYTICS_ENDPOINT);
 
   track(event: ProductEvent, properties: AnalyticsProperties = {}): void {
     if (typeof window === 'undefined') return;
 
-    const payload = JSON.stringify({
+    this.http.post(this.endpoint, {
       event,
       occurredAt: new Date().toISOString(),
       properties: safeAnalyticsProperties(properties)
-    });
-
-    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(this.endpoint, new Blob([payload], { type: 'application/json' }));
-      return;
-    }
-
-    if (typeof fetch === 'function') {
-      void fetch(this.endpoint, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: payload,
-        credentials: 'include',
-        keepalive: true
-      }).catch(() => undefined);
-    }
+    }, {
+      withCredentials: true,
+      headers: { Accept: 'application/json' }
+    }).pipe(catchError(() => EMPTY)).subscribe();
   }
 }

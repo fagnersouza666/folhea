@@ -49,8 +49,9 @@ card_downloaded, pwa_installed
 O `AnalyticsService` aceita somente dimensões anônimas (`screen`, `source`,
 `method`, `days`, `pages`, `minutes` e contagens). Título, autor, foto,
 conteúdo privado, e-mail, token e IDs são descartados antes do envio. Eventos
-usam `sendBeacon` quando possível e falhas de telemetria nunca interrompem o
-fluxo do usuário.
+são enviados via `HttpClient` com `withCredentials` para que o interceptor
+CSRF anexe `X-CSRF-Token` nas mutações autenticadas. Falhas de telemetria
+nunca interrompem o fluxo do usuário.
 
 ## Métricas de produto e release
 
