@@ -24,6 +24,11 @@ public class StatisticsService {
     }
 
     public StatsResponse stats(UserEntity user, LocalDate from, LocalDate to, String periodName) {
+        if ((from == null) != (to == null) || (from != null && from.isAfter(to))) {
+            throw new com.folhea.shared.ProblemException(400,
+                    "https://folhea.com.br/problems/invalid-period", "Período inválido",
+                    "Informe um período com datas válidas.");
+        }
         LocalDate today = today(user);
         PeriodSelection selection = selectPeriod(user.id, today, from, to, periodName);
         List<ReadingSessionEntity> period = selection.allTime
