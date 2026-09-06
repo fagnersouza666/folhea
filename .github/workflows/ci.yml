@@ -1,3 +1,6 @@
+# Pin GitHub Actions to immutable commit SHAs.
+# Regenerate with: gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
+
 name: CI
 
 on:
@@ -23,7 +26,7 @@ jobs:
       playwright: ${{ steps.detect.outputs.playwright }}
       docker: ${{ steps.detect.outputs.docker }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Detect complete component contracts
         id: detect
         shell: bash
@@ -81,8 +84,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -97,7 +100,7 @@ jobs:
         run: node ../scripts/ci/validate-api-contract.mjs contract-report.txt
       - name: Upload frontend test evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: frontend-test-evidence
           path: |
@@ -116,8 +119,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
@@ -126,7 +129,7 @@ jobs:
       - run: ./mvnw -B clean verify
       - name: Upload backend test evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: backend-test-evidence
           path: |
@@ -142,12 +145,12 @@ jobs:
     if: ${{ needs.components.outputs.seo == 'true' && needs.frontend.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Download SSG artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: frontend-test-evidence
           path: frontend
@@ -158,7 +161,7 @@ jobs:
           test -n "$site_file"
           site_root="${site_file%/*}"
           echo "path=$site_root" >> "$GITHUB_OUTPUT"
-      - name: Serve SSG output with Caddy 2.10.0 for HTTP checks
+      - name: Serve SSG output with Caddy 2.11 for HTTP checks
         run: |
           mkdir -p seo-report
           docker run --detach --rm \
@@ -169,7 +172,7 @@ jobs:
             --env STATIC_ROOT=/srv \
             --volume "$GITHUB_WORKSPACE/infra/Caddyfile:/etc/caddy/Caddyfile:ro" \
             --volume "$GITHUB_WORKSPACE/${{ steps.site-root.outputs.path }}:/srv:ro" \
-            caddy:2.10.0-alpine
+            caddy:2.11-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
           for attempt in $(seq 1 20); do
             curl --fail --silent http://127.0.0.1:4173/ >/dev/null && break
             sleep 1
@@ -189,7 +192,7 @@ jobs:
         run: docker rm --force folhea-caddy-seo || true
       - name: Upload SEO evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: seo-evidence
           path: seo-report/
@@ -202,8 +205,8 @@ jobs:
     if: ${{ needs.components.outputs.playwright == 'true' && needs.frontend.result == 'success' && needs.backend.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -216,7 +219,7 @@ jobs:
         working-directory: frontend
       - name: Upload Playwright evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-evidence
           path: |
@@ -231,8 +234,8 @@ jobs:
     if: ${{ needs.components.outputs.docker == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Validate OIDC Compose/Caddy surface
