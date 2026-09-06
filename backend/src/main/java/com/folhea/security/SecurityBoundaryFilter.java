@@ -50,7 +50,8 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
             return;
         }
         MediaType mediaType = context.getMediaType();
-        if (mediaType == null || !MediaType.APPLICATION_JSON_TYPE.isCompatible(mediaType)) {
+        boolean json = mediaType != null && MediaType.APPLICATION_JSON_TYPE.isCompatible(mediaType);
+        if (!json && !isEmptyFinishForm(context, mediaType)) {
             abort(context, 415, "https://folhea.com.br/problems/unsupported-content-type", "Tipo de conteúdo não suportado", "Mutações autenticadas aceitam somente application/json.");
             return;
         }
@@ -126,6 +127,26 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
     private static boolean isMutation(String method) {
         return "POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)
                 || "PATCH".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method);
+    }
+
+    private static boolean isEmptyFinishForm(ContainerRequestContext context, MediaType mediaType) {
+        if (!"POST".equalsIgnoreCase(context.getMethod())
+                || mediaType == null
+                || !MediaType.APPLICATION_FORM_URLENCODED_TYPE.isCompatible(mediaType)
+                || context.hasEntity()) return false;
+        int declaredLength = context.getLength();
+        if (declaredLength > 0) return false;
+
+        String path = context.getUriInfo().getPath();
+        if (path != null && path.startsWith("/")) path = path.substring(1);
+        if (path == null) return false;
+        String[] segments = path.split("/", -1);
+        return segments.length == 5
+                && "api".equals(segments[0])
+                && "v1".equals(segments[1])
+                && "books".equals(segments[2])
+                && !segments[3].isBlank()
+                && "finish".equals(segments[4]);
     }
 
     private static void abort(ContainerRequestContext context, int status, String type, String title, String detail) {

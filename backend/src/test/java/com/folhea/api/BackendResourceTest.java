@@ -3,7 +3,11 @@ package com.folhea.api;
 import com.folhea.book.BookEntity;
 import com.folhea.book.BookStatus;
 import com.folhea.reading.ReadingSessionEntity;
+import com.folhea.security.CsrfTokenService;
+import com.folhea.security.SessionCookiePolicy;
 import com.folhea.user.UserEntity;
+import io.restassured.RestAssured;
+import io.restassured.builder.RequestSpecBuilder;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.security.SecurityAttribute;
 import io.quarkus.test.security.TestSecurity;
@@ -12,8 +16,10 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -30,6 +36,7 @@ class BackendResourceTest {
     private static final LocalDate TODAY = LocalDate.of(2026, 9, 6);
 
     @Inject EntityManager entityManager;
+    @Inject CsrfTokenService csrfTokens;
     private UUID seededAliceBookId;
     private UUID seededBobBookId;
     private UUID seededBobSessionId;
@@ -63,6 +70,19 @@ class BackendResourceTest {
         entityManager.persist(bobSession);
         entityManager.flush();
         seededBobSessionId = bobSession.id;
+
+        String ticket = SessionCookiePolicy.newTicket(new SecureRandom());
+        String csrf = csrfTokens.getOrIssue(ticket);
+        RestAssured.requestSpecification = new RequestSpecBuilder()
+                .addHeader("Origin", "http://localhost:8081")
+                .addHeader("X-CSRF-Token", csrf)
+                .addCookie(SessionCookiePolicy.NAME, ticket)
+                .build();
+    }
+
+    @AfterEach
+    void clearRequestSpecification() {
+        RestAssured.requestSpecification = null;
     }
 
     @Test
@@ -72,6 +92,10 @@ class BackendResourceTest {
     })
     void bookCrudFinishAndReopenAreAvailable() {
         UUID bookId = createBook("O Hobbit");
+
+        // Forms remain rejected for generic mutations; only the empty finish
+        // request below is retained for backwards-compatible retries.
+        given().contentType(ContentType.URLENC).when().post("/api/v1/books").then().statusCode(415);
 
         given().when().get("/api/v1/books/{id}", bookId)
                 .then().statusCode(200)
@@ -92,6 +116,9 @@ class BackendResourceTest {
         // Omitting the body retains the existing date, making retries idempotent.
         given().contentType(ContentType.URLENC).when().post("/api/v1/books/{id}/finish", bookId)
                 .then().statusCode(200).body("finishedOn", equalTo(explicitFinishedOn.toString()));
+
+        given().contentType(ContentType.URLENC).body("finishedOn=" + explicitFinishedOn)
+                .when().post("/api/v1/books/{id}/finish", bookId).then().statusCode(415);
 
         given().contentType(ContentType.JSON).body("{not-json")
                 .when().post("/api/v1/books/{id}/finish", bookId)
