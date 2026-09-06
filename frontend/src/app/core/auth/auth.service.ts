@@ -51,6 +51,11 @@ export class AuthService {
     if (isPlatformBrowser(this.platformId)) window.location.assign('/auth/logout');
   }
 
+  async deleteAccount(): Promise<void> {
+    await firstValueFrom(this.api.deleteAccount());
+    this.signOut();
+  }
+
   restore(): Observable<boolean> {
     return this.api.getMe().pipe(
       tap((user) => this.userState.set(user)),

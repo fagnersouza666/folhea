@@ -66,7 +66,18 @@ async function handleApi(route: Route, state: MockState): Promise<void> {
     });
   }
   if (method === 'GET' && path === '/api/v1/books') return json(route, 200, state.books);
-  if (method === 'GET' && path === '/api/v1/sessions') return json(route, 200, state.sessions);
+  if (method === 'GET' && path === '/api/v1/sessions') {
+    const from = url.searchParams.get('from');
+    const to = url.searchParams.get('to');
+    const limit = Number(url.searchParams.get('limit') ?? state.sessions.length);
+    const offset = Number(url.searchParams.get('offset') ?? 0);
+    const filtered = state.sessions.filter((session) => {
+      if (from && session.readingDate < from) return false;
+      if (to && session.readingDate > to) return false;
+      return true;
+    });
+    return json(route, 200, filtered.slice(offset, offset + limit));
+  }
   if (method === 'GET' && path === '/api/v1/stats') {
     return json(route, 200, {
       period: { from: '2026-08-31', to: '2026-09-06' },

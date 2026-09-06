@@ -22,10 +22,10 @@ const book: Book = {
 };
 
 const createStore = (overrides: Record<string, unknown> = {}) => {
-  const booksSignal = (overrides.books as ReturnType<typeof signal<Book[]>>) ?? signal<Book[]>([book]);
+  const booksSignal = (overrides['books'] as ReturnType<typeof signal<Book[]>>) ?? signal<Book[]>([book]);
   const rest = { ...overrides };
-  delete rest.books;
-  delete rest.selectableBooks;
+  delete rest['books'];
+  delete rest['selectableBooks'];
   return {
     books: booksSignal,
     selectableBooks: () => booksSignal().filter((item) => !item.id.startsWith('local-')),

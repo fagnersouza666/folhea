@@ -19,7 +19,7 @@ import { AnalyticsService } from '../../core/analytics/analytics.service';
       <section class="controls" aria-labelledby="controls-title"><h2 id="controls-title">Personalize</h2>
         <fieldset><legend>Período</legend><div class="choice-grid period-grid">@for (option of periods; track option.id) { <button type="button" [class.selected]="store.period() === option.id" (click)="selectPeriod(option.id)">{{ option.label }}</button> }</div></fieldset>
         <fieldset><legend>Modelo</legend><div class="choice-grid">@for (option of templates; track option.id) { <button type="button" [class.selected]="template === option.id" (click)="chooseTemplate(option.id)"><span class="template-swatch" [class.dark-swatch]="option.id === 'dark'" [class.photo-swatch]="option.id === 'photo'"></span>{{ option.label }}</button> }</div></fieldset>
-        <label class="upload-field">Foto de fundo <span>opcional</span><input type="file" accept="image/jpeg,image/png,image/webp,image/avif" (change)="selectBackground($event)" /><small>A foto permanece no seu dispositivo e não é enviada ao Folhea.</small></label>
+        <label class="upload-field">Foto de fundo <span>opcional</span><input type="file" accept="image/jpeg,image/png,image/webp" (change)="selectBackground($event)" /><small>A foto permanece no seu dispositivo e não é enviada ao Folhea.</small></label>
         @if (template === 'photo' && backgroundUrl) { <div class="range-fields"><label>Enquadramento horizontal<input type="range" min="0" max="1" step=".01" [value]="cropX" (input)="cropX = numberValue($event)" /></label><label>Enquadramento vertical<input type="range" min="0" max="1" step=".01" [value]="cropY" (input)="cropY = numberValue($event)" /></label><label>Overlay<input type="range" min=".2" max=".85" step=".01" [value]="overlay" (input)="overlay = numberValue($event)" /></label></div> }
         <div class="action-row"><button class="button button-primary" type="button" [disabled]="busy" (click)="download()">{{ busy ? 'Gerando…' : 'Salvar PNG' }}</button><button class="button button-secondary" type="button" [disabled]="busy" (click)="share()">Compartilhar</button></div>
       </section>
@@ -55,7 +55,13 @@ export class CardsComponent implements OnDestroy {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) { this.error = 'Escolha uma imagem válida.'; return; }
+    try {
+      this.generator.validateBackground(file);
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : 'Escolha uma imagem válida.';
+      input.value = '';
+      return;
+    }
     if (this.backgroundUrl) URL.revokeObjectURL(this.backgroundUrl);
     this.background = file;
     this.backgroundUrl = URL.createObjectURL(file);

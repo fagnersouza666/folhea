@@ -34,6 +34,14 @@ describe('DashboardStore', () => {
     TestBed.resetTestingModule();
   });
 
+  function expectSessionsRequest() {
+    const request = httpMock.expectOne((req) => req.url === '/api/v1/sessions' && req.params.has('from') && req.params.has('to'));
+    expect(request.request.params.get('limit')).toBe('100');
+    expect(request.request.params.get('offset')).toBe('0');
+    request.flush([]);
+    return request;
+  }
+
   it('excludes optimistic books from selectableBooks', () => {
     store.addBook('Livro local').subscribe();
     expect(store.selectableBooks().length).toBe(0);
@@ -65,13 +73,13 @@ describe('DashboardStore', () => {
       week: { pages: 0, minutes: 0, booksFinished: 0 }
     });
     httpMock.expectOne('/api/v1/books').flush([]);
-    httpMock.expectOne('/api/v1/sessions').flush([]);
+    expectSessionsRequest();
     httpMock.match((request) => request.url.startsWith('/api/v1/stats')).forEach((request) => request.flush(statsResponse));
 
     store.reload();
     httpMock.expectOne('/api/v1/dashboard').flush('error', { status: 500, statusText: 'Server Error' });
     httpMock.expectOne('/api/v1/books').flush([]);
-    httpMock.expectOne('/api/v1/sessions').flush([]);
+    expectSessionsRequest();
     httpMock.match((request) => request.url.startsWith('/api/v1/stats')).forEach((request) => request.flush(statsResponse));
 
     store.load();
@@ -81,7 +89,21 @@ describe('DashboardStore', () => {
       week: { pages: 1, minutes: 1, booksFinished: 0 }
     });
     httpMock.expectOne('/api/v1/books').flush([]);
-    httpMock.expectOne('/api/v1/sessions').flush([]);
+    expectSessionsRequest();
     httpMock.match((request) => request.url.startsWith('/api/v1/stats')).forEach((request) => request.flush(statsResponse));
+  });
+
+  it('loads all-time stats from the backend period endpoint', () => {
+    store.loadStats('all');
+    const request = httpMock.expectOne('/api/v1/stats?period=all');
+    request.flush({
+      period: { from: '2024-01-01', to: '2026-09-06' },
+      currentStreakDays: 5,
+      pages: 42,
+      minutes: 30,
+      booksFinished: 2
+    });
+    expect(store.stats()?.pages).toBe(42);
+    expect(store.stats()?.currentStreakDays).toBe(5);
   });
 });

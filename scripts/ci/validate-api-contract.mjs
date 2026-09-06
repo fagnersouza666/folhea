@@ -10,6 +10,8 @@ const failures = [];
 
 const operations = [
   ['GET', '/api/v1/me', 'UserResource.java', '@Path("/api/v1/me")'],
+  ['GET', '/api/v1/me/export', 'UserResource.java', '@Path("/export")'],
+  ['DELETE', '/api/v1/me', 'UserResource.java', '@Path("/api/v1/me")'],
   ['GET', '/api/v1/dashboard', 'StatisticsResource.java', '@Path("/api/v1")'],
   ['GET', '/api/v1/stats', 'StatisticsResource.java', '@Path("/api/v1")'],
   ['GET', '/api/v1/books', 'BookResource.java', '@Path("/api/v1/books")'],
@@ -57,6 +59,9 @@ for (const [method, path, resource, backendMarker] of operations) {
 async function validateOpenApi() {
   const source = process.env.OPENAPI_FILE;
   const url = process.env.OPENAPI_URL;
+  // Production disables OpenAPI at Quarkus (%prod) and on the Caddy edge; CI
+  // must not depend on a public OPENAPI_URL. Use OPENAPI_FILE from a dev/test
+  // build artifact when cross-checking paths against the spec.
   if (!source && !url) return;
   try {
     const content = source ? readFileSafe(resolve(process.cwd(), source)) : await fetch(url).then((response) => response.text());

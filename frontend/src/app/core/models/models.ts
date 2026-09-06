@@ -5,6 +5,14 @@ export interface User {
   id: string;
   email: string;
   timezone: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface UserExport {
+  user: User;
+  books: Book[];
+  sessions: ReadingSession[];
 }
 
 export interface Book {

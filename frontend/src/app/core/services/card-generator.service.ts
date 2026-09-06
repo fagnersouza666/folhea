@@ -18,10 +18,22 @@ export interface CardRenderOptions {
   overlay?: number;
 }
 
+const ALLOWED_BACKGROUND_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const MAX_BACKGROUND_BYTES = 8 * 1024 * 1024;
+
 @Injectable({ providedIn: 'root' })
 export class CardGeneratorService {
   readonly width = 1080;
   readonly height = 1920;
+
+  validateBackground(file: File): void {
+    if (!ALLOWED_BACKGROUND_TYPES.has(file.type)) {
+      throw new Error('Use JPEG, PNG ou WebP. SVG e outros formatos não são permitidos.');
+    }
+    if (file.size > MAX_BACKGROUND_BYTES) {
+      throw new Error('A foto deve ter no máximo 8 MiB.');
+    }
+  }
 
   async render(metrics: CardMetrics, options: CardRenderOptions): Promise<Blob> {
     const canvas = document.createElement('canvas');
@@ -97,6 +109,7 @@ export class CardGeneratorService {
   }
 
   private loadImage(file: File): Promise<HTMLImageElement> {
+    this.validateBackground(file);
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file);
       const image = new Image();

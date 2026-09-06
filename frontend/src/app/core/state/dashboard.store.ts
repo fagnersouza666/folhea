@@ -5,10 +5,13 @@ import { ApiClient } from '../api/api-client.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { AuthService } from '../auth/auth.service';
 import { Book, BookPatch, Dashboard, ReadingDraft, ReadingSession, ReadingSessionPatch, Stats, StatsPeriod } from '../models/models';
-import { addDays, calendarDate, currentStreak, periodStats, startOfPeriod } from './reading-statistics';
+import { addDays, calendarDate, periodStats, startOfPeriod } from './reading-statistics';
 
 @Injectable({ providedIn: 'root' })
 export class DashboardStore {
+  private static readonly SESSIONS_WINDOW_DAYS = 90;
+  private static readonly SESSIONS_PAGE_SIZE = 100;
+
   private readonly api = inject(ApiClient);
   private readonly analytics = inject(AnalyticsService);
   private readonly auth = inject(AuthService);
@@ -25,8 +28,12 @@ export class DashboardStore {
   private readonly booksErrorState = signal<string | null>(null);
   private readonly sessionsErrorState = signal<string | null>(null);
   private readonly statsErrorState = signal<string | null>(null);
+  private readonly sessionsHasMoreState = signal(false);
   private hasLoaded = false;
   private sessionsLoaded = false;
+  private sessionsOffset = 0;
+  private sessionsFrom = '';
+  private sessionsTo = '';
 
   readonly dashboard = this.dashboardState.asReadonly();
   readonly books = this.booksState.asReadonly();
@@ -38,6 +45,7 @@ export class DashboardStore {
   readonly booksLoading = this.booksLoadingState.asReadonly();
   readonly sessionsLoading = this.sessionsLoadingState.asReadonly();
   readonly statsLoading = this.statsLoadingState.asReadonly();
+  readonly sessionsHasMore = this.sessionsHasMoreState.asReadonly();
   readonly error = this.errorState.asReadonly();
   readonly booksError = this.booksErrorState.asReadonly();
   readonly sessionsError = this.sessionsErrorState.asReadonly();
@@ -80,18 +88,32 @@ export class DashboardStore {
     this.booksLoadingState.set(true);
     this.booksErrorState.set(null);
     this.api.getBooks().subscribe({
-      next: (books) => { this.booksState.set(books); this.booksLoadingState.set(false); if (this.sessionsLoaded) this.recalculateDashboard(); else this.syncCurrentBook(); this.calculateVisibleStats(); },
-      error: (error: unknown) => { this.booksLoadingState.set(false); this.booksErrorState.set(this.errorMessage(error, 'Não foi possível carregar seus livros.')); }
+      next: (books) => {
+        this.booksState.set(books);
+        this.booksLoadingState.set(false);
+        if (this.sessionsLoaded) this.recalculateDashboard();
+        else this.syncCurrentBook();
+        this.refreshStatsAfterSessionChange();
+      },
+      error: (error: unknown) => {
+        this.booksLoadingState.set(false);
+        this.booksErrorState.set(this.errorMessage(error, 'Não foi possível carregar seus livros.'));
+      }
     });
   }
 
   loadSessions(): void {
-    this.sessionsLoadingState.set(true);
-    this.sessionsErrorState.set(null);
-    this.api.getSessions().subscribe({
-      next: (sessions) => { this.sessionsState.set(sessions); this.sessionsLoaded = true; this.sessionsLoadingState.set(false); this.recalculateDashboard(); this.calculateVisibleStats(); if (this.periodState() === 'all') this.loadStats('all'); },
-      error: (error: unknown) => { this.sessionsLoadingState.set(false); this.sessionsErrorState.set(this.errorMessage(error, 'Não foi possível carregar suas sessões.')); }
-    });
+    const today = this.today();
+    const from = addDays(today, -(DashboardStore.SESSIONS_WINDOW_DAYS - 1));
+    this.sessionsOffset = 0;
+    this.sessionsFrom = from;
+    this.sessionsTo = today;
+    this.fetchSessions(from, today, 0, false);
+  }
+
+  loadMoreSessions(): void {
+    if (!this.sessionsHasMoreState() || this.sessionsLoadingState()) return;
+    this.fetchSessions(this.sessionsFrom, this.sessionsTo, this.sessionsOffset, true);
   }
 
   selectPeriod(period: StatsPeriod): void { this.periodState.set(period); this.loadStats(period); }
@@ -102,13 +124,14 @@ export class DashboardStore {
     this.statsErrorState.set(null);
     const today = this.today();
     if (period === 'all') {
-      const first = this.sessionsState().map((session) => session.readingDate).sort()[0];
-      if (!first) {
-        this.statsState.set(periodStats([], this.booksState(), today, today, this.currentStreak()));
-        this.statsLoadingState.set(false);
-        return;
-      }
-      this.requestStats(first, today);
+      this.api.getStats(undefined, undefined, 'all').subscribe({
+        next: (stats) => { this.statsState.set(stats); this.statsLoadingState.set(false); },
+        error: (error: unknown) => {
+          this.statsState.set(periodStats(this.sessionsState(), this.booksState(), today, today, this.dashboardState()?.currentStreakDays ?? 0));
+          this.statsLoadingState.set(false);
+          this.statsErrorState.set(this.errorMessage(error, 'Não foi possível atualizar as estatísticas.'));
+        }
+      });
       return;
     }
     this.requestStats(startOfPeriod(period, today), today);
@@ -116,11 +139,41 @@ export class DashboardStore {
 
   private requestStats(from: string, to: string): void {
     this.api.getStats(from, to).subscribe({
-      next: (stats) => { this.statsState.set({ ...stats, currentStreakDays: this.sessionsLoaded ? this.currentStreak() : stats.currentStreakDays }); this.statsLoadingState.set(false); },
+      next: (stats) => { this.statsState.set(stats); this.statsLoadingState.set(false); },
       error: (error: unknown) => {
-        this.statsState.set(periodStats(this.sessionsState(), this.booksState(), from, to, this.currentStreak()));
+        this.statsState.set(periodStats(
+          this.sessionsState(),
+          this.booksState(),
+          from,
+          to,
+          this.dashboardState()?.currentStreakDays ?? 0
+        ));
         this.statsLoadingState.set(false);
         this.statsErrorState.set(this.errorMessage(error, 'Não foi possível atualizar as estatísticas.'));
+      }
+    });
+  }
+
+  private fetchSessions(from: string, to: string, offset: number, append: boolean): void {
+    this.sessionsLoadingState.set(true);
+    this.sessionsErrorState.set(null);
+    this.api.getSessions(from, to, DashboardStore.SESSIONS_PAGE_SIZE, offset).subscribe({
+      next: (sessions) => {
+        if (append) {
+          this.sessionsState.update((existing) => [...existing, ...sessions]);
+        } else {
+          this.sessionsState.set(sessions);
+        }
+        this.sessionsOffset = offset + sessions.length;
+        this.sessionsHasMoreState.set(sessions.length === DashboardStore.SESSIONS_PAGE_SIZE);
+        this.sessionsLoaded = true;
+        this.sessionsLoadingState.set(false);
+        this.recalculateDashboard();
+        this.refreshStatsAfterSessionChange();
+      },
+      error: (error: unknown) => {
+        this.sessionsLoadingState.set(false);
+        this.sessionsErrorState.set(this.errorMessage(error, 'Não foi possível carregar suas sessões.'));
       }
     });
   }
@@ -160,7 +213,12 @@ export class DashboardStore {
     this.booksState.update((books) => books.map((book) => book.id === id ? { ...book, status: 'FINISHED', finishedOn } : book));
     this.syncCurrentBook();
     this.api.finishBook(id, finishedOn).subscribe({
-      next: (book) => { this.booksState.update((books) => books.map((item) => item.id === id ? { ...item, ...book } : item)); this.syncCurrentBook(); this.analytics.track('book_finished'); },
+      next: (book) => {
+        this.booksState.update((books) => books.map((item) => item.id === id ? { ...item, ...book } : item));
+        this.syncCurrentBook();
+        this.refreshStatsAfterSessionChange();
+        this.analytics.track('book_finished');
+      },
       error: (error: unknown) => { this.booksState.set(previous); this.syncCurrentBook(); this.setMutationError(error, 'Não foi possível finalizar o livro.'); }
     });
   }
@@ -170,7 +228,12 @@ export class DashboardStore {
     this.booksState.update((books) => books.map((book) => book.id === id ? { ...book, status: 'READING', finishedOn: undefined } : book));
     this.syncCurrentBook();
     this.api.reopenBook(id).subscribe({
-      next: (book) => { this.booksState.update((books) => books.map((item) => item.id === id ? { ...item, ...book } : item)); this.syncCurrentBook(); this.analytics.track('book_reopened'); },
+      next: (book) => {
+        this.booksState.update((books) => books.map((item) => item.id === id ? { ...item, ...book } : item));
+        this.syncCurrentBook();
+        this.refreshStatsAfterSessionChange();
+        this.analytics.track('book_reopened');
+      },
       error: (error: unknown) => { this.booksState.set(previous); this.syncCurrentBook(); this.setMutationError(error, 'Não foi possível reabrir o livro.'); }
     });
   }
@@ -198,16 +261,17 @@ export class DashboardStore {
     const optimistic: ReadingSession = { id: optimisticId, ...draft, createdAt: now, updatedAt: now };
     this.sessionsState.update((sessions) => [optimistic, ...sessions]);
     this.recalculateDashboard();
-    this.calculateVisibleStats();
+    this.refreshStatsAfterSessionChange();
     return this.api.createSession(draft).pipe(
       tap((session) => {
         this.sessionsState.update((sessions) => sessions.map((item) => item.id === optimisticId ? session : item));
+        this.loadDashboard();
         this.analytics.track('reading_session_created', { pages: draft.pages, minutes: draft.minutes });
       }),
       catchError((error: unknown) => {
         this.sessionsState.update((sessions) => sessions.filter((item) => item.id !== optimisticId));
         this.recalculateDashboard();
-        this.calculateVisibleStats();
+        this.refreshStatsAfterSessionChange();
         this.setMutationError(error, 'Não foi possível registrar a leitura.');
         return throwError(() => error);
       })
@@ -218,16 +282,17 @@ export class DashboardStore {
     const previous = this.sessionsState();
     this.sessionsState.update((sessions) => sessions.map((session) => session.id === id ? { ...session, ...patch } : session));
     this.recalculateDashboard();
-    this.calculateVisibleStats();
+    this.refreshStatsAfterSessionChange();
     return this.api.updateSession(id, patch).pipe(
       tap((session) => {
         this.sessionsState.update((sessions) => sessions.map((item) => item.id === id ? session : item));
+        this.loadDashboard();
         this.analytics.track('reading_session_updated', { pages: patch.pages, minutes: patch.minutes });
       }),
       catchError((error: unknown) => {
         this.sessionsState.set(previous);
         this.recalculateDashboard();
-        this.calculateVisibleStats();
+        this.refreshStatsAfterSessionChange();
         this.setMutationError(error, 'Não foi possível editar a sessão.');
         return throwError(() => error);
       })
@@ -238,13 +303,16 @@ export class DashboardStore {
     const previous = this.sessionsState();
     this.sessionsState.update((sessions) => sessions.filter((session) => session.id !== id));
     this.recalculateDashboard();
-    this.calculateVisibleStats();
+    this.refreshStatsAfterSessionChange();
     return this.api.deleteSession(id).pipe(
-      tap(() => this.analytics.track('reading_session_deleted')),
+      tap(() => {
+        this.loadDashboard();
+        this.analytics.track('reading_session_deleted');
+      }),
       catchError((error: unknown) => {
         this.sessionsState.set(previous);
         this.recalculateDashboard();
-        this.calculateVisibleStats();
+        this.refreshStatsAfterSessionChange();
         this.setMutationError(error, 'Não foi possível excluir a sessão.');
         return throwError(() => error);
       })
@@ -260,15 +328,14 @@ export class DashboardStore {
     return calendarDate(new Date(), timezone);
   }
 
-  private currentStreak(): number { return currentStreak(this.sessionsState(), this.today()); }
-
   private recalculateDashboard(): void {
     const today = this.today();
     const from = addDays(today, -6);
     const period = this.sessionsState().filter((session) => session.readingDate >= from && session.readingDate <= today);
     const current = this.booksState().find((book) => book.status === 'READING' && !book.id.startsWith('local-'));
+    const streak = this.dashboardState()?.currentStreakDays ?? 0;
     this.dashboardState.set({
-      currentStreakDays: this.currentStreak(),
+      currentStreakDays: streak,
       currentBook: current ? { id: current.id, title: current.title } : null,
       week: {
         pages: period.reduce((total, session) => total + session.pages, 0),
@@ -285,10 +352,20 @@ export class DashboardStore {
       : { currentStreakDays: 0, currentBook: current ? { id: current.id, title: current.title } : null, week: { pages: 0, minutes: 0, booksFinished: 0 } });
   }
 
-  private calculateVisibleStats(): void {
+  private refreshStatsAfterSessionChange(): void {
     const current = this.statsState();
     if (!current) return;
-    this.statsState.set(periodStats(this.sessionsState(), this.booksState(), current.period.from, current.period.to, this.currentStreak()));
+    if (this.periodState() === 'all') {
+      this.loadStats('all');
+      return;
+    }
+    this.statsState.set(periodStats(
+      this.sessionsState(),
+      this.booksState(),
+      current.period.from,
+      current.period.to,
+      this.dashboardState()?.currentStreakDays ?? current.currentStreakDays
+    ));
   }
 
   private setMutationError(error: unknown, fallback: string): void { this.errorState.set(this.errorMessage(error, fallback)); }
