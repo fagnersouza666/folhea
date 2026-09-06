@@ -106,11 +106,30 @@ describe('critical form DOM states', () => {
 
     const fixture = TestBed.createComponent(BooksComponent);
     fixture.detectChanges();
-    const retry = Array.from(fixture.nativeElement.querySelectorAll<HTMLButtonElement>('button')).find((button) => button.textContent.includes('Tentar')) as HTMLButtonElement;
+    const retry = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((button) => button.textContent.includes('Tentar')) as HTMLButtonElement;
     retry.click();
 
     expect(store.reload).toHaveBeenCalledOnce();
     expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain('Não foi possível');
+  });
+
+  it('distinguishes loading and empty library states without losing the next action', () => {
+    const booksLoading = signal(true);
+    const store = createStore({ books: signal<Book[]>([]), booksLoading });
+    TestBed.configureTestingModule({
+      imports: [BooksComponent],
+      providers: [provideRouter([]), { provide: DashboardStore, useValue: store }]
+    });
+
+    const fixture = TestBed.createComponent(BooksComponent);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[role="status"]')?.textContent).toContain('Carregando');
+    expect(fixture.nativeElement.querySelector('.empty')).toBeNull();
+
+    booksLoading.set(false);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.empty h2')?.textContent).toContain('biblioteca');
+    expect(fixture.nativeElement.querySelector('.empty a')).not.toBeNull();
   });
 
   it('does not replace a dashboard failure with silent zero-value content', () => {
