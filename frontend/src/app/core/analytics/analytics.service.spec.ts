@@ -81,7 +81,7 @@ describe('AnalyticsService', () => {
       author: 'J. R. R. Tolkien'
     } as unknown as Record<string, string>);
 
-    const [, body] = sendBeacon.mock.calls[0] as [string, Blob];
+    const [, body] = sendBeacon.mock.calls[0] as unknown as [string, Blob];
     await expect(body.text()).resolves.toMatch(/"event":"book_created"/);
     const payload = JSON.parse(await body.text()) as { properties: Record<string, unknown> };
     expect(payload.properties).toEqual({ source: 'progress' });
