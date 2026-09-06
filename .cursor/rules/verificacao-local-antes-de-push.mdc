@@ -18,14 +18,18 @@ Rode o **gate completo** da superfície, não um subconjunto. Só prossiga com t
   `npm run test:coverage`
   `npm run build -- --configuration production`
   `npm run build:ssg -- --configuration production`
-  `node ../scripts/ci/validate-api-contract.mjs`
-- Mexeu em `frontend/e2e/**`, `frontend/playwright.config.ts` ou jornada crítica de UI → também `npx playwright install --with-deps chromium` (se o browser não estiver instalado) e `npm run e2e:critical`
-- Mexeu em páginas públicas, SSG ou `infra/Caddyfile` → depois do `build:ssg`, `node ../scripts/ci/validate-seo.mjs dist seo-report/seo-validation.txt`
+  `node ../scripts/ci/validate-api-contract.mjs contract-report.txt`
+- Se `frontend/package.json` tem o script `e2e:critical` (a CI também exige backend) e mexeu em `frontend/**` ou `backend/**` → em `frontend/`: `npx playwright install --with-deps chromium` (se o browser não estiver instalado) e `npm run e2e:critical`
+- Mexeu em páginas públicas, SSG ou `infra/Caddyfile` → depois do `build:ssg`, na raiz, com `<site-root>` = pasta de `frontend/dist` que contém `robots.txt`:
+  `docker run --detach --rm --name folhea-caddy-seo --publish 4173:80 --env PUBLIC_DOMAIN=:80 --env API_UPSTREAM=http://127.0.0.1:9 --env STATIC_ROOT=/srv --volume "$PWD/infra/Caddyfile:/etc/caddy/Caddyfile:ro" --volume "$PWD/<site-root>:/srv:ro" caddy:2.11-alpine`
+  `SEO_BASE_URL=http://127.0.0.1:4173 node scripts/ci/validate-seo.mjs <site-root> seo-report/seo-validation.txt`
+  `docker rm --force folhea-caddy-seo`
 - Mexeu em `backend/**` → em `backend/`: `./mvnw -B clean verify` (exige Docker)
 - Mexeu em `infra/**`, `docker-compose.yml`, `docker-compose.prod.yml` ou `infra/Dockerfile` → na raiz:
   `node scripts/ci/validate-oidc-surface.mjs`
   `docker compose --env-file .env.example config --quiet`
-  Se mexeu em Dockerfile/Caddyfile: `docker build --file infra/Dockerfile .`
+  `docker build --file infra/Dockerfile --tag folhea:ci .`
+  `docker build --file infra/Dockerfile --target caddy-runtime --tag folhea:caddy-ci .`
 - Mexeu em `scripts/ci/**` → execute o validador alterado
 - Mexeu em `scripts/ops/**` → execute o script/teste correspondente em `scripts/ops/` (não use `validate-production-compose.sh` sem `.env`; o gate de CI usa `.env.example`)
 - Mexeu em `scripts/versao.sh` ou `scripts/tests/test-versao.sh` → `./scripts/tests/test-versao.sh`
