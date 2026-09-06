@@ -27,13 +27,13 @@ test.describe('critical reading journey', () => {
 
   test('stats and card creation', async ({ page }) => {
     await signIn(page);
-    await page.getByRole('link', { name: 'Progresso' }).click();
+    await page.getByRole('link', { name: 'Ver progresso' }).click();
     await expect(page.getByRole('heading', { name: 'Seu progresso' })).toBeVisible();
     await page.getByRole('button', { name: /criar card/i }).click();
     await expect(page.getByRole('button', { name: /card criado/i })).toBeVisible();
   });
 
-  test('reading edit/delete, finish/reopen, and card share/download contracts', async ({ page }) => {
+  test('reading edit/delete, finish/reopen, and card share/download contracts', async ({ page, mockApi }) => {
     await signIn(page);
     const result = await page.evaluate(async () => {
       const json = (body: unknown) => ({ headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
