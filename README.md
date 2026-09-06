@@ -6,3 +6,81 @@ You are free to use, modify, distribute and commercialize this software.
 
 Attribution to the original project and author must be preserved as described
 in the LICENSE and NOTICE files.
+
+## Desenvolvimento local
+
+O Folhea é um monorepo com `frontend/`, `backend/` e `infra/`. Os comandos
+abaixo são o contrato usado pelo CI; execute-os antes de abrir um pull request.
+
+### Pré-requisitos
+
+- Node.js 22 ou superior e npm;
+- Java 25 e Docker (necessário para Dev Services/Testcontainers);
+- Docker Compose, quando for necessário executar a stack completa.
+
+### Frontend
+
+```bash
+cd frontend
+npm ci
+npm run lint
+npm run build -- --configuration production
+npm run build:ssg -- --configuration production
+npm run test -- --run
+```
+
+O build SSG deve gerar as páginas públicas. O teste de SEO executado no CI
+verifica o artefato gerado, incluindo `title`, description, canonical,
+`robots.txt`, `sitemap.xml`, `noindex`, status 404 e redirects.
+
+### Backend
+
+```bash
+cd backend
+./mvnw -B clean verify
+```
+
+Esse comando compila o Quarkus e executa os testes JUnit 5, incluindo os
+testes REST/RestAssured, smoke e contrato. Docker deve estar disponível para
+os testes que usam Dev Services ou Testcontainers.
+
+### Fluxos críticos
+
+Com o frontend e o backend disponíveis localmente, instale os navegadores e
+execute os testes Playwright:
+
+```bash
+cd frontend
+npm ci
+npx playwright install --with-deps chromium
+npm run e2e:critical
+```
+
+Os fluxos cobertos são landing, login, cadastro de livro, registro/edição/
+exclusão de leitura, finalização, estatísticas e isolamento básico entre
+usuários. As regras do streak também devem cobrir hoje, ontem, sequência,
+quebra, múltiplas sessões no dia, timezone, edição e exclusão.
+
+### Docker
+
+```bash
+docker build -f infra/Dockerfile .
+```
+
+## Gate de merge
+
+Todo pull request deve passar pelo workflow `CI`. O job `CI / merge-gate` é o
+único status check necessário para a proteção de `main` e só fica verde quando
+todos estes gates terminam com sucesso:
+
+- frontend lint, build de produção, build SSG e Vitest;
+- backend build e testes;
+- Playwright dos fluxos críticos;
+- validação SEO do artefato SSG;
+- Docker build.
+
+Em Settings → Branches → Branch protection rules, configure `main` para exigir
+pull request, exigir `CI / merge-gate`, exigir branch atualizada e bloquear
+force-push. Não permita bypass para merges normais. O workflow publica logs,
+relatórios de teste, relatório Playwright e artefato SEO por 14 dias; esses
+artefatos são a evidência da aprovação.
