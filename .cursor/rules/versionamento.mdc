@@ -1,0 +1,40 @@
+---
+description: Incremento obrigatório da versão do produto (frontend e backend juntos) em toda alteração e correção
+alwaysApply: true
+---
+
+# Versionamento do produto
+
+Frontend (`frontend/package.json` + lockfile) e backend (`backend/pom.xml`) **sempre na mesma versão** SemVer `X.Y.Z`, sem `-SNAPSHOT`.
+O OpenAPI (`quarkus.smallrye-openapi.info-version`) acompanha o pom.
+Não há app mobile. Não use `pubspec.yaml`.
+Nunca edite esses arquivos à mão — use o script.
+
+```bash
+./scripts/versao.sh funcionalidade   # 0.1.0 → 0.2.0
+./scripts/versao.sh corrigir          # 0.1.0 → 0.1.1
+./scripts/versao.sh grande            # 0.1.0 → 1.0.0  (só se o usuário pedir)
+./scripts/versao.sh atual             # mostra e avisa se divergirem
+./scripts/versao.sh verificar         # falha se divergirem
+```
+
+## Quando incrementar
+
+| Tipo | Comando | Exemplo |
+| --- | --- | --- |
+| Funcionalidade, alteração de comportamento, feature | `funcionalidade` | 0.1.0 → 0.2.0 |
+| Correção de bug ou defeito | `corrigir` | 0.1.0 → 0.1.1 |
+| Quebra grande / major | `grande` | **somente com pedido explícito** |
+
+## Regras
+
+- Toda alteração de produto (código em `frontend/` ou `backend/`) **incrementa no mesmo commit** da mudança.
+- Lote que mistura feature e correção: use `funcionalidade` (o do meio vence).
+- Só docs, chore, teste ou infra **sem** mudança de produto: **não** incremente; declare isso no resumo.
+- Nunca rode `grande` sem o usuário mandar. Nunca adivinhe major.
+- Se as versões já divergirem, alinhe à mão uma vez para a mesma `X.Y.Z` e só então use o script.
+- Depois do bump: atualize `README.md` §Versão do produto.
+
+## Anti-padrão
+
+Editar `version` no `package.json` ou `<version>` no pom em separado, bumpar só um lado, deixar `-SNAPSHOT` no pom, deixar a versão para um commit posterior, ou tratar o literal OpenAPI `info-version` como versão independente.
