@@ -158,11 +158,18 @@ jobs:
           test -n "$site_file"
           site_root="${site_file%/*}"
           echo "path=$site_root" >> "$GITHUB_OUTPUT"
-      - name: Serve SSG output for HTTP checks
+      - name: Serve SSG output with Caddy 2.10.0 for HTTP checks
         run: |
           mkdir -p seo-report
-          node scripts/ci/serve-seo.mjs "${{ steps.site-root.outputs.path }}" 4173 > seo-report/server.log 2>&1 &
-          echo $! > seo-report/server.pid
+          docker run --detach --rm \
+            --name folhea-caddy-seo \
+            --publish 4173:80 \
+            --env PUBLIC_DOMAIN=:80 \
+            --env API_UPSTREAM=http://127.0.0.1:9 \
+            --env STATIC_ROOT=/srv \
+            --volume "$GITHUB_WORKSPACE/infra/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            --volume "$GITHUB_WORKSPACE/${{ steps.site-root.outputs.path }}:/srv:ro" \
+            caddy:2.10.0-alpine
           for attempt in $(seq 1 20); do
             curl --fail --silent http://127.0.0.1:4173/ >/dev/null && break
             sleep 1
@@ -174,6 +181,12 @@ jobs:
           SEO_BASE_URL: http://127.0.0.1:4173
           SEO_REDIRECT_PATH: ${{ vars.SEO_REDIRECT_PATH }}
           SEO_REDIRECT_TARGET: ${{ vars.SEO_REDIRECT_TARGET }}
+      - name: Capture Caddy validation logs
+        if: always()
+        run: docker logs folhea-caddy-seo > seo-report/caddy.log 2>&1 || true
+      - name: Stop Caddy validation server
+        if: always()
+        run: docker rm --force folhea-caddy-seo || true
       - name: Upload SEO evidence
         if: always()
         uses: actions/upload-artifact@v4

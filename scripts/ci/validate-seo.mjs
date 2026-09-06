@@ -222,6 +222,22 @@ function responseContentType(response) {
   return response.headers.get('content-type')?.toLowerCase() ?? '';
 }
 
+function validateEdgeHeaders(response, source) {
+  const expectedHeaders = {
+    'content-security-policy': "default-src 'self'",
+    'referrer-policy': 'strict-origin-when-cross-origin',
+    'x-content-type-options': 'nosniff',
+    'x-frame-options': 'DENY'
+  };
+
+  for (const [name, expected] of Object.entries(expectedHeaders)) {
+    const actual = response.headers.get(name);
+    if (!actual || !actual.toLowerCase().includes(expected.toLowerCase())) {
+      failures.push(`${source}: expected ${name} to contain "${expected}", got ${actual ?? 'missing'}`);
+    }
+  }
+}
+
 async function request(baseUrl, path, options = {}) {
   const timeout = Number(process.env.SEO_HTTP_TIMEOUT_MS ?? 5000);
   const response = await fetch(new URL(path, baseUrl), {
@@ -249,10 +265,12 @@ async function validateHttp() {
       const { response, body } = await request(baseUrl, route.path);
       const source = `HTTP ${route.path}`;
       if (response.status !== 200) {
-        failures.push(`${source}: expected 200, got ${response.status}`);
+        failures.push(`${source}: expected 200 without redirect, got ${response.status} ${response.headers.get('location') ?? ''}`.trim());
         continue;
       }
+      if (response.headers.has('location')) failures.push(`${source}: unexpected redirect to ${response.headers.get('location')}`);
       if (!responseContentType(response).includes('text/html')) failures.push(`${source}: expected HTML content type, got ${responseContentType(response) || 'missing'}`);
+      validateEdgeHeaders(response, source);
       validatePublicDocument(body, route, source);
     } catch (error) {
       failures.push(`HTTP ${route.path}: request failed (${error.message})`);
@@ -272,6 +290,7 @@ async function validateHttp() {
       const bodyRobots = normalizedRobots(metaContent(body, 'robots'));
       if (!headerRobots.includes('noindex') && !bodyRobots.includes('noindex')) failures.push(`${source}: missing noindex protection`);
       if (!headerRobots.includes('nofollow') && !bodyRobots.includes('nofollow')) failures.push(`${source}: missing nofollow protection`);
+      if (!normalizedRobots(response.headers.get('cache-control')).includes('no-store')) failures.push(`${source}: missing Cache-Control: no-store`);
       if (/Página não encontrada/i.test(elementText(body, 'h1') ?? '')) failures.push(`${source}: private route served the 404 document`);
     } catch (error) {
       failures.push(`HTTP ${path}: request failed (${error.message})`);

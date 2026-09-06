@@ -68,9 +68,11 @@
 		file_server
 	}
 
-	# SSG emits an index.html for every public route. Serve only files that
-	# exist so an unknown URL remains a real 404 instead of a soft 404 home page.
-	try_files {path} {path}/
+	# SSG emits an index.html for every public route. Check the generated
+	# document before the request path itself: resolving /route to
+	# /route/index.html avoids file_server's directory redirect while an
+	# unknown URL remains a real 404 instead of a soft 404 home page.
+	try_files {path}/index.html {path}
 	file_server
 
 	# Keep the branded 404 document while preserving the error status.
