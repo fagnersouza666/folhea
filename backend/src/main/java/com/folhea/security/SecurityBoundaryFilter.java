@@ -36,15 +36,16 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
     @Override
     public void filter(ContainerRequestContext context) {
         if (!isApiRequest(context)) return;
-        if (identity == null || identity.isAnonymous()) return;
-
-        String method = context.getMethod();
-        if (!isMutation(method)) return;
 
         if (!policy.isAllowedHost(firstHeader(context, "X-Forwarded-Host", HttpHeaders.HOST))) {
             abort(context, 403, "https://folhea.com.br/problems/invalid-host", "Origem não permitida", "O host da requisição não é confiável.");
             return;
         }
+        if (identity == null || identity.isAnonymous()) return;
+
+        String method = context.getMethod();
+        if (!isMutation(method)) return;
+
         if (!validOrigin(context)) {
             abort(context, 403, "https://folhea.com.br/problems/csrf-origin", "Origem não permitida", "A requisição deve vir da origem canônica.");
             return;

@@ -2,12 +2,14 @@ import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Injectable, PLATFORM_ID, computed, inject, signal } from '@angular/core';
 import { catchError, map, Observable, of, tap } from 'rxjs';
+import { CsrfService } from '../api/csrf.service';
 import { User } from '../models/models';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly csrf = inject(CsrfService);
   private readonly userState = signal<User | null>(null);
 
   readonly user = this.userState.asReadonly();
@@ -19,6 +21,7 @@ export class AuthService {
 
   signOut(): void {
     this.userState.set(null);
+    this.csrf.clear();
     if (isPlatformBrowser(this.platformId)) window.location.assign('/auth/logout');
   }
 

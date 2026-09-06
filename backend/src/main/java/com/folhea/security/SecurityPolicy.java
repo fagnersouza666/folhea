@@ -53,7 +53,7 @@ public class SecurityPolicy {
             URI requestHost = URI.create("http://" + host);
             if (requestHost.getHost() == null || requestHost.getRawUserInfo() != null) return false;
             return canonical.getHost().equalsIgnoreCase(requestHost.getHost())
-                    && effectivePort(canonical) == effectivePort(requestHost);
+                    && hostPortMatches(canonical, requestHost);
         } catch (IllegalArgumentException ignored) {
             return false;
         }
@@ -107,6 +107,13 @@ public class SecurityPolicy {
     private static int effectivePort(URI uri) {
         if (uri.getPort() >= 0) return uri.getPort();
         return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
+    }
+
+    private static boolean hostPortMatches(URI canonical, URI requestHost) {
+        if (requestHost.getPort() < 0) {
+            return canonical.getPort() < 0 || canonical.getPort() == effectivePort(canonical);
+        }
+        return effectivePort(canonical) == requestHost.getPort();
     }
 
     private String originString(URI uri) {

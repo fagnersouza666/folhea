@@ -1,6 +1,6 @@
-import { HttpInterceptorFn } from '@angular/common/http';
+import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { switchMap } from 'rxjs';
+import { catchError, switchMap, throwError } from 'rxjs';
 import { CsrfService } from './csrf.service';
 
 const mutationMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -13,6 +13,15 @@ export const csrfInterceptor: HttpInterceptorFn = (request, next) => {
   const csrf = inject(CsrfService);
   if (request.headers.has('X-CSRF-Token')) return next(withCredentials);
   return csrf.getToken().pipe(
-    switchMap((token) => next(withCredentials.clone({ setHeaders: { 'X-CSRF-Token': token } })))
+    switchMap((token) => next(withCredentials.clone({ setHeaders: { 'X-CSRF-Token': token } }))),
+    catchError((error: unknown) => {
+      if (error instanceof HttpErrorResponse && error.status === 403) {
+        csrf.clear();
+        return csrf.getToken().pipe(
+          switchMap((token) => next(withCredentials.clone({ setHeaders: { 'X-CSRF-Token': token } })))
+        );
+      }
+      return throwError(() => error);
+    })
   );
 };

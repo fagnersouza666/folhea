@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, of, shareReplay, tap } from 'rxjs';
+import { Observable, map, of, shareReplay, tap } from 'rxjs';
 
 interface CsrfResponse {
   token: string;
@@ -16,12 +16,15 @@ export class CsrfService {
   getToken(): Observable<string> {
     if (this.token) return of(this.token);
     if (!this.request$) {
-      this.request$ = this.http.get<CsrfResponse>('/api/v1/csrf', { withCredentials: true }).pipe(
-        tap(({ token }) => { this.token = token; this.request$ = null; }),
+      const request$ = this.http.get<CsrfResponse>('/api/v1/csrf', { withCredentials: true }).pipe(
+        map(({ token }) => token),
+        tap((token) => { this.token = token; this.request$ = null; }),
         shareReplay({ bufferSize: 1, refCount: false })
       );
+      this.request$ = request$;
+      return request$;
     }
-    return this.request$;
+    return this.request$!;
   }
 
   clear(): void {

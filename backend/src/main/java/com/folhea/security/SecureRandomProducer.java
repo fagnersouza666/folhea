@@ -8,7 +8,6 @@ import java.security.SecureRandom;
 @ApplicationScoped
 public class SecureRandomProducer {
     @Produces
-    @ApplicationScoped
     SecureRandom secureRandom() {
         return new SecureRandom();
     }
