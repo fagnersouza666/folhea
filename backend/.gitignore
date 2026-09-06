@@ -1,3 +1,4 @@
 target/
 .quarkus/
 *.log
+contract-report.txt

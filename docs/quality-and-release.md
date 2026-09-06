@@ -32,7 +32,8 @@ validados contra o documento OpenAPI. Em produção o spec não é público
 (`%prod.quarkus.smallrye-openapi.enable=false` e bloqueio na borda); use
 `OPENAPI_FILE` de um build dev/test quando quiser cruzar o contrato com o
 documento. O CI executa essa validação junto com o
-lint e publica o relatório.
+lint e publica o relatório. `contract-report.txt` e `seo-report/` não entram
+no git; são artefatos do validador local e da CI.
 
 Vitest cobre regras e serviços do frontend; `npm run test:coverage` gera a
 cobertura V8. O Maven executa JUnit 5, Quarkus Test e RestAssured quando os

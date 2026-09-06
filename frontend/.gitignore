@@ -6,3 +6,5 @@ coverage/
 .cache/
 playwright-report/
 test-results/
+contract-report.txt
+seo-report/

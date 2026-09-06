@@ -11,3 +11,7 @@ GEMINI.md
 backups/
 *.dump
 *.dump.gz
+
+# Relatórios gerados pelos validadores locais e da CI.
+contract-report.txt
+seo-report/
