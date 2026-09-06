@@ -37,7 +37,7 @@ public class StatisticsService {
         long finished = selection.allTime
                 ? books.find("userId = ?1 and status = ?2", user.id, BookStatus.FINISHED).count()
                 : books.find("userId = ?1 and status = ?2 and finishedOn between ?3 and ?4", user.id, BookStatus.FINISHED, selection.from, selection.to).count();
-        return new StatsResponse(new Period(selection.from, selection.to), streak(user), sumPages(period), sumMinutes(period), finished);
+        return new StatsResponse(new Period(selection.from, selection.to), streak(user), sumMinutes(period), sumPages(period), finished);
     }
 
     public DashboardResponse dashboard(UserEntity user) {
