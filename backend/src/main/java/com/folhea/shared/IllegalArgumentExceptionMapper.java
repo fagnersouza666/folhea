@@ -13,7 +13,7 @@ public class IllegalArgumentExceptionMapper implements ExceptionMapper<IllegalAr
         return Response.status(Response.Status.BAD_REQUEST)
                 .type(MediaType.valueOf("application/problem+json"))
                 .entity(new ProblemResponse(URI.create("https://folhea.com.br/problems/invalid-request"),
-                        "Requisição inválida", 400, exception.getMessage()))
+                        "Requisição inválida", 400, "A requisição não atende ao contrato esperado."))
                 .build();
     }
 }

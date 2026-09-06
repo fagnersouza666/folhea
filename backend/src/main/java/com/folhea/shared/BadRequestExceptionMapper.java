@@ -11,13 +11,10 @@ import java.net.URI;
 public class BadRequestExceptionMapper implements ExceptionMapper<BadRequestException> {
     @Override
     public Response toResponse(BadRequestException exception) {
-        String detail = exception.getMessage() == null || exception.getMessage().isBlank()
-                ? "A requisição não pôde ser processada."
-                : exception.getMessage();
         return Response.status(Response.Status.BAD_REQUEST)
                 .type(MediaType.valueOf("application/problem+json"))
                 .entity(new ProblemResponse(URI.create("https://folhea.com.br/problems/invalid-request"),
-                        "Requisição inválida", 400, detail))
+                        "Requisição inválida", 400, "A requisição não atende ao contrato esperado."))
                 .build();
     }
 }
