@@ -66,7 +66,7 @@ export class DashboardStore {
     this.booksLoadingState.set(true);
     this.booksErrorState.set(null);
     this.api.getBooks().subscribe({
-      next: (books) => { this.booksState.set(books); this.booksLoadingState.set(false); },
+      next: (books) => { this.booksState.set(books); this.booksLoadingState.set(false); this.calculateVisibleStats(); },
       error: (error: unknown) => { this.booksLoadingState.set(false); this.booksErrorState.set(this.errorMessage(error, 'Não foi possível carregar seus livros.')); }
     });
   }
@@ -75,7 +75,7 @@ export class DashboardStore {
     this.sessionsLoadingState.set(true);
     this.sessionsErrorState.set(null);
     this.api.getSessions().subscribe({
-      next: (sessions) => { this.sessionsState.set(sessions); this.sessionsLoadingState.set(false); this.recalculateDashboard(); this.calculateVisibleStats(); },
+      next: (sessions) => { this.sessionsState.set(sessions); this.sessionsLoadingState.set(false); this.recalculateDashboard(); this.calculateVisibleStats(); if (this.periodState() === 'all') this.loadStats('all'); },
       error: (error: unknown) => { this.sessionsLoadingState.set(false); this.sessionsErrorState.set(this.errorMessage(error, 'Não foi possível carregar suas sessões.')); }
     });
   }
