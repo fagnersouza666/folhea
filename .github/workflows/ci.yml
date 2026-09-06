@@ -164,7 +164,7 @@ jobs:
           docker run --detach --rm \
             --name folhea-caddy-seo \
             --publish 4173:80 \
-            --env PUBLIC_DOMAIN=http://localhost:80 \
+            --env PUBLIC_DOMAIN=:80 \
             --env API_UPSTREAM=http://127.0.0.1:9 \
             --env STATIC_ROOT=/srv \
             --volume "$GITHUB_WORKSPACE/infra/Caddyfile:/etc/caddy/Caddyfile:ro" \
