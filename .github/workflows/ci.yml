@@ -83,10 +83,17 @@ jobs:
         with:
           name: frontend-test-evidence
           path: frontend
+      - name: Locate generated SSG site
+        id: site-root
+        run: |
+          site_file="$(find frontend/dist -type f -name robots.txt -print -quit)"
+          test -n "$site_file"
+          site_root="${site_file%/*}"
+          echo "path=$site_root" >> "$GITHUB_OUTPUT"
       - name: Serve SSG output for HTTP checks
         run: |
           mkdir -p seo-report
-          npx --yes serve frontend/dist --listen 4173 > seo-report/server.log 2>&1 &
+          npx --yes serve "${{ steps.site-root.outputs.path }}" --listen 4173 > seo-report/server.log 2>&1 &
           echo $! > seo-report/server.pid
           for attempt in $(seq 1 20); do
             curl --fail --silent http://127.0.0.1:4173/ >/dev/null && break
@@ -94,7 +101,7 @@ jobs:
           done
           curl --fail --silent http://127.0.0.1:4173/ >/dev/null
       - name: Validate generated SEO and HTTP responses
-        run: node scripts/ci/validate-seo.mjs frontend/dist seo-report/seo-validation.txt
+        run: node scripts/ci/validate-seo.mjs "${{ steps.site-root.outputs.path }}" seo-report/seo-validation.txt
         env:
           SEO_BASE_URL: http://127.0.0.1:4173
           SEO_REDIRECT_PATH: ${{ vars.SEO_REDIRECT_PATH }}

@@ -27,6 +27,7 @@ npm run lint
 npm run build -- --configuration production
 npm run build:ssg -- --configuration production
 npm run test -- --run
+node ../scripts/ci/validate-seo.mjs dist seo-report/seo-validation.txt
 ```
 
 O build SSG deve gerar as páginas públicas. O teste de SEO executado no CI
