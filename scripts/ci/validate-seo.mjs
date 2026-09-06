@@ -11,10 +11,10 @@ const failures = [];
 const publicRoutes = [
   { path: '/', title: 'Folhea — Cada página conta', description: 'Acompanhe seu hábito de leitura, registre páginas e veja sua evolução com o Folhea.', h1: 'Cada página conta.' },
   { path: '/como-funciona', title: 'Como funciona — Folhea', description: 'Entenda como o Folhea transforma leitura física em progresso visível.', h1: 'Seu hábito em três movimentos.' },
-  { path: '/recursos', title: 'Recursos — Folhea', description: 'Streak, métricas e cards para acompanhar sua leitura.', h1: 'Tudo o que ajuda você a continuar.' },
-  { path: '/sobre', title: 'Sobre — Folhea', description: 'Conheça o propósito do Folhea.', h1: 'Leitura física merece progresso visível.' },
-  { path: '/privacidade', title: 'Privacidade — Folhea', description: 'Saiba como o Folhea trata seus dados.', h1: 'Privacidade é parte do produto.' },
-  { path: '/termos', title: 'Termos — Folhea', description: 'Leia os termos de uso do Folhea.', h1: 'Termos de uso.' }
+  { path: '/recursos', title: 'Recursos — Folhea', description: 'Conheça os recursos do Folhea para registrar leituras e acompanhar seu progresso.', h1: 'Tudo o que ajuda você a continuar.' },
+  { path: '/sobre', title: 'Sobre — Folhea', description: 'Conheça o propósito do Folhea, um companheiro simples para hábitos de leitura.', h1: 'Leitura física merece progresso visível.' },
+  { path: '/privacidade', title: 'Privacidade — Folhea', description: 'Saiba quais dados o Folhea coleta, como os utiliza e quais são seus direitos.', h1: 'Privacidade é parte do produto.' },
+  { path: '/termos', title: 'Termos — Folhea', description: 'Leia os termos de uso do Folhea e as responsabilidades ao utilizar o serviço.', h1: 'Termos de uso.' }
 ];
 
 const privateRoutes = ['/app', '/app/inicio'];
