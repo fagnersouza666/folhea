@@ -13,4 +13,9 @@ public class ReadingSessionRepository implements PanacheRepositoryBase<ReadingSe
     }
     public ReadingSessionEntity findOwned(UUID userId, UUID id) { return find("id = ?1 and userId = ?2", id, userId).firstResult(); }
     public List<ReadingSessionEntity> allOwned(UUID userId) { return find("userId = ?1 order by readingDate desc, createdAt desc", userId).list(); }
+
+    public LocalDate firstReadingDate(UUID userId) {
+        ReadingSessionEntity first = find("userId = ?1 order by readingDate asc, createdAt asc", userId).firstResult();
+        return first == null ? null : first.readingDate;
+    }
 }

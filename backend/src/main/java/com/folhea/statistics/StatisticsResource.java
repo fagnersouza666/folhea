@@ -23,11 +23,17 @@ public class StatisticsResource {
 
     @GET @Path("/stats")
     @Operation(summary = "Retorna métricas do período")
-    public StatisticsService.StatsResponse stats(@QueryParam("from") LocalDate from, @QueryParam("to") LocalDate to) {
+    public StatisticsService.StatsResponse stats(@QueryParam("from") LocalDate from,
+                                                 @QueryParam("to") LocalDate to,
+                                                 @QueryParam("period") String period,
+                                                 @QueryParam("range") String range) {
         if ((from == null) != (to == null) || (from != null && from.isAfter(to))) {
             throw new com.folhea.shared.ProblemException(400, "https://folhea.com.br/problems/invalid-period", "Período inválido", "Informe um período com datas válidas.");
         }
-        return statistics.stats(currentUser.get(), from, to);
+        if (period != null && range != null && !period.equalsIgnoreCase(range)) {
+            throw new com.folhea.shared.ProblemException(400, "https://folhea.com.br/problems/invalid-period", "Período inválido", "Informe apenas um período.");
+        }
+        return statistics.stats(currentUser.get(), from, to, period != null ? period : range);
     }
 
     @GET @Path("/dashboard")

@@ -20,6 +20,10 @@ public class CurrentUser {
         if (securityIdentity == null || securityIdentity.isAnonymous()) {
             throw new ProblemException(401, "https://folhea.com.br/problems/unauthorized", "Não autenticado", "É necessário autenticar-se.");
         }
+        if (securityIdentity.getPrincipal() == null || securityIdentity.getPrincipal().getName() == null
+                || securityIdentity.getPrincipal().getName().isBlank()) {
+            throw new ProblemException(401, "https://folhea.com.br/problems/unauthorized", "Não autenticado", "A identidade autenticada não possui subject.");
+        }
         String subject = securityIdentity.getPrincipal().getName();
         UserEntity user = users.findByIdentitySubject(subject);
         if (user == null) {
@@ -28,6 +32,15 @@ public class CurrentUser {
             user.email = Optional.ofNullable(securityIdentity.getAttribute("email")).map(Object::toString).orElse(null);
             user.timezone = validTimezone(Optional.ofNullable(securityIdentity.getAttribute("zoneinfo")).map(Object::toString).orElse("UTC"));
             users.persist(user);
+        } else {
+            // Claims are the source of truth for identity metadata. Do not replace
+            // existing values with null when a provider omits an optional claim.
+            String email = Optional.ofNullable(securityIdentity.getAttribute("email"))
+                    .map(Object::toString).orElse(null);
+            if (email != null && !email.isBlank()) user.email = email;
+            String timezone = Optional.ofNullable(securityIdentity.getAttribute("zoneinfo"))
+                    .map(Object::toString).orElse(null);
+            if (timezone != null && !timezone.isBlank()) user.timezone = validTimezone(timezone);
         }
         return user;
     }

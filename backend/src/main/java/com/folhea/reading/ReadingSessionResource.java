@@ -6,6 +6,9 @@ import com.folhea.shared.ProblemException;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -45,7 +48,7 @@ public class ReadingSessionResource {
 
     @POST @Transactional
     @Operation(summary = "Registra uma sessão de leitura")
-    public Response create(CreateSessionRequest request) {
+    public Response create(@Valid CreateSessionRequest request) {
         var user = currentUser.get();
         validateProgress(request == null ? null : request.pages(), request == null ? null : request.minutes());
         if (request.readingDate() == null) invalid("Informe a data da leitura.");
@@ -61,10 +64,10 @@ public class ReadingSessionResource {
     }
 
     @PATCH @Path("/{id}") @Transactional
-    public SessionResponse update(@PathParam("id") UUID id, UpdateSessionRequest request) {
+    public SessionResponse update(@PathParam("id") UUID id, @Valid UpdateSessionRequest request) {
         var user = currentUser.get();
         ReadingSessionEntity session = findOwned(user.id, id);
-        if (request == null) invalid("Informe ao menos um campo para alterar.");
+        if (request == null || request.isEmpty()) invalid("Informe ao menos um campo para alterar.");
         if (request.bookId() != null) { ensureBookOwned(user.id, request.bookId()); session.bookId = request.bookId(); }
         if (request.readingDate() != null) session.readingDate = request.readingDate();
         if (request.pages() != null) session.pages = request.pages();
@@ -96,9 +99,25 @@ public class ReadingSessionResource {
     }
     private static void invalid(String detail) { throw new ProblemException(400, "https://folhea.com.br/problems/invalid-reading-session", "Sessão de leitura inválida", detail); }
 
-    public record CreateSessionRequest(UUID bookId, LocalDate readingDate, int pages, int minutes) { }
-    public record UpdateSessionRequest(UUID bookId, LocalDate readingDate, Integer pages, Integer minutes) { }
-    public record SessionResponse(UUID id, UUID bookId, LocalDate readingDate, int pages, int minutes) {
-        static SessionResponse from(ReadingSessionEntity session) { return new SessionResponse(session.id, session.bookId, session.readingDate, session.pages, session.minutes); }
+    public record CreateSessionRequest(
+            @NotNull(message = "Informe o livro da sessão.") UUID bookId,
+            @NotNull(message = "Informe a data da leitura.") LocalDate readingDate,
+            @NotNull(message = "Informe páginas ou minutos.") @Min(value = 0, message = "Páginas não podem ser negativas.") Integer pages,
+            @NotNull(message = "Informe páginas ou minutos.") @Min(value = 0, message = "Minutos não podem ser negativos.") Integer minutes) { }
+
+    public record UpdateSessionRequest(
+            UUID bookId,
+            LocalDate readingDate,
+            @Min(value = 0, message = "Páginas não podem ser negativas.") Integer pages,
+            @Min(value = 0, message = "Minutos não podem ser negativos.") Integer minutes) {
+        boolean isEmpty() { return bookId == null && readingDate == null && pages == null && minutes == null; }
+    }
+
+    public record SessionResponse(UUID id, UUID userId, UUID bookId, LocalDate readingDate, int pages, int minutes,
+                                  java.time.Instant createdAt, java.time.Instant updatedAt) {
+        static SessionResponse from(ReadingSessionEntity session) {
+            return new SessionResponse(session.id, session.userId, session.bookId, session.readingDate,
+                    session.pages, session.minutes, session.createdAt, session.updatedAt);
+        }
     }
 }
