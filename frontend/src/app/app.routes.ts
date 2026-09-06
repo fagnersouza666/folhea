@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { AppShellComponent } from './layout/app-shell.component';
 import { LandingComponent } from './public/landing/landing.component';
+import { NotFoundComponent } from './public/not-found.component';
 import { PublicPageComponent } from './public/public-page.component';
 
 export const routes: Routes = [
@@ -17,9 +18,13 @@ export const routes: Routes = [
     { path: 'inicio', loadComponent: () => import('./features/home/home.component').then((m) => m.HomeComponent), title: 'Início — Folhea' },
     { path: 'livros', loadComponent: () => import('./features/books/books.component').then((m) => m.BooksComponent), title: 'Livros — Folhea' },
     { path: 'livros/novo', loadComponent: () => import('./features/books/new-book.component').then((m) => m.NewBookComponent), title: 'Cadastrar livro — Folhea' },
+    { path: 'livros/:id', loadComponent: () => import('./features/books/book-detail.component').then((m) => m.BookDetailComponent), title: 'Livro — Folhea' },
     { path: 'ler', loadComponent: () => import('./features/reading/reading.component').then((m) => m.ReadingComponent), title: 'Registrar leitura — Folhea' },
     { path: 'ler/feedback', loadComponent: () => import('./features/reading/feedback.component').then((m) => m.FeedbackComponent), title: 'Leitura registrada — Folhea' },
-    { path: 'progresso', loadComponent: () => import('./features/progress/progress.component').then((m) => m.ProgressComponent), title: 'Progresso — Folhea' }
+    { path: 'sessoes/:id/editar', loadComponent: () => import('./features/reading/edit-session.component').then((m) => m.EditSessionComponent), title: 'Editar leitura — Folhea' },
+    { path: 'progresso', loadComponent: () => import('./features/progress/progress.component').then((m) => m.ProgressComponent), title: 'Progresso — Folhea' },
+    { path: 'cards', loadComponent: () => import('./features/cards/cards.component').then((m) => m.CardsComponent), title: 'Cards — Folhea' },
+    { path: 'configuracoes', loadComponent: () => import('./features/settings/settings.component').then((m) => m.SettingsComponent), title: 'Configurações — Folhea' }
   ] },
-  { path: '**', redirectTo: '' }
+  { path: '**', component: NotFoundComponent, title: 'Página não encontrada — Folhea' }
 ];

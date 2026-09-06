@@ -24,8 +24,10 @@ set -a && . ../.env && set +a
 
 The API is rooted at `/api/v1`; OpenAPI is available at `/api/openapi`. Configure OIDC and database credentials through environment variables rather than committing secrets.
 
-Operational deployment, health checks, daily backups, retention, and restore
-procedures are documented in [docs/operations.md](docs/operations.md).
+Operational deployment and health checks are documented in
+[docs/operations.md](docs/operations.md). Executable backup, restore, recovery
+verification, retention, and incident procedures are in
+[docs/backup-restore.md](docs/backup-restore.md).
 
 ## License
 
@@ -60,8 +62,10 @@ node ../scripts/ci/validate-seo.mjs dist seo-report/seo-validation.txt
 ```
 
 O build SSG deve gerar as páginas públicas. O teste de SEO executado no CI
-verifica o artefato gerado, incluindo `title`, description, canonical,
-`robots.txt`, `sitemap.xml`, `noindex`, status 404 e redirects.
+serve o artefato e verifica as rotas públicas (`title`, description,
+canonical, `h1`, `lang`, Open Graph), `robots.txt`, `sitemap.xml`, o shell
+privado `/app`, um 404 real sem soft-404 e redirects permanentes quando
+configurados.
 
 ### Backend
 
@@ -118,6 +122,13 @@ sem ocultar falhas de componentes disponíveis. Os gates completos são:
 - Playwright dos fluxos críticos;
 - validação SEO do artefato SSG;
 - Docker build.
+
+O workflow `CD` executado após merge repete lint, testes, build de produção,
+SSG e backend, constrói a imagem quando `infra/Dockerfile` está disponível,
+dispara `PRODUCTION_DEPLOY_HOOK` e verifica liveness/readiness em
+`PRODUCTION_HEALTH_URL`. O contrato completo de release, métricas de produto,
+eventos analytics e a política de privacidade ficam em
+[`docs/quality-and-release.md`](docs/quality-and-release.md).
 
 Em Settings → Branches → Branch protection rules, configure `main` para exigir
 pull request, exigir `CI / merge-gate`, exigir branch atualizada e bloquear

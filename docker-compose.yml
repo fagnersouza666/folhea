@@ -68,18 +68,22 @@ services:
       DB_USERNAME: ${DB_USERNAME:-folhea}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be provided by an external secret or .env}
       DB_JDBC_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-folhea}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.30.0.2}
       OIDC_AUTH_SERVER_URL: http://keycloak:8080/realms/folhea
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-folhea-api}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
       OIDC_TOKEN_ISSUER: ${OIDC_TOKEN_ISSUER:-http://keycloak:8080/realms/folhea}
       CORS_ENABLED: ${CORS_ENABLED:-false}
+      SECURITY_CANONICAL_ORIGIN: ${SECURITY_CANONICAL_ORIGIN:?SECURITY_CANONICAL_ORIGIN must be provided}
+      SECURITY_ALLOWED_ORIGINS: ${SECURITY_ALLOWED_ORIGINS:?SECURITY_ALLOWED_ORIGINS must be provided}
       JSON_LOGGING: ${JSON_LOGGING:-true}
       METRICS_ENABLED: ${METRICS_ENABLED:-false}
     expose:
       - "8080"
     networks:
-      - edge
-      - private
+      edge:
+        ipv4_address: 172.30.0.3
+      private:
     depends_on:
       postgres:
         condition: service_healthy
@@ -109,7 +113,8 @@ services:
       - caddy-data:/data
       - caddy-config:/config
     networks:
-      - edge
+      edge:
+        ipv4_address: 172.30.0.2
     depends_on:
       backend:
         condition: service_healthy
@@ -127,5 +132,8 @@ volumes:
 networks:
   edge:
     internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
   private:
     internal: true

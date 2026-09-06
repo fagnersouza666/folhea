@@ -92,7 +92,9 @@ jobs:
       - run: npm run lint
       - run: npm run build -- --configuration production
       - run: npm run build:ssg -- --configuration production
-      - run: npm run test -- --run
+      - run: npm run test:coverage
+      - name: Validate frontend/backend API contract
+        run: node ../scripts/ci/validate-api-contract.mjs contract-report.txt
       - name: Upload frontend test evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -101,6 +103,7 @@ jobs:
           path: |
             frontend/coverage/
             frontend/dist/
+            frontend/contract-report.txt
           if-no-files-found: ignore
           retention-days: 14
 
@@ -129,6 +132,7 @@ jobs:
           path: |
             backend/target/surefire-reports/
             backend/target/failsafe-reports/
+            backend/target/surefire-reports/*.xml
           if-no-files-found: ignore
           retention-days: 14
 
@@ -157,7 +161,7 @@ jobs:
       - name: Serve SSG output for HTTP checks
         run: |
           mkdir -p seo-report
-          npx --yes serve "${{ steps.site-root.outputs.path }}" --listen 4173 > seo-report/server.log 2>&1 &
+          node scripts/ci/serve-seo.mjs "${{ steps.site-root.outputs.path }}" 4173 > seo-report/server.log 2>&1 &
           echo $! > seo-report/server.pid
           for attempt in $(seq 1 20); do
             curl --fail --silent http://127.0.0.1:4173/ >/dev/null && break

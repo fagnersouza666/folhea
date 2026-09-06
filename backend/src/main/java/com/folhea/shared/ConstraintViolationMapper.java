@@ -13,6 +13,7 @@ public class ConstraintViolationMapper implements ExceptionMapper<ConstraintViol
     public Response toResponse(ConstraintViolationException exception) {
         return Response.status(Response.Status.BAD_REQUEST)
                 .type(MediaType.valueOf("application/problem+json"))
+                .header("Cache-Control", "no-store")
                 .entity(new ProblemResponse(URI.create("https://folhea.com.br/problems/validation"), "Requisição inválida", 400,
                         exception.getConstraintViolations().stream().map(v -> v.getMessage()).findFirst().orElse("Dados inválidos.")))
                 .build();
