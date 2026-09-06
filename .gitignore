@@ -1,4 +1,9 @@
-# Local Gas Town runtime state and agent instructions are not project source.
+# Local Gas Town and agent runtime state are not project source.
 .beads/
 .runtime/
+.claude/
+.opencode/
+.logs/
 CLAUDE.md
+CLAUDE.local.md
+GEMINI.md
