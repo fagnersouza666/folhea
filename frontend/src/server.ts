@@ -14,7 +14,7 @@ const commonEngine = new CommonEngine();
 
 app.set('view engine', 'html');
 app.set('views', browserDistFolder);
-app.use(express.static(browserDistFolder, { index: false, maxAge: '1y' }));
+app.use(express.static(browserDistFolder, { index: false, redirect: false, maxAge: '1y' }));
 app.get('/{*splat}', (request, response, next) => {
   const responseInit: { status?: number } = {};
   commonEngine
