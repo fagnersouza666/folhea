@@ -1,0 +1,3 @@
+# Local Gas Town runtime state is not project source.
+.beads/
+.runtime/
