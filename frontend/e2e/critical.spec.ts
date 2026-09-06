@@ -9,7 +9,8 @@ test.describe('critical reading journey', () => {
     expect(mockApi.books).toHaveLength(1);
   });
 
-  test('book registration and reading session', async ({ page }) => {
+  test('book registration and reading session', async ({ page, mockApi }) => {
+    void mockApi;
     await signIn(page);
     await page.getByRole('link', { name: 'Livros' }).click();
     await page.getByRole('link', { name: /novo livro/i }).click();
@@ -25,15 +26,17 @@ test.describe('critical reading journey', () => {
     await expect(page.getByText('32', { exact: true })).toBeVisible();
   });
 
-  test('stats and card creation', async ({ page }) => {
+  test('stats and card creation', async ({ page, mockApi }) => {
+    void mockApi;
     await signIn(page);
-    await page.getByRole('link', { name: 'Progresso' }).click();
+    await page.getByRole('link', { name: 'Ver progresso' }).click();
     await expect(page.getByRole('heading', { name: 'Seu progresso' })).toBeVisible();
     await page.getByRole('button', { name: /criar card/i }).click();
     await expect(page.getByRole('button', { name: /card criado/i })).toBeVisible();
   });
 
-  test('reading edit/delete, finish/reopen, and card share/download contracts', async ({ page }) => {
+  test('reading edit/delete, finish/reopen, and card share/download contracts', async ({ page, mockApi }) => {
+    void mockApi;
     await signIn(page);
     const result = await page.evaluate(async () => {
       const json = (body: unknown) => ({ headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });

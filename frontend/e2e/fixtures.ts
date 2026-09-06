@@ -49,6 +49,10 @@ async function handleApi(route: Route, state: MockState): Promise<void> {
   const path = url.pathname;
   const method = request.method();
 
+  if (method === 'GET' && path === '/api/v1/me') {
+    return json(route, 200, { id: 'demo-user', email: 'reader@example.com', timezone: 'America/Sao_Paulo' });
+  }
+  if (method === 'GET' && path === '/api/v1/csrf') return json(route, 200, { token: 'e2e-csrf-token' });
   if (method === 'GET' && path === '/api/v1/dashboard') {
     const current = state.books.find((book) => book.status === 'READING');
     return json(route, 200, {
@@ -143,10 +147,9 @@ export const test = base.extend<{ mockApi: MockState }>({
 });
 
 export async function signIn(page: Page): Promise<void> {
+  await page.route('**/auth/login', (route) => route.fulfill({ status: 302, headers: { location: '/app/inicio' } }));
   await page.goto('/');
   await page.getByRole('link', { name: /começar agora/i }).click();
-  await page.getByLabel('E-mail').fill('reader@example.com');
-  await page.getByLabel('Senha').fill('deterministic-password');
   await page.getByRole('button', { name: /entrar/i }).click();
   await expect(page).toHaveURL(/\/app\/inicio$/);
   await expect(page.getByText('Olá, leitor.')).toBeVisible();
