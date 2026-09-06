@@ -51,8 +51,10 @@ export class BookDetailComponent {
 
   save(): void {
     this.form.markAllAsTouched();
+    const title = this.title.value.trim();
+    if (!title) { this.title.setErrors({ required: true }); return; }
     if (this.form.invalid || !this.id) return;
-    this.store.updateBook(this.id, { title: this.title.value.trim(), author: this.form.controls.author.value.trim() });
+    this.store.updateBook(this.id, { title, author: this.form.controls.author.value.trim() });
   }
 
   finish(): void { if (this.id) this.store.finishBook(this.id); }

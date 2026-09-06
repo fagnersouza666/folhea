@@ -108,14 +108,16 @@ export class CardGeneratorService {
   private wrapText(context: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number): void {
     const words = text.split(' ');
     let line = '';
-    words.forEach((word, index) => {
+    let lineY = y;
+    words.forEach((word) => {
       const candidate = `${line}${word} `;
       if (context.measureText(candidate).width > maxWidth && line) {
-        context.fillText(line.trim(), x, y + index * lineHeight);
+        context.fillText(line.trim(), x, lineY);
+        lineY += lineHeight;
         line = `${word} `;
       } else line = candidate;
     });
-    context.fillText(line.trim(), x, y + (words.length > 3 ? lineHeight : 0));
+    context.fillText(line.trim(), x, lineY);
   }
 
   private formatMinutes(minutes: number): string { return minutes >= 60 ? `${Math.floor(minutes / 60)}h${minutes % 60 ? `${minutes % 60}min` : ''}` : `${minutes}min`; }

@@ -36,6 +36,13 @@ export class EditSessionComponent {
   get pages() { return this.form.controls.pages; }
   get minutes() { return this.form.controls.minutes; }
 
+  constructor() {
+    effect(() => {
+      const current = this.session();
+      if (current && this.form.pristine) this.form.setValue({ bookId: current.bookId, readingDate: current.readingDate, pages: current.pages, minutes: current.minutes });
+    });
+  }
+
   save(): void {
     this.form.markAllAsTouched();
     if (this.form.invalid || !this.id) return;
@@ -49,9 +56,3 @@ export class EditSessionComponent {
     void this.router.navigate(['/app/progresso']);
   }
 }
-  constructor() {
-    effect(() => {
-      const current = this.session();
-      if (current && this.form.pristine) this.form.setValue({ bookId: current.bookId, readingDate: current.readingDate, pages: current.pages, minutes: current.minutes });
-    });
-  }
