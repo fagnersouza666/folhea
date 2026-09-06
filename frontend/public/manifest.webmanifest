@@ -1,0 +1,13 @@
+{
+  "name": "Folhea — Cada página conta",
+  "short_name": "Folhea",
+  "description": "Acompanhe seu hábito de leitura e transforme cada página em progresso.",
+  "start_url": "/app/inicio",
+  "display": "standalone",
+  "background_color": "#f7f4ed",
+  "theme_color": "#173f35",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
