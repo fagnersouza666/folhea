@@ -67,7 +67,7 @@ export class DashboardStore {
     this.booksLoadingState.set(true);
     this.booksErrorState.set(null);
     this.api.getBooks().subscribe({
-      next: (books) => { this.booksState.set(books); this.booksLoadingState.set(false); this.recalculateDashboard(); this.calculateVisibleStats(); },
+      next: (books) => { this.booksState.set(books); this.booksLoadingState.set(false); if (this.sessionsLoaded) this.recalculateDashboard(); else this.syncCurrentBook(); this.calculateVisibleStats(); },
       error: (error: unknown) => { this.booksLoadingState.set(false); this.booksErrorState.set(this.errorMessage(error, 'Não foi possível carregar seus livros.')); }
     });
   }
@@ -116,10 +116,10 @@ export class DashboardStore {
     const now = new Date().toISOString();
     const optimistic: Book = { id: `local-book-${Date.now()}`, title, author: author || undefined, status: 'READING', createdAt: now, updatedAt: now };
     this.booksState.update((books) => [optimistic, ...books]);
-    this.recalculateDashboard();
+    this.syncCurrentBook();
     this.api.createBook({ title, author: author || undefined }).subscribe({
-      next: (book) => this.booksState.update((books) => books.map((item) => item.id === optimistic.id ? { ...optimistic, ...book } : item)),
-      error: (error: unknown) => { this.booksState.update((books) => books.filter((item) => item.id !== optimistic.id)); this.setMutationError(error, 'Não foi possível cadastrar o livro.'); }
+      next: (book) => { this.booksState.update((books) => books.map((item) => item.id === optimistic.id ? { ...optimistic, ...book } : item)); this.syncCurrentBook(); },
+      error: (error: unknown) => { this.booksState.update((books) => books.filter((item) => item.id !== optimistic.id)); this.syncCurrentBook(); this.setMutationError(error, 'Não foi possível cadastrar o livro.'); }
     });
     return optimistic;
   }
@@ -128,7 +128,7 @@ export class DashboardStore {
     const previous = this.booksState();
     this.booksState.update((books) => books.map((book) => book.id === id ? { ...book, ...patch, author: patch.author === '' ? undefined : patch.author } : book));
     this.api.updateBook(id, patch).subscribe({
-      next: (book) => this.booksState.update((books) => books.map((item) => item.id === id ? { ...item, ...book } : item)),
+      next: (book) => { this.booksState.update((books) => books.map((item) => item.id === id ? { ...item, ...book } : item)); this.syncCurrentBook(); },
       error: (error: unknown) => { this.booksState.set(previous); this.setMutationError(error, 'Não foi possível editar o livro.'); }
     });
   }
@@ -136,20 +136,20 @@ export class DashboardStore {
   finishBook(id: string, finishedOn = this.today()): void {
     const previous = this.booksState();
     this.booksState.update((books) => books.map((book) => book.id === id ? { ...book, status: 'FINISHED', finishedOn } : book));
-    this.recalculateDashboard();
+    this.syncCurrentBook();
     this.api.finishBook(id, finishedOn).subscribe({
-      next: (book) => { this.booksState.update((books) => books.map((item) => item.id === id ? { ...item, ...book } : item)); this.recalculateDashboard(); },
-      error: (error: unknown) => { this.booksState.set(previous); this.recalculateDashboard(); this.setMutationError(error, 'Não foi possível finalizar o livro.'); }
+      next: (book) => { this.booksState.update((books) => books.map((item) => item.id === id ? { ...item, ...book } : item)); this.syncCurrentBook(); },
+      error: (error: unknown) => { this.booksState.set(previous); this.syncCurrentBook(); this.setMutationError(error, 'Não foi possível finalizar o livro.'); }
     });
   }
 
   reopenBook(id: string): void {
     const previous = this.booksState();
     this.booksState.update((books) => books.map((book) => book.id === id ? { ...book, status: 'READING', finishedOn: undefined } : book));
-    this.recalculateDashboard();
+    this.syncCurrentBook();
     this.api.reopenBook(id).subscribe({
-      next: (book) => { this.booksState.update((books) => books.map((item) => item.id === id ? { ...item, ...book } : item)); this.recalculateDashboard(); },
-      error: (error: unknown) => { this.booksState.set(previous); this.recalculateDashboard(); this.setMutationError(error, 'Não foi possível reabrir o livro.'); }
+      next: (book) => { this.booksState.update((books) => books.map((item) => item.id === id ? { ...item, ...book } : item)); this.syncCurrentBook(); },
+      error: (error: unknown) => { this.booksState.set(previous); this.syncCurrentBook(); this.setMutationError(error, 'Não foi possível reabrir o livro.'); }
     });
   }
 
@@ -158,9 +158,9 @@ export class DashboardStore {
     const previousSessions = this.sessionsState();
     this.booksState.update((books) => books.filter((book) => book.id !== id));
     this.sessionsState.update((sessions) => sessions.filter((session) => session.bookId !== id));
-    this.recalculateDashboard();
+    this.syncCurrentBook();
     this.api.deleteBook(id).subscribe({
-      error: (error: unknown) => { this.booksState.set(previousBooks); this.sessionsState.set(previousSessions); this.recalculateDashboard(); this.setMutationError(error, 'Não foi possível excluir o livro.'); }
+      error: (error: unknown) => { this.booksState.set(previousBooks); this.sessionsState.set(previousSessions); this.syncCurrentBook(); this.setMutationError(error, 'Não foi possível excluir o livro.'); }
     });
   }
 
@@ -219,6 +219,13 @@ export class DashboardStore {
         booksFinished: this.booksState().filter((book) => book.status === 'FINISHED' && Boolean(book.finishedOn) && book.finishedOn! >= from && book.finishedOn! <= today).length
       }
     });
+  }
+
+  private syncCurrentBook(): void {
+    const current = this.booksState().find((book) => book.status === 'READING');
+    this.dashboardState.update((dashboard) => dashboard
+      ? { ...dashboard, currentBook: current ? { id: current.id, title: current.title } : null }
+      : { currentStreakDays: 0, currentBook: current ? { id: current.id, title: current.title } : null, week: { pages: 0, minutes: 0, booksFinished: 0 } });
   }
 
   private calculateVisibleStats(): void {
