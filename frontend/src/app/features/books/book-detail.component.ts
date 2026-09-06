@@ -14,8 +14,8 @@ import { DashboardStore } from '../../core/state/dashboard.store';
         <a routerLink="/app/livros" class="back-link">← Seus livros</a>
         <div class="detail-heading"><div class="book-thumb" aria-hidden="true">{{ currentBook.title[0] }}</div><div><p class="eyebrow">Livro</p><h1>{{ currentBook.title }}</h1><p class="muted">{{ currentBook.status === 'FINISHED' ? 'Finalizado' : 'Lendo agora' }}</p></div></div>
         <form class="surface form-card" [formGroup]="form" (ngSubmit)="save()" novalidate>
-          <label class="field">Título<input formControlName="title" [attr.aria-invalid]="title.invalid && title.touched" />@if (title.invalid && title.touched) { <span class="field-error">Dê um título ao seu livro.</span> }</label>
-          <label class="field">Autor <span class="optional">opcional</span><input formControlName="author" /></label>
+          <label class="field" for="detail-book-title">Título<input id="detail-book-title" formControlName="title" [attr.aria-invalid]="title.invalid && title.touched" [attr.aria-describedby]="title.invalid && title.touched ? 'detail-book-title-error' : null" />@if (title.invalid && title.touched) { <span id="detail-book-title-error" class="field-error">Dê um título ao seu livro.</span> }</label>
+          <label class="field" for="detail-book-author">Autor <span class="optional">opcional</span><input id="detail-book-author" formControlName="author" /></label>
           <button class="button button-primary" type="submit">Salvar alterações</button>
         </form>
         <section class="actions surface" aria-labelledby="book-actions-title">
