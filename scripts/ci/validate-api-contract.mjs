@@ -34,14 +34,18 @@ function readFileSafe(path) {
   return existsSync(path) ? readFileSync(path, 'utf8') : '';
 }
 
-function clientPath(path) {
-  return path.replace('/api/v1', '').replaceAll('{id}', '${id}');
+function clientPathVariants(path) {
+  const normalizedPath = path.replace('/api/v1', '');
+  return [
+    normalizedPath.replaceAll('{id}', '${id}'),
+    normalizedPath.replaceAll('{id}', '${encodeURIComponent(id)}')
+  ];
 }
 
 for (const [method, path, resource, backendMarker] of operations) {
   const clientNeedle = `this.http.${method.toLowerCase()}<`;
-  const normalizedPath = clientPath(path);
-  if (!frontendClient.includes(normalizedPath) || !frontendClient.includes(clientNeedle)) {
+  const hasClientPath = clientPathVariants(path).some((variant) => frontendClient.includes(variant));
+  if (!hasClientPath || !frontendClient.includes(clientNeedle)) {
     failures.push(`frontend client is missing ${method} ${path}`);
   }
   const source = backendSources.get(resource) ?? '';
