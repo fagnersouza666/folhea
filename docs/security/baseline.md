@@ -25,7 +25,9 @@ primeira release; o PRD continua sendo a fonte dos requisitos de produto.
   ```
 
   `__Host-` exige `Path=/` e proíbe `Domain`, reduzindo escopo e fixação. Nunca
-  usar `SameSite=None` sem justificativa e revisão de risco.
+  usar `SameSite=None` sem justificativa e revisão de risco. No `%dev` HTTP
+  (`ng serve` em `:4200`) o cookie é `folhea_session` sem `Secure`, porque o
+  prefixo `__Host-` é recusado pelo browser em HTTP.
 
 ### Mapeamento `subject → User`
 
@@ -65,7 +67,11 @@ Frontend e API usam a mesma origem pública:
 ```text
 https://folhea.com.br/       # Angular/SSG/PWA
 https://folhea.com.br/api/*  # BFF/Quarkus via Caddy
+https://folhea.com.br/auth/* # OIDC BFF via Caddy
 ```
+
+Em `ng serve` local, a mesma origem é `http://localhost:4200`, com proxy de
+`/api` e `/auth` para o Quarkus em `http://localhost:8080`.
 
 O padrão é não enviar cabeçalho CORS. Se uma origem adicional for aprovada,
 allowlist exata deve ser configurada no servidor, sem `*`, com

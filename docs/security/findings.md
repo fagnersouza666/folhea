@@ -31,6 +31,16 @@ vigentes. A auditoria completa de 06/09/2026 está em
 - **Ação:** ao publicar Redis em rede compartilhada ou multi-host, exigir
   TLS (`rediss://`) e rotação de senha. Ver `docs/operations.md`.
 
+## Local — `ng serve` na porta 4200
+
+- **Severidade:** operacional de desenvolvimento
+- **Estado:** documentado
+- **Ação:** `frontend/proxy.conf.json` encaminha `/api` e `/auth` ao
+  Quarkus em `http://localhost:8080`. O realm **dev** aceita
+  `http://localhost:4200/auth/callback`; o realm **prod** continua só com
+  `https://folhea.com.br/auth/callback` (guard em
+  `scripts/ci/validate-oidc-surface.mjs`).
+
 ## Demais findings (SEC-004–SEC-013)
 
 Todos mitigados neste ciclo. Detalhes por finding permanecem no relatório

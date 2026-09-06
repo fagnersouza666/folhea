@@ -1767,6 +1767,11 @@ Frontend:
 npm start
 ```
 
+O `ng serve` encaminha `/api` e `/auth` ao BFF em `http://localhost:8080`
+(`frontend/proxy.conf.json`) e envia `X-Forwarded-Host: localhost:4200`.
+`/auth/login` inicia o OIDC; a tela Angular de entrar é `/entrar`. O Keycloak
+de desenvolvimento escuta `http://localhost:8180` via override local.
+
 # 82. Repositório
 
 Utilizar monorepo:

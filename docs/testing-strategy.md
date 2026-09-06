@@ -40,6 +40,16 @@ O `abort()` registra `status` e o problema (`invalid-host`, `csrf-origin`,
 `csrf-invalid`, `body-too-large`) sem o token. No `%test` o limite de corpo é
 1024 bytes para o 413 chegar no filtro, não na camada HTTP de 64K.
 
+`scripts/tests/test-render-realm.sh` cobre a substituição de `${OIDC_CLIENT_SECRET}`
+no realm Keycloak sem `envsubst` (a imagem não tem gettext), inclusive secretos
+com `/`, `&` e `\\`.
+
+`dev-proxy.spec.ts` trava o contrato do `ng serve`: `angular.json` aponta
+`proxy.conf.json`, que encaminha `/auth` e `/api` a `http://localhost:8080` e
+repassa `X-Forwarded-Host: localhost:4200`. Sem esse proxy, `GET /auth/login`
+na porta 4200 cai no wildcard Angular e mostra 404 em vez de iniciar o OIDC no
+BFF. Sem o host encaminhado, o callback OIDC cai em `:8080`, onde não há SPA.
+
 `dashboard.store.spec.ts` cobre os três casos de carga (selectableBooks,
 retry após load 500 e stats `all`) e o rollback otimista de `addBook`,
 `finishBook`, `deleteBook` e `addSession`: cada mutação aplica o estado

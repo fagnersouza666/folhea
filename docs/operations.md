@@ -90,6 +90,25 @@ O primeiro boot do PostgreSQL cria duas bases independentes (`folhea` e
 alterar os nomes depois do primeiro boot exige uma migração operacional
 explícita, não a edição do script.
 
+## Desenvolvimento local com `ng serve`
+
+A borda pública de Compose continua no Caddy (`https://localhost:8443`). Para
+hot reload do Angular, `npm start` em `frontend/` escuta `http://localhost:4200`
+e usa `frontend/proxy.conf.json` para encaminhar `/api` e `/auth` ao Quarkus em
+`http://localhost:8080`, com `X-Forwarded-Host: localhost:4200` para o redirect
+OIDC voltar à SPA. `/auth/login` não é página Angular; é o início OIDC do BFF.
+O realm de desenvolvimento inclui `http://localhost:4200/auth/callback`.
+
+O Postgres do Compose não publica `5432` no host. Se o `quarkus:dev` apontar
+para `localhost:5432`, ele pode autenticar no PostgreSQL do sistema e falhar
+com `28P01`. Use `docker-compose.override.example.yml` (`127.0.0.1:5433`,
+Keycloak em `127.0.0.1:8180`, `KC_HOSTNAME=http://localhost:8180` e rede
+`default` + `private`) e `DB_JDBC_URL=jdbc:postgresql://localhost:5433/folhea`.
+O `%dev` liga o OIDC contra `http://localhost:8180/realms/folhea`. Sem isso o
+BFF devolve `/app/inicio` sem sessão e o guard Angular devolve `/entrar` — o
+botão Entrar parece não fazer nada. Crie um usuário no realm `folhea` em
+`http://localhost:8180` com o admin do `.env`.
+
 ## Health checks e diagnóstico
 
 O Quarkus expõe apenas na rede interna:

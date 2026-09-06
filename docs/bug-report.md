@@ -748,3 +748,49 @@ Modo **quick** nos arquivos desta correção: `application.properties`,
 `RedisSecurityStoreTest.java`. Nenhum CRÍTICO/ALTO novo. O acoplamento a
 `redis://127.0.0.1:6379` era falso verde local (redis-server de sistema);
 Dev Services agora provisiona `redis:7-alpine` e o teste recusa a porta 6379.
+
+---
+
+## Revisão pontual — 404 em `/auth/login` no `ng serve` (06/09/2026)
+
+Modo **quick** nos arquivos desta correção: `frontend/proxy.conf.json`,
+`frontend/angular.json`, `frontend/src/app/core/auth/dev-proxy.spec.ts`,
+`infra/keycloak/folhea-realm.dev.template.json`, `scripts/ci/validate-oidc-surface.mjs`.
+
+Nenhum CRÍTICO/ALTO novo. Causa raiz confirmada em runtime: o Angular
+tratava `GET /auth/login` (e até `/api/v1/me`) como rota SPA e renderizava
+`NotFoundComponent`. O proxy local replica o Caddy (`/auth` e `/api` →
+Quarkus em `:8080`). O alvo é só `http://localhost:8080` (não é open
+proxy). `/auth/login` continua sendo o BFF, não uma rota Angular.
+
+`ClockProducer` injeta `Optional<String>` em `folhea.clock.fixed-instant`.
+`defaultValue=""` no SmallRye é tratado como propriedade ausente
+(SRCFG00014) e o `quarkus:dev` não sobe — a tela em `/auth/login` passava
+a ser o erro “Error restarting Quarkus”.
+
+---
+
+## Revisão pontual — Entrar não abre o IdP no `ng serve` (06/09/2026)
+
+Modo **quick** nos arquivos desta correção: `application.properties`,
+`SessionCookiePolicy.java`, `SessionCookieSettings.java`,
+`BffSessionCookieFilter.java`, `CsrfResource.java`,
+`SecurityBoundaryFilter.java`, `UserResource.java`,
+`infra/keycloak/render-realm.sh`, `docker-compose.override.example.yml`,
+`frontend/proxy.conf.json`.
+
+Nenhum CRÍTICO/ALTO novo em produção. `%prod` continua com OIDC, cookie
+`__Host-` e hostname público via Caddy. Causa raiz local: `%dev` tinha
+`quarkus.oidc.enabled=false`, então `GET /auth/login` respondia 303 para
+`/app/inicio` sem sessão e o `authGuard` devolvia `/entrar`. O Keycloak
+também crashava (`/opt/keycloak/data/import` inexistente) e não publicava
+`8180` no host. O `%dev` agora inicia o code flow em
+`http://localhost:8180`, o override publica essa porta, o proxy envia
+`X-Forwarded-Host: localhost:4200` e o cookie CSRF local é `folhea_session`
+(HTTP não aceita `__Host-`). `NotAuthorizedExceptionMapper` não pode
+engolir `UnauthorizedException` em `/auth/*` como problem+json — isso
+transformava o challenge OIDC (302) em 401 e o botão Entrar parecia morto.
+No `%dev` o mapper reencaminha o `ChallengeData` do `HttpAuthenticator`. A substituição bash do secret no realm trata
+`&` e `\\` como especiais; o helper `folhea_render_oidc_secret` escapa esses
+caracteres antes de interpolar (`scripts/tests/test-render-realm.sh`).
+
