@@ -87,6 +87,7 @@ export class CardGeneratorService {
   }
 
   private drawCover(context: CanvasRenderingContext2D, image: HTMLImageElement, cropX: number, cropY: number): void {
+    if (image.naturalWidth < 1 || image.naturalHeight < 1) return;
     const scale = Math.max(this.width / image.naturalWidth, this.height / image.naturalHeight);
     const sourceWidth = this.width / scale;
     const sourceHeight = this.height / scale;
