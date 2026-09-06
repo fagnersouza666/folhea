@@ -4,16 +4,17 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
@@ -23,6 +24,7 @@ class RedisSecurityStoreTest {
     @Inject CsrfTokenStore csrfTokenStore;
     @Inject TokenStateStore tokenStateStore;
     @Inject RateLimitStore rateLimitStore;
+    @Inject Config config;
 
     @BeforeEach
     void resetStores() {
@@ -32,6 +34,16 @@ class RedisSecurityStoreTest {
         csrfTokenStore.remove("ticket-cap-2");
         csrfTokenStore.remove("ticket-cap-3");
         tokenStateStore.remove("reference-a");
+    }
+
+    @Test
+    void redisHostsComeFromDevServicesNotWorkstationDefault() {
+        List<String> hosts = config.getOptionalValues("quarkus.redis.hosts", String.class)
+                .orElse(List.of());
+        assertFalse(
+                hosts.stream().anyMatch(host -> host.contains("127.0.0.1:6379")
+                        || host.contains("localhost:6379")),
+                "Redis store tests must use Dev Services, not redis://127.0.0.1:6379");
     }
 
     @Test

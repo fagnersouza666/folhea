@@ -19,8 +19,10 @@ vigentes. A auditoria completa de 06/09/2026 está em
 - **Estado:** **fechado** (06/09/2026)
 - **Remediação:** Redis 7 na rede privada do Compose (`--requirepass`,
   sem porta pública). `ServerTokenStateManager`, `CsrfTokenService` e
-  `RateLimiter` usam stores Redis em `%prod`; testes unitários mantêm
-  fallback in-memory.
+  `RateLimiter` usam stores Redis em `%prod`. Testes unitários usam
+  fallback in-memory; `RedisSecurityStoreTest` sobe Redis via Dev Services
+  (sem `quarkus.redis.hosts` no perfil `%test`, para não acoplar a um
+  `redis-server` local na porta 6379).
 
 ## Ressalva em aberto — TLS Redis fora do Compose
 

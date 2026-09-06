@@ -11,7 +11,7 @@ Frontend (`frontend/package.json`), backend (`backend/pom.xml`) e OpenAPI
 chore, teste ou infra sem mudança de produto não incrementam. Detalhe em
 `.cursor/rules/versionamento.mdc`.
 
-Versão atual: **0.2.0**.
+Versão atual: **0.2.1**.
 
 ## Backend
 
@@ -69,6 +69,9 @@ abaixo são o contrato usado pelo CI; execute-os antes de abrir um pull request.
 - Java 25 e Docker (necessário para Dev Services/Testcontainers);
 - Docker Compose, quando for necessário executar a stack completa.
 
+Se `java -version` mostrar 21, o Maven usa o JDK errado. Exporte o JDK 25
+antes de `./mvnw` (em Debian/Ubuntu/Pop!_OS: `/usr/lib/jvm/java-25-openjdk-amd64`).
+
 ### Frontend
 
 ```bash
@@ -85,7 +88,8 @@ O build SSG deve gerar as páginas públicas. O teste de SEO executado no CI
 serve o artefato e verifica as rotas públicas (`title`, description,
 canonical, `h1`, `lang`, Open Graph), `robots.txt`, `sitemap.xml`, o shell
 privado `/app`, um 404 real sem soft-404 e redirects permanentes quando
-configurados.
+configurados. Os relatórios `contract-report.txt` e `seo-report/` ficam
+fora do git.
 
 ### Backend
 

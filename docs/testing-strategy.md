@@ -10,7 +10,7 @@ scripts abaixo deve ser mantido quando frontend e backend forem evoluídos.
 | --- | --- | --- | --- |
 | Unitário | Vitest | services, Signals, forms, regras de apresentação e componentes críticos | `npm run test -- --run` |
 | Smoke/contrato | JUnit 5, Quarkus Test, RestAssured | inicialização da API, autenticação, endpoints e schema OpenAPI | `./mvnw -B clean verify` |
-| Integração | Dev Services/Testcontainers | PostgreSQL e dependências reais, migrações e isolamento | `./mvnw -B clean verify` |
+| Integração | Dev Services/Testcontainers | PostgreSQL, Redis (store de sessão) e dependências reais, migrações e isolamento | `./mvnw -B clean verify` |
 | E2E | Playwright | landing, login, livro, sessão, edição/exclusão, finalização, stats e isolamento | `npm run e2e:critical` |
 | SEO | Node + artefato SSG | title, description, canonical, robots, sitemap, noindex, 404 e redirects | `node ../scripts/ci/validate-seo.mjs dist seo-report/seo-validation.txt` |
 
@@ -26,6 +26,12 @@ Os testes de domínio devem cobrir explicitamente:
 
 Casos de data devem usar um relógio injetável e timezone explícito. Assim, o
 resultado não depende do fuso horário ou do horário do runner do CI.
+
+`RedisSecurityStoreTest` cobre CSRF, token state e rate limit contra Redis
+real. O perfil `%test` não define `quarkus.redis.hosts`: um valor explícito
+`redis://127.0.0.1:6379` desliga o Dev Services e o teste passaria contra um
+`redis-server` da máquina, falhando no CI. O container é `redis:7-alpine`,
+alinhado ao Compose.
 
 Os cenários E2E usam Playwright com fixtures em memória. A fixture intercepta a
 API em `/api/v1/**` e mantém livros e sessões em estado isolado por teste; não
@@ -68,7 +74,10 @@ e resources Quarkus. Se `OPENAPI_FILE` ou `OPENAPI_URL` estiver definido, o
 validador confere os mesmos paths no documento OpenAPI. Produção não expõe o
 spec publicamente; prefira `OPENAPI_FILE` de build dev/test em vez de
 `OPENAPI_URL` apontando para o domínio público. A cobertura V8 do
-Vitest e os relatórios JUnit/Surefire são publicados como artefatos.
+Vitest e os relatórios JUnit/Surefire são publicados como artefatos. Os
+arquivos `contract-report.txt` e o diretório `seo-report/` são evidência
+local/CI e ficam no `.gitignore`; o workflow sobe esses artefatos sem
+versioná-los.
 
 ## SEO e HTTP
 

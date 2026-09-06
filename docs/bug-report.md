@@ -739,3 +739,12 @@ Falsos positivos descartados:
 - Catch de `RuntimeException` em timezone: fallback UTC intencional.
 
 Prioridade sugerida: BUG-001, BUG-002, BUG-003, BUG-004, BUG-005, BUG-006, BUG-008.
+
+---
+
+## Revisão pontual — RedisSecurityStoreTest (06/09/2026)
+
+Modo **quick** nos arquivos desta correção: `application.properties`,
+`RedisSecurityStoreTest.java`. Nenhum CRÍTICO/ALTO novo. O acoplamento a
+`redis://127.0.0.1:6379` era falso verde local (redis-server de sistema);
+Dev Services agora provisiona `redis:7-alpine` e o teste recusa a porta 6379.
