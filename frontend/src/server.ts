@@ -1,4 +1,5 @@
 import { APP_BASE_HREF } from '@angular/common';
+import { RESPONSE_INIT } from '@angular/core';
 import { CommonEngine } from '@angular/ssr/node';
 import express from 'express';
 import { dirname, join, resolve } from 'node:path';
@@ -13,11 +14,15 @@ const commonEngine = new CommonEngine();
 
 app.set('view engine', 'html');
 app.set('views', browserDistFolder);
-app.get('*.*', express.static(browserDistFolder, { maxAge: '1y' }));
-app.get('*', (request, response, next) => {
+app.use(express.static(browserDistFolder, { index: false, redirect: false, maxAge: '1y' }));
+app.get('/{*splat}', (request, response, next) => {
+  const responseInit: { status?: number } = {};
   commonEngine
-    .render({ bootstrap, documentFilePath: indexHtml, url: `${request.protocol}://${request.get('host')}${request.originalUrl}`, publicPath: browserDistFolder, providers: [{ provide: APP_BASE_HREF, useValue: request.baseUrl }] })
-    .then((html) => response.send(html))
+    .render({ bootstrap, documentFilePath: indexHtml, url: `${request.protocol}://${request.get('host')}${request.originalUrl}`, publicPath: browserDistFolder, providers: [{ provide: APP_BASE_HREF, useValue: request.baseUrl }, { provide: RESPONSE_INIT, useValue: responseInit }] })
+    .then((html) => {
+      if (responseInit.status) response.status(responseInit.status);
+      response.send(html);
+    })
     .catch((error) => next(error));
 });
 

@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { AppShellComponent } from './layout/app-shell.component';
 import { LandingComponent } from './public/landing/landing.component';
+import { NotFoundComponent } from './public/not-found.component';
 import { PublicPageComponent } from './public/public-page.component';
 
 export const routes: Routes = [
@@ -25,5 +26,5 @@ export const routes: Routes = [
     { path: 'cards', loadComponent: () => import('./features/cards/cards.component').then((m) => m.CardsComponent), title: 'Cards — Folhea' },
     { path: 'configuracoes', loadComponent: () => import('./features/settings/settings.component').then((m) => m.SettingsComponent), title: 'Configurações — Folhea' }
   ] },
-  { path: '**', redirectTo: '' }
+  { path: '**', component: NotFoundComponent, title: 'Página não encontrada — Folhea' }
 ];
