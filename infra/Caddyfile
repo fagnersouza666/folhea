@@ -35,9 +35,11 @@
 
 	root * {$STATIC_ROOT}
 	# The authenticated area is client-rendered. It needs the application shell
-	# for deep links, while public paths below must resolve only to SSG files.
+	# for deep links, while keeping the whole area out of search indexes.
 	@private path /app /app/*
 	handle @private {
+		header X-Robots-Tag "noindex, nofollow"
+		header Cache-Control "no-store"
 		rewrite * /index.html
 		file_server
 	}

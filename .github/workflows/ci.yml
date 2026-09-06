@@ -161,7 +161,7 @@ jobs:
       - name: Serve SSG output for HTTP checks
         run: |
           mkdir -p seo-report
-          npx --yes serve "${{ steps.site-root.outputs.path }}" --listen 4173 > seo-report/server.log 2>&1 &
+          node scripts/ci/serve-seo.mjs "${{ steps.site-root.outputs.path }}" 4173 > seo-report/server.log 2>&1 &
           echo $! > seo-report/server.pid
           for attempt in $(seq 1 20); do
             curl --fail --silent http://127.0.0.1:4173/ >/dev/null && break
