@@ -65,7 +65,11 @@ if (!existsSync(dist)) {
   failures.push(`missing SSG output directory: ${dist}`);
 } else {
   const siteRoot = findSiteRoot(dist);
-  const htmlFiles = filesUnder(siteRoot).filter((path) => path.endsWith('.html'));
+  // Angular emits index.csr.html as the client-side fallback alongside the
+  // prerendered index.html. It is not a separately addressable route.
+  const htmlFiles = filesUnder(siteRoot)
+    .filter((path) => path.endsWith('.html'))
+    .filter((path) => basename(path) !== 'index.csr.html');
   if (htmlFiles.length === 0) failures.push(`no generated HTML pages found in: ${siteRoot}`);
 
   const titles = new Map();
@@ -74,24 +78,25 @@ if (!existsSync(dist)) {
   for (const path of htmlFiles) {
     const content = readFileSync(path, 'utf8');
     const relativePath = relative(siteRoot, path);
-    const isPrivate = /(^|[/\\])app([/\\]|$)/.test(relativePath);
+    const isNotFound = basename(path) === '404.html';
+    const isPrivate = /(^|[/\\])(app|entrar|login|callback)([/\\]|$)/.test(relativePath);
     const title = content.match(/<title>\s*([^<]+?)\s*<\/title>/i)?.[1]?.trim();
     const description = metaContent(content, 'description');
     const robots = metaContent(content, 'robots')?.toLowerCase().replace(/\s+/g, '');
 
     if (!title) failures.push(`missing title: ${path}`);
     if (!hasMeta(content, 'description')) failures.push(`missing meta description: ${path}`);
-    if (!hasCanonical(content)) failures.push(`missing canonical: ${path}`);
+    if (!isNotFound && !hasCanonical(content)) failures.push(`missing canonical: ${path}`);
     if (title && titles.has(title)) failures.push(`duplicate title "${title}": ${path} and ${titles.get(title)}`);
     if (description && descriptions.has(description)) {
       failures.push(`duplicate meta description: ${path} and ${descriptions.get(description)}`);
     }
     if (title) titles.set(title, path);
     if (description) descriptions.set(description, path);
-    if (!isPrivate && robots?.includes('noindex')) {
+    if (!isPrivate && !isNotFound && robots?.includes('noindex')) {
       failures.push(`public page has noindex: ${path}`);
     }
-    if (isPrivate && robots !== 'noindex,nofollow') {
+    if ((isPrivate || isNotFound) && robots !== 'noindex,nofollow') {
       failures.push(`private page is missing noindex,nofollow: ${path}`);
     }
   }
@@ -108,7 +113,7 @@ if (!existsSync(dist)) {
   if (existsSync(sitemap)) {
     const sitemapContent = readFileSync(sitemap, 'utf8');
     if (!/<urlset[\s>]/i.test(sitemapContent)) failures.push(`invalid sitemap root: ${sitemap}`);
-    if (/\/(?:app|login|callback)(?:[/<]|$)/i.test(sitemapContent)) {
+    if (/\/(?:app|entrar|login|callback)(?:[/<]|$)/i.test(sitemapContent)) {
       failures.push(`private URL found in sitemap: ${sitemap}`);
     }
   }
