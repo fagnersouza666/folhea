@@ -135,10 +135,10 @@ versionados como configuração sem segredos ou exportados por canal seguro.
 Rate limit não substitui validação, autorização ou proteção contra abuso
 distribuído; alertas devem acompanhar picos de `401`, `403` e `429`.
 
-O código mantém um fallback local fail-closed para desenvolvimento e testes,
-com contadores separados por IP e usuário. A publicação com mais de uma
-instância exige armazenamento compartilhado com TTL para sessão OIDC, CSRF e
-limites; o finding SEC-001 registra essa dependência operacional.
+O código mantém fallback in-memory fail-closed para `%test` e testes unitários.
+Em produção (`%prod`) o Redis na rede privada persiste sessão OIDC, CSRF e rate
+limit com TTL alinhado ao cookie de sessão (8 h). Fora do Compose, exigir TLS
+(`rediss://`) — ressalva documentada no veredicto de segurança.
 
 ## 6. Segredos, dados e logs
 

@@ -2,6 +2,19 @@
 
 O Folhea é um rastreador de hábito de leitura. O backend é um monolito Java 25 / Quarkus 3.33 com PostgreSQL e Flyway.
 
+## Versão do produto
+
+Frontend (`frontend/package.json`), backend (`backend/pom.xml`) e OpenAPI
+(`quarkus.smallrye-openapi.info-version`) compartilham a mesma versão SemVer
+`X.Y.Z`, sem `-SNAPSHOT`. Não edite esses arquivos à mão: use
+`./scripts/versao.sh` (`corrigir`, `funcionalidade` ou `grande`). Só docs,
+chore, teste ou infra sem mudança de produto não incrementam. Detalhe em
+`.cursor/rules/versionamento.mdc`.
+
+Hoje os números ainda divergem (`0.1.0` no frontend, `1.0.0-SNAPSHOT` no
+pom e `1.0` no OpenAPI). Na próxima alteração de produto, alinhe os três
+à mesma `X.Y.Z` e só então rode o script.
+
 ## Backend
 
 Crie um arquivo de ambiente local e suba a stack completa:
@@ -29,9 +42,9 @@ set -a && . ../.env && set +a
 ./mvnw quarkus:dev
 ```
 
-A raiz da API é `/api/v1`; o OpenAPI fica em `/api/openapi`. Configure as
-credenciais de OIDC e do banco por variáveis de ambiente, sem gravar
-segredos no repositório.
+A raiz da API é `/api/v1`; o OpenAPI fica em `/api/openapi` em dev/test (em
+produção o spec é desligado no Quarkus e bloqueado no Caddy). Configure Redis,
+OIDC e banco por variáveis de ambiente, sem gravar segredos no repositório.
 
 O deploy operacional e os health checks estão em
 [docs/operations.md](docs/operations.md). Os procedimentos executáveis de
@@ -139,7 +152,10 @@ dispara `PRODUCTION_DEPLOY_HOOK` e verifica liveness/readiness em
 eventos analytics e a política de privacidade ficam em
 [`docs/quality-and-release.md`](docs/quality-and-release.md).
 O relatório da última varredura de bugs (modo full) está em
-[`docs/bug-report.md`](docs/bug-report.md).
+[`docs/bug-report.md`](docs/bug-report.md). A auditoria de segurança
+(06/09/2026, veredicto **APROVADO COM RESSALVAS** — findings SEC-001–SEC-013
+remediados) está em
+[`docs/relatorio-seguranca.md`](docs/relatorio-seguranca.md).
 
 Em Settings → Branches → Branch protection rules, configure `main` para exigir
 pull request, exigir `CI / merge-gate`, exigir branch atualizada e bloquear

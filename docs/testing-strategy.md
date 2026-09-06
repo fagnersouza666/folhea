@@ -65,7 +65,9 @@ execução completa assim que cada contrato estiver presente.
 
 O job frontend também valida a correspondência entre métodos do client Angular
 e resources Quarkus. Se `OPENAPI_FILE` ou `OPENAPI_URL` estiver definido, o
-validador confere os mesmos paths no documento OpenAPI. A cobertura V8 do
+validador confere os mesmos paths no documento OpenAPI. Produção não expõe o
+spec publicamente; prefira `OPENAPI_FILE` de build dev/test em vez de
+`OPENAPI_URL` apontando para o domínio público. A cobertura V8 do
 Vitest e os relatórios JUnit/Surefire são publicados como artefatos.
 
 ## SEO e HTTP

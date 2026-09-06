@@ -5,6 +5,18 @@ retenção mínima de sete dias, uma cópia fora do servidor principal e restore
 testados periodicamente. Os scripts usam o serviço `postgres` do Compose e não
 fazem backup de volumes enquanto o banco está escrevendo.
 
+## Retenção e direitos do titular (LGPD)
+
+Backups PostgreSQL podem conter dados pessoais (e-mail, hábitos de leitura)
+por até `BACKUP_RETENTION_DAYS` (mínimo operacional de sete dias). A exclusão
+self-service em **Configurações → Privacidade** (`DELETE /api/v1/me`) remove os
+dados ativos imediatamente; cópias históricas expiram conforme a rotação de
+backup. Restores de teste devem usar ambientes isolados e descartar o volume após
+a verificação.
+
+Exportação self-service: `GET /api/v1/me/export` (JSON com usuário, livros e
+sessões).
+
 ## Contrato dos scripts
 
 Os scripts ficam em `scripts/ops/` e falham cedo com `set -Eeuo pipefail`:

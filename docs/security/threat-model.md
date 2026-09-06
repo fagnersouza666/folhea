@@ -4,7 +4,7 @@
 
 **Escopo:** aplicação web responsiva/PWA, Caddy, BFF Quarkus, Keycloak e PostgreSQL
 
-**Última revisão:** 2026-09-06
+**Última revisão:** 2026-09-06 (auditoria em [../relatorio-seguranca.md](../relatorio-seguranca.md))
 
 Este documento é o contrato de segurança do v1. Um endpoint novo só pode ser
 implementado depois de aplicar as regras de [baseline](baseline.md), adicionar
@@ -88,6 +88,7 @@ formal de risco. **P2** deve entrar no backlog com responsável e prazo.
 | T-13 | Cache/proxy servir resposta privada a outra pessoa | vazamento de dados | `Cache-Control: no-store` em `/api/*`, ausência de cache público e testes com dois usuários | **P0** |
 | T-14 | Downgrade HTTP, framing ou MIME sniffing | interceptação/execução de conteúdo | HTTPS automático, HSTS, CSP `frame-ancestors`, `X-Frame-Options`, `nosniff` | **P1** |
 | T-15 | Secret ou imagem privada entrar em fixture/artefato | vazamento acidental | fixtures sintéticas, revisão de diffs, secret scan e regra de não armazenar fotos no v1 | **P0** |
+| T-16 | Reset de senha Keycloak sem verificação de e-mail (CVE-2026-18963) | takeover da conta | Keycloak ≥ 26.7.2; `resetPasswordAllowed` desligado até o patch; `login-actions` permanece público só o necessário ao login | **P0** |
 
 ## 5. Autorização por recurso
 
@@ -106,6 +107,8 @@ e não carregar o recurso primeiro para só depois checar propriedade.
 | `PATCH/DELETE /api/v1/sessions/{id}` | exige propriedade da sessão e valida livro relacionado | A não altera/exclui sessão de B |
 | `GET /api/v1/stats` e `/dashboard` | agregações somente do usuário | métricas de A não incluem dados de B |
 | `GET /api/v1/me` | retorna apenas o usuário da sessão | não aceita `id`/`sub` escolhido pelo cliente |
+| `GET /api/v1/me/export` | exporta user/books/sessions do usuário autenticado | A não exporta dados de B |
+| `DELETE /api/v1/me` | exige `{"confirm": true}`; cascade + revoga sessão | A não exclui conta de B |
 
 O contrato usa `404` para recurso inexistente ou não pertencente ao usuário,
 evitando confirmar sua existência. A resposta nunca inclui `userId` arbitrário

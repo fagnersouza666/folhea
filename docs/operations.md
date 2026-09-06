@@ -1,8 +1,8 @@
 # Operação da infraestrutura
 
-Este runbook cobre a stack inicial do Folhea: Caddy, Quarkus, PostgreSQL 18 e
-Keycloak. PostgreSQL e Keycloak ficam somente na rede privada do Compose; a
-única superfície publicada é o Caddy.
+Este runbook cobre a stack inicial do Folhea: Caddy, Quarkus, PostgreSQL 18,
+Keycloak e Redis. PostgreSQL, Keycloak e Redis ficam somente na rede privada do
+Compose; a única superfície publicada é o Caddy.
 
 ## Deploy
 
@@ -38,13 +38,52 @@ Keycloak. PostgreSQL e Keycloak ficam somente na rede privada do Compose; a
    `PUBLIC_DOMAIN`, mantenha `DB_PASSWORD`, `KEYCLOAK_DB_PASSWORD` e
    `KEYCLOAK_ADMIN_PASSWORD` fora do Git e suba o Keycloak com
    `docker compose -f docker-compose.yml -f docker-compose.prod.yml` (modo
-   `start --optimized`). Defina também `OIDC_PUBLIC_ORIGIN`, `OIDC_PUBLIC_ISSUER`,
-   `OIDC_PUBLIC_AUTHORIZATION_URL` e `OIDC_PUBLIC_LOGOUT_URL` para o mesmo
-   domínio público HTTPS. O backend continua usando `http://keycloak:8080`
-   somente no back-channel; Caddy publica apenas as rotas de login/logout e
-   recursos estáticos necessários ao navegador. O console administrativo,
-   token endpoint, introspection, JWKS e realm-management não são roteados pelo
-   Caddy.
+   `start --optimized`). Use Keycloak **26.7.3** (digest pinado no Compose).
+   CVE-2026-18963 exige ≥ 26.7.2 ([relatório](relatorio-seguranca.md)). Defina
+   `OIDC_PUBLIC_ORIGIN`, `OIDC_PUBLIC_ISSUER`, `OIDC_PUBLIC_AUTHORIZATION_URL` e
+   `OIDC_PUBLIC_LOGOUT_URL` para o mesmo domínio público HTTPS. O backend
+   continua usando `http://keycloak:8080` somente no back-channel; Caddy
+   publica apenas as rotas de login/logout e recursos estáticos necessários ao
+   navegador. O console administrativo, token endpoint, introspection, JWKS e
+   realm-management não são roteados pelo Caddy. `/realms/folhea/login-actions/*`
+   permanece público porque o formulário de login do IdP precisa dele — por
+   isso o patch de reset de senha não pode esperar. O Caddy também responde
+   `404` em `/api/openapi`; o Quarkus desliga o SmallRye OpenAPI no perfil
+   `%prod`. Defina `REDIS_PASSWORD` e `OIDC_CLIENT_SECRET` no secret store; o
+   backend usa `REDIS_URL=redis://:<senha>@redis:6379` na rede privada.
+
+## Redis (store de sessão)
+
+O Redis persiste referências opacas de sessão OIDC, tokens CSRF e janelas de
+rate limit. No Compose atual:
+
+- sem `ports` publicados;
+- `--requirepass` obrigatório;
+- `maxmemory` 256 MiB com política `allkeys-lru`;
+- healthcheck antes do backend subir.
+
+**Fora do Compose:** use TLS (`rediss://`), ACL mínima e rotação periódica da
+senha. A ausência de TLS na rede Docker interna é a ressalva registrada no
+veredicto **APROVADO COM RESSALVAS**.
+
+## Supply chain (imagens e Actions)
+
+Imagens base e serviços usam digest SHA256 pinado (`infra/Dockerfile`,
+`docker-compose.yml`). GitHub Actions usam commit SHA imutável com comentário
+de tag (`# v4`).
+
+Regenerar digests:
+
+```bash
+docker buildx imagetools inspect <imagem:tag>
+gh api repos/actions/checkout/commits/v4 --jq .sha
+```
+
+Validar overlay de produção:
+
+```bash
+scripts/ops/validate-production-compose.sh
+```
 
 O primeiro boot do PostgreSQL cria duas bases independentes (`folhea` e
 `keycloak`). O script de inicialização roda apenas quando o volume é criado;
@@ -72,7 +111,10 @@ docker compose --env-file .env exec backend \
 ```
 
 Os logs do backend são JSON e o access log HTTP está desligado para não
-registrar cookies, tokens, query strings ou payloads privados. Não use
+registrar cookies, tokens, query strings ou payloads privados. Cada resposta
+inclui `X-Request-ID` (eco do cliente ou UUID gerado) e o MDC registra
+`requestId`, `userId` interno, `route` e `httpStatus` para correlação.
+Não use
 `docker compose config` em um terminal compartilhado: a saída renderiza os
 valores das variáveis injetadas.
 

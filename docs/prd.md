@@ -1365,9 +1365,11 @@ Deve ser possível gerar cliente TypeScript futuramente a partir desse contrato.
 
 ```http
 GET /api/v1/me
+GET /api/v1/me/export
+DELETE /api/v1/me
 ```
 
-Resposta conceitual:
+Resposta conceitual de `/me`:
 
 ```json
 {
@@ -1376,6 +1378,18 @@ Resposta conceitual:
   "timezone": "America/Sao_Paulo"
 }
 ```
+
+Exportação (`GET /api/v1/me/export`):
+
+```json
+{
+  "user": { "id": "uuid", "email": "usuario@email.com", "timezone": "America/Sao_Paulo", "createdAt": "...", "updatedAt": "..." },
+  "books": [],
+  "sessions": []
+}
+```
+
+Exclusão de conta (`DELETE /api/v1/me` com corpo `{"confirm": true}`): remove o usuário e registros associados (cascade), revoga CSRF/token state, limpa cookie e encerra sessão OIDC.
 
 # 63. API de livros
 
@@ -2322,7 +2336,8 @@ Não implementar:
 * microserviços;
 * Kubernetes;
 * Kafka;
-* Redis;
+* Redis como cache de domínio ou fila (permitido **somente** como store
+  opaco de sessão OIDC, CSRF e rate limit na rede privada do Compose);
 * Elasticsearch;
 * GraphQL;
 * WebSocket;

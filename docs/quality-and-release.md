@@ -28,7 +28,10 @@ O relatório HTML, screenshots, vídeos, traces e JUnit ficam em
 `scripts/ci/validate-api-contract.mjs` verifica que os métodos do client
 Angular têm as mesmas operações dos resources Quarkus. Quando
 `OPENAPI_FILE` ou `OPENAPI_URL` é fornecido, os mesmos paths também são
-validados contra o documento OpenAPI. O CI executa essa validação junto com o
+validados contra o documento OpenAPI. Em produção o spec não é público
+(`%prod.quarkus.smallrye-openapi.enable=false` e bloqueio na borda); use
+`OPENAPI_FILE` de um build dev/test quando quiser cruzar o contrato com o
+documento. O CI executa essa validação junto com o
 lint e publica o relatório.
 
 Vitest cobre regras e serviços do frontend; `npm run test:coverage` gera a
@@ -53,6 +56,17 @@ são enviados via `HttpClient` com `withCredentials` para que o interceptor
 CSRF anexe `X-CSRF-Token` nas mutações autenticadas. Falhas de telemetria
 nunca interrompem o fluxo do usuário.
 
+## Versão do produto
+
+A versão do Folhea é um único SemVer `X.Y.Z` compartilhado por
+`frontend/package.json` (e o lockfile), `backend/pom.xml` e
+`quarkus.smallrye-openapi.info-version`. O incremento acontece no mesmo
+commit da mudança de produto, com `./scripts/versao.sh`. Correção usa
+`corrigir` (patch), feature usa `funcionalidade` (minor) e major (`grande`)
+só com pedido explícito. Docs, chore, teste ou infra sem mudança de
+produto não incrementam. A regra está em
+[`.cursor/rules/versionamento.mdc`](../.cursor/rules/versionamento.mdc).
+
 ## Métricas de produto e release
 
 - Ativação: primeiro `reading_session_created` por conta.
@@ -71,4 +85,6 @@ artefatos e informa a configuração ausente, sem fingir que houve deploy.
 
 Critérios de release: `CI / merge-gate` verde, contrato OpenAPI alinhado,
 Playwright crítico verde, imagem reproduzível, health checks `UP`, nenhuma
-credencial em logs/artefatos e aprovação da revisão das métricas e eventos.
+credencial em logs/artefatos, aprovação da revisão das métricas e eventos, e
+nenhum finding P0 aberto em [`docs/relatorio-seguranca.md`](relatorio-seguranca.md)
+(hoje: Keycloak ≥ 26.7.2 ou reset de senha desligado).
