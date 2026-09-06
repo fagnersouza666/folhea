@@ -13,14 +13,7 @@
       "name": "public",
       "installMode": "lazy",
       "updateMode": "prefetch",
-      "resources": { "files": ["/assets/**", "/*.svg", "/*.png"] }
-    }
-  ],
-  "dataGroups": [
-    {
-      "name": "api",
-      "urls": ["/api/v1/**"],
-      "cacheConfig": { "maxSize": 50, "maxAge": "1h", "strategy": "freshness", "timeout": "5s" }
+      "resources": { "files": ["/assets/**", "/*.svg", "/*.png", "/*.webp", "/*.avif"] }
     }
   ]
 }

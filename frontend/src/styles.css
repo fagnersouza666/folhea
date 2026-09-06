@@ -55,6 +55,8 @@ a { color: inherit; text-decoration: none; }
 .brand-mark { display: grid; width: 1.8rem; height: 1.8rem; place-items: center; border-radius: .55rem .55rem .55rem .25rem; color: var(--forest-950); background: var(--amber); font-family: Georgia, serif; font-size: 1.05rem; font-weight: 900; }
 .app-layout { display: grid; min-height: 100vh; grid-template-rows: auto 1fr auto; }
 .app-header { display: flex; align-items: center; justify-content: space-between; width: min(100% - 2rem, 72rem); margin-inline: auto; padding-block: 1.1rem; }
+.header-actions { display: flex; align-items: center; gap: .65rem; }
+.settings-link { display: grid; width: 2.3rem; height: 2.3rem; place-items: center; border-radius: .65rem; color: var(--forest-800); background: var(--forest-100); font-size: 1rem; }
 .profile-button { display: inline-flex; align-items: center; gap: .55rem; border: 0; padding: .1rem; color: var(--ink); background: transparent; text-align: right; }
 .avatar { display: grid; width: 2rem; height: 2rem; place-items: center; border-radius: 50%; color: var(--forest-900); background: var(--forest-100); font-size: .75rem; font-weight: 800; }
 .profile-copy { display: grid; gap: .1rem; }
@@ -69,7 +71,14 @@ a { color: inherit; text-decoration: none; }
 .record-icon { display: grid; width: 2.5rem; height: 2.5rem; margin-top: -1.2rem; place-items: center; border: .35rem solid var(--cream-100); border-radius: 50%; color: var(--cream-50); background: var(--coral); font-size: 1.35rem !important; }
 .loading { display: flex; align-items: center; justify-content: center; gap: .6rem; min-height: 12rem; color: var(--muted); font-size: .85rem; }
 .spinner { width: 1rem; height: 1rem; border: 2px solid #c6d5cb; border-top-color: var(--forest-900); border-radius: 50%; animation: spin .8s linear infinite; }
+.connection-alert { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 1rem; }
+.update-alert { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 1rem; border-radius: .75rem; padding: .6rem .75rem; color: var(--forest-950); background: var(--amber); font-size: .78rem; font-weight: 750; }
+.update-alert .button { min-height: 2.2rem; padding: .45rem .75rem; font-size: .75rem; }
+.dismiss { flex: none; border: 0; color: inherit; background: transparent; font-size: .7rem; font-weight: 800; text-decoration: underline; }
 @keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
 
 @media (min-width: 760px) {
   .container { width: min(100% - 4rem, 72rem); }
