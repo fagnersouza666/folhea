@@ -21,6 +21,7 @@ class SecurityPolicyTest {
 
     @Test void hostMustMatchCanonicalHostAndPort() {
         assertTrue(policy.isAllowedHost("folhea.com.br"));
+        assertTrue(policy.isAllowedHost("preview.folhea.com.br"));
         assertFalse(policy.isAllowedHost("evil.example"));
         assertFalse(policy.isAllowedHost("folhea.com.br.evil.example"));
         assertFalse(policy.isAllowedHost("folhea.com.br:8443"));

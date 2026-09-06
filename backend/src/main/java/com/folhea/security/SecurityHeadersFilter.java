@@ -21,6 +21,7 @@ public class SecurityHeadersFilter implements ContainerResponseFilter {
         response.getHeaders().putSingle("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
 
         String path = request.getUriInfo().getPath();
+        if (path != null && path.startsWith("/")) path = path.substring(1);
         if (path != null && (path.equals("api") || path.startsWith("api/") || path.equals("auth") || path.startsWith("auth/"))) {
             response.getHeaders().putSingle("Cache-Control", "no-store");
         }

@@ -29,7 +29,7 @@ public class BffSessionCookieFilter implements ContainerResponseFilter {
         Cookie current = request.getCookies().get(SessionCookiePolicy.NAME);
         if (path.equals("auth/callback") && identity != null && !identity.isAnonymous()) {
             String next = SessionCookiePolicy.newTicket(random);
-            if (current != null) csrfTokens.revoke(current.getValue());
+            if (current != null && SessionCookiePolicy.isValidTicket(current.getValue())) csrfTokens.revoke(current.getValue());
             csrfTokens.getOrIssue(next);
             response.getHeaders().add(HttpHeaders.SET_COOKIE, SessionCookiePolicy.issue(next));
         } else if (path.equals("auth/logout")) {

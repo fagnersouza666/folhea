@@ -46,6 +46,7 @@ public class ServerTokenStateManager implements TokenStateManager {
             OidcTenantConfig tenantConfig,
             String tokenState,
             OidcRequestContext<AuthorizationCodeTokens> requestContext) {
+        if (!SessionCookiePolicy.isValidTicket(tokenState)) return Uni.createFrom().nullItem();
         StoredTokens stored = tokens.get(tokenState);
         if (stored == null) return Uni.createFrom().nullItem();
         if (!clock.instant().isBefore(stored.expiresAt())) {

@@ -44,16 +44,13 @@ public class SecurityPolicy {
 
     public boolean isAllowedHost(String candidate) {
         if (candidate == null || candidate.isBlank()) return false;
-        URI canonical = parseOrigin(configuredCanonicalOrigin);
-        if (canonical == null) return false;
-
         String host = candidate.trim();
         if (host.contains("/") || host.contains("@") || host.contains("#") || host.contains("?")) return false;
         try {
             URI requestHost = URI.create("http://" + host);
             if (requestHost.getHost() == null || requestHost.getRawUserInfo() != null) return false;
-            return canonical.getHost().equalsIgnoreCase(requestHost.getHost())
-                    && hostPortMatches(canonical, requestHost);
+            return allowedOriginUris().stream().anyMatch(allowed -> allowed.getHost().equalsIgnoreCase(requestHost.getHost())
+                    && hostPortMatches(allowed, requestHost));
         } catch (IllegalArgumentException ignored) {
             return false;
         }
@@ -71,6 +68,17 @@ public class SecurityPolicy {
                 .filter(value -> value != null)
                 .map(this::originString)
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private Set<URI> allowedOriginUris() {
+        Set<URI> origins = new LinkedHashSet<>();
+        for (String origin : allowedOrigins()) {
+            URI parsed = parseOrigin(origin);
+            if (parsed != null) origins.add(parsed);
+        }
+        URI canonical = parseOrigin(configuredCanonicalOrigin);
+        if (canonical != null) origins.add(canonical);
+        return origins;
     }
 
     public SecurityPolicy(String canonicalOrigin, String allowedOrigins) {
