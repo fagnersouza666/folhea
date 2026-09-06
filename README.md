@@ -119,6 +119,13 @@ sem ocultar falhas de componentes disponíveis. Os gates completos são:
 - validação SEO do artefato SSG;
 - Docker build.
 
+O workflow `CD` executado após merge repete lint, testes, build de produção,
+SSG e backend, constrói a imagem quando `infra/Dockerfile` está disponível,
+dispara `PRODUCTION_DEPLOY_HOOK` e verifica liveness/readiness em
+`PRODUCTION_HEALTH_URL`. O contrato completo de release, métricas de produto,
+eventos analytics e a política de privacidade ficam em
+[`docs/quality-and-release.md`](docs/quality-and-release.md).
+
 Em Settings → Branches → Branch protection rules, configure `main` para exigir
 pull request, exigir `CI / merge-gate`, exigir branch atualizada e bloquear
 force-push. Não permita bypass para merges normais. O workflow publica logs,

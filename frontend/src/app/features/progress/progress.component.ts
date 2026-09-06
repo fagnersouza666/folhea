@@ -19,5 +19,8 @@ export class ProgressComponent {
     this.analytics.track('card_created', { source: 'progress' });
   }
 
+  shareCard(): void { this.analytics.track('card_shared', { source: 'progress' }); }
+  downloadCard(): void { this.analytics.track('card_downloaded', { source: 'progress' }); }
+
   formatMinutes(minutes: number): string { return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}min` : `${minutes}min`; }
 }

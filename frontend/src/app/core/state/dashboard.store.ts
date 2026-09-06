@@ -37,8 +37,13 @@ export class DashboardStore {
     const fallback: Book = { id: `book-${Date.now()}`, userId: 'demo-user', title, author: author || undefined, status: 'READING', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     this.booksState.update((books) => [...books, fallback]);
     this.dashboardState.update((dashboard) => dashboard ? { ...dashboard, currentBook: { id: fallback.id, title: fallback.title } } : { ...demoDashboard, currentBook: { id: fallback.id, title: fallback.title } });
-    this.analytics.track('book_created');
-    this.api.createBook({ title, author: author || undefined }).subscribe({ next: (book) => this.booksState.update((books) => books.map((item) => item.id === fallback.id ? book : item)), error: () => undefined });
+    this.api.createBook({ title, author: author || undefined }).subscribe({
+      next: (book) => {
+        this.booksState.update((books) => books.map((item) => item.id === fallback.id ? book : item));
+        this.analytics.track('book_created');
+      },
+      error: () => undefined
+    });
     return fallback;
   }
 
@@ -47,8 +52,26 @@ export class DashboardStore {
       const current = dashboard ?? demoDashboard;
       return { ...current, currentStreakDays: current.currentStreakDays + (session.readingDate === this.today() ? 1 : 0), week: { ...current.week, pages: current.week.pages + session.pages, minutes: current.week.minutes + session.minutes } };
     });
-    this.analytics.track('reading_session_created', { pages: session.pages, minutes: session.minutes });
-    this.api.createSession({ ...session }).subscribe({ error: () => undefined });
+    this.api.createSession({ ...session }).subscribe({
+      next: () => this.analytics.track('reading_session_created', { pages: session.pages, minutes: session.minutes }),
+      error: () => undefined
+    });
+  }
+
+  updateSession(session: ReadingSession): void {
+    this.api.updateSession(session.id, session).subscribe({ next: () => this.analytics.track('reading_session_updated', { pages: session.pages, minutes: session.minutes }), error: () => undefined });
+  }
+
+  deleteSession(id: string): void {
+    this.api.deleteSession(id).subscribe({ next: () => this.analytics.track('reading_session_deleted'), error: () => undefined });
+  }
+
+  finishBook(id: string, finishedOn?: string): void {
+    this.api.finishBook(id, finishedOn).subscribe({ next: () => this.analytics.track('book_finished'), error: () => undefined });
+  }
+
+  reopenBook(id: string): void {
+    this.api.reopenBook(id).subscribe({ next: () => this.analytics.track('book_reopened'), error: () => undefined });
   }
 
   setStats(stats: Stats): void { this.statsState.set(stats); }

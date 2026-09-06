@@ -13,8 +13,9 @@ export class AuthService {
   readonly isAuthenticated = computed(() => this.userState() !== null);
 
   signIn(email: string): void {
+    const isNewAccount = this.userState() === null;
     this.userState.set({ id: 'demo-user', email, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo' });
-    this.analytics.track('account_created');
+    if (isNewAccount) this.analytics.track('account_created');
     void this.router.navigate(['/app/inicio']);
   }
 
