@@ -1,0 +1,2 @@
+SEO validation failed for dist
+- missing SSG output directory: dist
