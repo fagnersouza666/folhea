@@ -1,5 +1,6 @@
 package com.folhea.security;
 
+import com.folhea.security.SessionCookiePolicy;
 import org.junit.jupiter.api.Test;
 
 import java.security.SecureRandom;
@@ -8,8 +9,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CsrfTokenServiceTest {
@@ -34,6 +37,24 @@ class CsrfTokenServiceTest {
 
         assertFalse(tokens.isValid("ticket-a", token));
         assertTrue(tokens.tokenCount() == 0);
+    }
+
+    @Test void expiredEntriesArePurgedOnIssue() {
+        MutableClock clock = new MutableClock(Instant.parse("2026-09-06T00:00:00Z"));
+        CsrfTokenService tokens = new CsrfTokenService(Duration.ofMinutes(5), clock, new SecureRandom());
+        String token = tokens.getOrIssue("ticket-a");
+        clock.advance(Duration.ofMinutes(6));
+        assertFalse(tokens.isValid("ticket-a", token));
+        tokens.getOrIssue("ticket-b");
+        assertEquals(1, tokens.tokenCount());
+    }
+
+    @Test void rejectsWhenCapacityIsReached() {
+        SecureRandom random = new SecureRandom();
+        CsrfTokenService tokens = new CsrfTokenService(Duration.ofMinutes(5), Clock.systemUTC(), random, 2);
+        tokens.getOrIssue(SessionCookiePolicy.newTicket(random));
+        tokens.getOrIssue(SessionCookiePolicy.newTicket(random));
+        assertThrows(IllegalStateException.class, () -> tokens.getOrIssue(SessionCookiePolicy.newTicket(random)));
     }
 
     private static final class MutableClock extends Clock {

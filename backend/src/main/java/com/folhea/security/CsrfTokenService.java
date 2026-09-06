@@ -21,26 +21,38 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @ApplicationScoped
 public class CsrfTokenService {
+    private static final int DEFAULT_MAX_ENTRIES = 100_000;
     private final Map<String, TokenEntry> tokens = new ConcurrentHashMap<>();
     private final Clock clock;
     private final SecureRandom random;
     private final Duration ttl;
+    private final int maxEntries;
+    private long checks;
 
     @Inject
     public CsrfTokenService(
             @ConfigProperty(name = "folhea.security.csrf.ttl", defaultValue = "PT8H") Duration ttl) {
-        this(ttl, Clock.systemUTC(), new SecureRandom());
+        this(ttl, Clock.systemUTC(), new SecureRandom(), DEFAULT_MAX_ENTRIES);
     }
 
-    public CsrfTokenService(Duration ttl, Clock clock, SecureRandom random) {
+    CsrfTokenService(Duration ttl, Clock clock, SecureRandom random) {
+        this(ttl, clock, random, DEFAULT_MAX_ENTRIES);
+    }
+
+    CsrfTokenService(Duration ttl, Clock clock, SecureRandom random, int maxEntries) {
         this.ttl = ttl;
         this.clock = clock;
         this.random = random;
+        this.maxEntries = maxEntries;
     }
 
-    public String getOrIssue(String sessionTicket) {
+    public synchronized String getOrIssue(String sessionTicket) {
         requireTicket(sessionTicket);
         Instant now = clock.instant();
+        purgeExpired(now);
+        if (tokens.size() >= maxEntries && !tokens.containsKey(sessionTicket)) {
+            throw new IllegalStateException("Limite de tokens CSRF atingido.");
+        }
         TokenEntry entry = tokens.compute(sessionTicket, (ignored, existing) -> {
             if (existing != null && now.isBefore(existing.expiresAt())) return existing;
             return new TokenEntry(newToken(), now.plus(ttl));
@@ -72,6 +84,11 @@ public class CsrfTokenService {
 
     int tokenCount() {
         return tokens.size();
+    }
+
+    private void purgeExpired(Instant now) {
+        if (++checks % 256 != 0 && tokens.size() < maxEntries) return;
+        tokens.entrySet().removeIf(entry -> !now.isBefore(entry.getValue().expiresAt()));
     }
 
     private String newToken() {

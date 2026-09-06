@@ -23,16 +23,34 @@ import java.util.concurrent.ConcurrentHashMap;
 @ApplicationScoped
 public class ServerTokenStateManager implements TokenStateManager {
     private static final int TOKEN_REFERENCE_BYTES = 32;
+    private static final int DEFAULT_MAX_ENTRIES = 100_000;
     private final Map<String, StoredTokens> tokens = new ConcurrentHashMap<>();
     private final SecureRandom random = new SecureRandom();
-    private final Clock clock = Clock.systemUTC();
+    private final Clock clock;
+    private final int maxEntries;
+    private long checks;
+
+    ServerTokenStateManager() {
+        this(Clock.systemUTC(), DEFAULT_MAX_ENTRIES);
+    }
+
+    ServerTokenStateManager(Clock clock) {
+        this(clock, DEFAULT_MAX_ENTRIES);
+    }
+
+    ServerTokenStateManager(Clock clock, int maxEntries) {
+        this.clock = clock;
+        this.maxEntries = maxEntries;
+    }
 
     @Override
-    public Uni<String> createTokenState(
+    public synchronized Uni<String> createTokenState(
             RoutingContext context,
             OidcTenantConfig tenantConfig,
             AuthorizationCodeTokens authorizationCodeTokens,
             OidcRequestContext<String> requestContext) {
+        purgeExpired(clock.instant());
+        if (tokens.size() >= maxEntries) return Uni.createFrom().nullItem();
         String reference;
         do {
             reference = newReference();
@@ -47,6 +65,7 @@ public class ServerTokenStateManager implements TokenStateManager {
             String tokenState,
             OidcRequestContext<AuthorizationCodeTokens> requestContext) {
         if (!SessionCookiePolicy.isValidTicket(tokenState)) return Uni.createFrom().nullItem();
+        purgeExpired(clock.instant());
         StoredTokens stored = tokens.get(tokenState);
         if (stored == null) return Uni.createFrom().nullItem();
         if (!clock.instant().isBefore(stored.expiresAt())) {
@@ -68,6 +87,11 @@ public class ServerTokenStateManager implements TokenStateManager {
 
     int tokenCount() {
         return tokens.size();
+    }
+
+    private void purgeExpired(Instant now) {
+        if (++checks % 256 != 0 && tokens.size() < maxEntries) return;
+        tokens.entrySet().removeIf(entry -> !now.isBefore(entry.getValue().expiresAt()));
     }
 
     private String newReference() {
