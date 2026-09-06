@@ -24,8 +24,10 @@ set -a && . ../.env && set +a
 
 The API is rooted at `/api/v1`; OpenAPI is available at `/api/openapi`. Configure OIDC and database credentials through environment variables rather than committing secrets.
 
-Operational deployment, health checks, daily backups, retention, and restore
-procedures are documented in [docs/operations.md](docs/operations.md).
+Operational deployment and health checks are documented in
+[docs/operations.md](docs/operations.md). Executable backup, restore, recovery
+verification, retention, and incident procedures are in
+[docs/backup-restore.md](docs/backup-restore.md).
 
 ## License
 
