@@ -1,5 +1,8 @@
 User-agent: *
 Allow: /
 Disallow: /app/
+Disallow: /entrar
+Disallow: /login
+Disallow: /callback
 
 Sitemap: https://folhea.com.br/sitemap.xml
