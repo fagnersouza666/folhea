@@ -11,6 +11,7 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.ext.Provider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -23,6 +24,7 @@ import java.net.URI;
 @Priority(Priorities.AUTHENTICATION + 100)
 public class SecurityBoundaryFilter implements ContainerRequestFilter {
     private static final String CSRF_HEADER = "X-CSRF-Token";
+    private static final Logger LOG = Logger.getLogger(SecurityBoundaryFilter.class);
 
     @Inject SecurityIdentity identity;
     @Inject SecurityPolicy policy;
@@ -155,6 +157,13 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
     }
 
     private static void abort(ContainerRequestContext context, int status, String type, String title, String detail) {
+        LOG.warn(rejectLog(status, type));
         context.abortWith(ProblemResponses.build(status, type, title, detail));
+    }
+
+    static String rejectLog(int status, String type) {
+        int separator = type.lastIndexOf('/');
+        String problem = separator >= 0 ? type.substring(separator + 1) : type;
+        return "Rejected API request status=" + status + " problem=" + problem;
     }
 }

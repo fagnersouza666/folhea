@@ -25,6 +25,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.hasSize;
@@ -104,6 +105,67 @@ class BackendResourceTest {
                 .header("Content-Type", equalTo("application/problem+json"))
                 .body("type", equalTo("https://folhea.com.br/problems/unauthorized"))
                 .body("status", equalTo(401));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
+    void authenticatedInvalidHostReturns403AndLogsTheRejectReason() {
+        given().header("X-Forwarded-Host", "evil.example")
+                .when().get("/api/v1/me")
+                .then().statusCode(403)
+                .contentType("application/problem+json")
+                .body("type", equalTo("https://folhea.com.br/problems/invalid-host"))
+                .body("status", equalTo(403));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
+    void authenticatedInvalidOriginReturns403AndLogsTheRejectReason() {
+        given().header("Origin", "https://evil.example")
+                .header("Referer", "https://evil.example/attack")
+                .contentType(ContentType.JSON).body("{\"title\":\"x\"}")
+                .when().post("/api/v1/books")
+                .then().statusCode(403)
+                .contentType("application/problem+json")
+                .body("type", equalTo("https://folhea.com.br/problems/csrf-origin"))
+                .body("status", equalTo(403));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
+    void authenticatedInvalidCsrfReturns403AndLogsTheRejectReasonWithoutTheToken() {
+        String forged = "forged-csrf-token";
+        given().header("X-CSRF-Token", forged)
+                .contentType(ContentType.JSON).body("{\"title\":\"x\"}")
+                .when().post("/api/v1/books")
+                .then().statusCode(403)
+                .contentType("application/problem+json")
+                .body("type", equalTo("https://folhea.com.br/problems/csrf-invalid"))
+                .body("status", equalTo(403))
+                .body(not(containsString(forged)));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
+    void authenticatedOversizedBodyReturns413AndLogsTheRejectReason() {
+        given().contentType(ContentType.JSON).body("{\"title\":\"" + "a".repeat(2_000) + "\"}")
+                .when().post("/api/v1/books")
+                .then().statusCode(413)
+                .contentType("application/problem+json")
+                .body("type", equalTo("https://folhea.com.br/problems/body-too-large"))
+                .body("status", equalTo(413));
     }
 
     @Test
