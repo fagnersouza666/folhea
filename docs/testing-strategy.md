@@ -33,6 +33,20 @@ real. O perfil `%test` não define `quarkus.redis.hosts`: um valor explícito
 `redis-server` da máquina, falhando no CI. O container é `redis:7-alpine`,
 alinhado ao Compose.
 
+`BackendResourceTest` cobre 401 anônimo, 415 de content-type, e os rejeites
+autenticados do `SecurityBoundaryFilter`: 403 para host, origem CSRF e CSRF
+inválido, e 413 para corpo acima de `folhea.security.max-json-body-bytes`.
+O `abort()` registra `status` e o problema (`invalid-host`, `csrf-origin`,
+`csrf-invalid`, `body-too-large`) sem o token. No `%test` o limite de corpo é
+1024 bytes para o 413 chegar no filtro, não na camada HTTP de 64K.
+
+`dashboard.store.spec.ts` cobre os três casos de carga (selectableBooks,
+retry após load 500 e stats `all`) e o rollback otimista de `addBook`,
+`finishBook`, `deleteBook` e `addSession`: cada mutação aplica o estado
+otimista, o HTTP devolve 500 e o spec exige `books`/`sessions` no estado
+anterior com `error` visível (`setMutationError`). O store não ganha API
+de teste.
+
 Os cenários E2E usam Playwright com fixtures em memória. A fixture intercepta a
 API em `/api/v1/**` e mantém livros e sessões em estado isolado por teste; não
 há dependência de serviços externos para validar a jornada crítica. O relatório
