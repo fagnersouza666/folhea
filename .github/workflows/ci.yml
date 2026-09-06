@@ -43,28 +43,48 @@ jobs:
           }
 
           frontend=false
-          if [[ -f frontend/package.json && -f frontend/package-lock.json ]] \
-            && has_npm_scripts frontend/package.json lint build build:ssg test; then
+          if [[ -f frontend/package.json && -f frontend/package-lock.json \
+            && -f scripts/ci/validate-api-contract.mjs ]] \
+            && has_npm_scripts frontend/package.json lint build build:ssg test:coverage; then
             frontend=true
           fi
 
           backend=false
-          if [[ -f backend/pom.xml && -x backend/mvnw ]]; then
+          if [[ -f backend/pom.xml && -x backend/mvnw \
+            && -f backend/.mvn/wrapper/maven-wrapper.properties ]]; then
             backend=true
           fi
 
           docker=false
-          if [[ -f infra/Dockerfile ]]; then
+          if [[ -f infra/Dockerfile \
+            && -f infra/Caddyfile \
+            && -f docker-compose.yml \
+            && -f docker-compose.prod.yml \
+            && -f .env.example \
+            && -f scripts/ci/validate-oidc-surface.mjs \
+            && -f infra/keycloak/folhea-realm.dev.template.json \
+            && -f infra/keycloak/folhea-realm.prod.template.json \
+            && -f frontend/package.json \
+            && -f frontend/package-lock.json \
+            && -f backend/pom.xml \
+            && -x backend/mvnw \
+            && -f backend/.mvn/wrapper/maven-wrapper.properties ]] \
+            && has_npm_scripts frontend/package.json build; then
             docker=true
           fi
 
           seo=false
-          if [[ "$frontend" == true && -f scripts/ci/validate-seo.mjs ]]; then
+          if [[ "$frontend" == true \
+            && -f scripts/ci/validate-seo.mjs \
+            && -f infra/Caddyfile ]]; then
             seo=true
           fi
 
           playwright=false
-          if [[ "$frontend" == true && "$backend" == true ]] \
+          if [[ "$frontend" == true && "$backend" == true \
+            && -f frontend/playwright.config.ts \
+            && -f frontend/e2e/critical.spec.ts \
+            && -f frontend/e2e/fixtures.ts ]] \
             && has_npm_scripts frontend/package.json e2e:critical; then
             playwright=true
           fi
@@ -281,15 +301,24 @@ jobs:
             local name="$1"
             local expected="$2"
             local result="$3"
-            if [[ "$expected" == true ]]; then
-              if [[ "$result" != success ]]; then
-                echo "::error::$name gate was expected to pass, but finished with $result"
+            case "$expected" in
+              true)
+                if [[ "$result" != success ]]; then
+                  echo "::error::$name gate was expected to pass, but finished with $result"
+                  failed=1
+                fi
+                ;;
+              false)
+                if [[ "$result" != skipped ]]; then
+                  echo "::error::$name gate was expected to be skipped, but finished with $result"
+                  failed=1
+                fi
+                ;;
+              *)
+                echo "::error::$name detector output must be true or false, got '$expected'"
                 failed=1
-              fi
-            elif [[ "$result" != skipped ]]; then
-              echo "::error::$name gate was expected to be skipped, but finished with $result"
-              failed=1
-            fi
+                ;;
+            esac
           }
 
           check_gate frontend "$FRONTEND_EXPECTED" "$FRONTEND"

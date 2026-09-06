@@ -57,10 +57,14 @@ docker:   docker build -f infra/Dockerfile .
 
 O workflow mantém jobs separados para diagnóstico e começa pelo job
 `components`, que detecta os contratos disponíveis na revisão. Frontend só é
-considerado disponível com `package.json`, lockfile e os scripts de lint, build,
-SSG e teste; backend precisa de `pom.xml` e `mvnw`; Docker precisa de
-`infra/Dockerfile`; SEO depende do frontend e do validador; Playwright depende
-do frontend, backend e do script `e2e:critical`.
+considerado disponível com `package.json`, lockfile, o validador de contrato e
+os scripts realmente executados pelo job (`lint`, `build`, `build:ssg` e
+`test:coverage`); backend precisa de `pom.xml`, `mvnw` executável e o wrapper
+do Maven. Docker precisa do Dockerfile, Caddy, Compose, templates de realm,
+validador OIDC e os insumos de build do frontend/backend; SEO depende do
+frontend completo, do validador e de `infra/Caddyfile`; Playwright depende do
+frontend e backend completos, `e2e:critical`, a configuração e os fixtures/specs
+críticos.
 
 O `CI / merge-gate` agrega os resultados usando essa expectativa: componente
 disponível exige `success`, componente ausente ou parcial exige `skipped`. Um

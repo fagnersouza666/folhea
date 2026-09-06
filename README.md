@@ -129,10 +129,13 @@ docker build -f infra/Dockerfile .
 
 Todo pull request deve passar pelo workflow `CI`. O job `CI / merge-gate` é o
 único status check necessário para a proteção de `main`. O workflow primeiro
-detecta os contratos dos componentes: frontend exige `package.json`, lockfile e
-os scripts de lint, build, SSG e teste; backend exige `pom.xml` e `mvnw`; SEO
-exige o validador; Playwright exige frontend, backend e `e2e:critical`; Docker
-exige `infra/Dockerfile`.
+detecta os contratos dos componentes. Frontend exige `package.json`, lockfile,
+o validador de contrato e os scripts de lint, build, SSG e cobertura; backend
+exige `pom.xml`, `mvnw` executável e o wrapper do Maven. SEO exige o frontend
+completo, o validador e `infra/Caddyfile`; Playwright exige frontend e backend
+completos, `e2e:critical`, a configuração e os fixtures/specs críticos; Docker
+exige `infra/Dockerfile`, Caddy, Compose, os templates de realm, o validador
+OIDC e os insumos de build do frontend/backend.
 
 Um componente ausente ou ainda parcial tem seu job marcado como `skipped`, e o
 merge-gate aceita esse resultado somente para o componente que foi detectado
