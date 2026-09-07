@@ -108,6 +108,21 @@ class BackendResourceTest {
     }
 
     @Test
+    void invalidServerSessionCannotAccessProtectedApi() {
+        RestAssured.requestSpecification = new RequestSpecBuilder()
+                .addHeader("Host", "localhost:8081")
+                .addCookie("q_session_folhea", "invalid-session-reference")
+                .build();
+
+        given().redirects().follow(false)
+                .when().get("/api/v1/me")
+                .then().statusCode(401)
+                .contentType("application/problem+json")
+                .body("type", equalTo("https://folhea.com.br/problems/unauthorized"))
+                .body("status", equalTo(401));
+    }
+
+    @Test
     @TestSecurity(user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")

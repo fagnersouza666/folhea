@@ -1,14 +1,19 @@
 package com.folhea.security;
 
 import io.quarkus.oidc.AuthorizationCodeTokens;
+import io.vertx.core.http.HttpServerRequest;
+import io.vertx.ext.web.RoutingContext;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.Alternative;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -57,6 +62,60 @@ class ServerTokenStateManagerTest {
 
         assertNull(manager.getTokens(null, null, "not a ticket", null).await().indefinitely());
         assertNull(manager.getTokens(null, null, "", null).await().indefinitely());
+    }
+
+    @Test
+    void renewalReplacesThePreviousBrowserReference() {
+        ServerTokenStateManager manager = new ServerTokenStateManager();
+        AuthorizationCodeTokens original = tokens("access-token-a", "refresh-token-a");
+        AuthorizationCodeTokens renewed = tokens("access-token-b", "refresh-token-b");
+
+        String previousReference = manager.createTokenState(null, null, original, null)
+                .await().indefinitely();
+        String renewedReference = manager.createTokenState(
+                        contextWithSessionReference(previousReference), null, renewed, null)
+                .await().indefinitely();
+
+        assertNotEquals(previousReference, renewedReference);
+        assertNull(manager.getTokens(null, null, previousReference, null).await().indefinitely());
+        assertEquals("access-token-b", manager.getTokens(null, null, renewedReference, null)
+                .await().indefinitely().getAccessToken());
+        assertEquals(1, manager.tokenCount());
+    }
+
+    private static AuthorizationCodeTokens tokens(String accessToken, String refreshToken) {
+        return new AuthorizationCodeTokens(
+                "id-token-value", accessToken, refreshToken, 300L, "openid");
+    }
+
+    private static RoutingContext contextWithSessionReference(String reference) {
+        io.vertx.core.http.Cookie sessionCookie = proxy(
+                io.vertx.core.http.Cookie.class,
+                (proxy, method, arguments) -> "getValue".equals(method.getName())
+                        ? reference : defaultValue(method.getReturnType()));
+        HttpServerRequest request = proxy(HttpServerRequest.class, (proxy, method, arguments) ->
+                "cookieMap".equals(method.getName())
+                        ? Map.of("q_session_folhea", sessionCookie)
+                        : defaultValue(method.getReturnType()));
+        return proxy(RoutingContext.class, (proxy, method, arguments) ->
+                "request".equals(method.getName()) ? request : defaultValue(method.getReturnType()));
+    }
+
+    private static <T> T proxy(Class<T> type, InvocationHandler handler) {
+        return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type}, handler));
+    }
+
+    private static Object defaultValue(Class<?> type) {
+        if (!type.isPrimitive()) return null;
+        if (type == boolean.class) return false;
+        if (type == char.class) return '\0';
+        if (type == byte.class) return (byte) 0;
+        if (type == short.class) return (short) 0;
+        if (type == int.class) return 0;
+        if (type == long.class) return 0L;
+        if (type == float.class) return 0F;
+        if (type == double.class) return 0D;
+        return null;
     }
 
     private static final class MutableClock extends Clock {

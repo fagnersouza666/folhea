@@ -40,6 +40,19 @@ class OidcConfigurationTest {
     }
 
     @Test
+    void browserSessionsRefreshExpiredTokensAndClearStateOnLogout() {
+        assertEquals("${OIDC_REFRESH_EXPIRED:true}", CONFIG.getProperty("quarkus.oidc.token.refresh-expired"));
+        assertEquals("${OIDC_REFRESH_TOKEN_TIME_SKEW:1M}",
+                CONFIG.getProperty("quarkus.oidc.token.refresh-token-time-skew"));
+        assertEquals("${OIDC_SESSION_AGE_EXTENSION:30M}",
+                CONFIG.getProperty("quarkus.oidc.authentication.session-age-extension"));
+        assertEquals("/auth/logout", CONFIG.getProperty("quarkus.oidc.logout.path"));
+        assertEquals("/", CONFIG.getProperty("quarkus.oidc.logout.post-logout-path"));
+        assertEquals("${OIDC_LOGOUT_CLEAR_SITE_DATA:cookies}",
+                CONFIG.getProperty("quarkus.oidc.logout.clear-site-data"));
+    }
+
+    @Test
     void productionProfileRequiresConfidentialClientSecret() {
         assertTrue(CONFIG.containsKey("%prod.quarkus.oidc.credentials.secret"));
         assertEquals("${OIDC_CLIENT_SECRET}", CONFIG.getProperty("%prod.quarkus.oidc.credentials.secret"));
