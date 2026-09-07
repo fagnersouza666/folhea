@@ -22,4 +22,7 @@ trap 'rm -f "$sed_script"' EXIT
   printf '/g\n'
 } > "$sed_script"
 sed -f "$sed_script" "$template" > "$output"
+if [ "${FOLHEA_REALM_RENDER_ONLY:-}" = "1" ]; then
+  exit 0
+fi
 exec /opt/keycloak/bin/kc.sh "$@"

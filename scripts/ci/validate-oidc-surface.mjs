@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -43,9 +45,9 @@ requireText(compose, '["/bin/bash", "/opt/keycloak/render-realm.sh"]', 'Keycloak
 const renderRealm = read('infra/keycloak/render-realm.sh');
 requireText(renderRealm, 'mkdir -p', 'Keycloak realm import directory must exist before secret substitution');
 assert.ok(!/\benvsubst\b/.test(renderRealm), 'Keycloak image has no gettext; render the realm in bash');
-requireText(renderRealm, 'folhea_render_oidc_secret', 'Keycloak realm secret substitution is a testable helper');
-requireText(renderRealm, 'escaped=${escaped//&/\\\\&}', 'Bash replacement must escape & in OIDC_CLIENT_SECRET');
-requireText(renderRealm, '\\$\\{OIDC_CLIENT_SECRET\\}', 'Keycloak realm secret placeholder');
+requireText(renderRealm, 'sed -f "$sed_script"', 'Keycloak realm secret is applied via a sed script file');
+requireText(renderRealm, "s/[/\\\\&]/\\\\&/g", 'Sed replacement escapes the secret literally');
+requireText(renderRealm, '${OIDC_CLIENT_SECRET}', 'Keycloak realm secret placeholder');
 const localOverride = read('docker-compose.override.example.yml');
 requireText(localOverride, '127.0.0.1:5433:5432', 'Local Postgres publish for quarkus:dev');
 requireText(localOverride, '127.0.0.1:8180:8080', 'Local Keycloak publish for quarkus:dev');
@@ -103,5 +105,25 @@ for (const redirectUri of [
 for (const origin of ['http://localhost:8080', 'http://localhost:4200', 'https://localhost:8443']) {
   assert.ok(devClient.webOrigins.includes(origin), `Development web origin is missing ${origin}`);
 }
+
+const renderDir = fs.mkdtempSync(path.join(os.tmpdir(), 'folhea-realm-'));
+const templatePath = path.join(renderDir, 'template.json');
+const outputPath = path.join(renderDir, 'out.json');
+fs.writeFileSync(templatePath, '{"secret":"${OIDC_CLIENT_SECRET}","keep":"ok"}');
+execFileSync('bash', [path.join(root, 'infra/keycloak/render-realm.sh')], {
+  env: {
+    ...process.env,
+    OIDC_CLIENT_SECRET: 'a$(id)&b/c\\d',
+    KEYCLOAK_REALM_TEMPLATE: templatePath,
+    KEYCLOAK_REALM_OUTPUT: outputPath,
+    FOLHEA_REALM_RENDER_ONLY: '1'
+  }
+});
+assert.equal(
+  fs.readFileSync(outputPath, 'utf8'),
+  '{"secret":"a$(id)&b/c\\d","keep":"ok"}',
+  'Realm renderer must copy the client secret literally'
+);
+fs.rmSync(renderDir, { recursive: true, force: true });
 
 console.log('OIDC Compose/Caddy surface: valid');
