@@ -17,7 +17,7 @@ vigentes. A auditoria completa de 06/09/2026 está em
 
 - **Severidade:** P1 operacional
 - **Estado:** **fechado** (06/09/2026)
-- **Remediação:** Redis 7 na rede privada do Compose (`--requirepass`,
+- **Remediação:** Redis 8 na rede privada do Compose (`--requirepass`,
   sem porta pública). `ServerTokenStateManager`, `CsrfTokenService` e
   `RateLimiter` usam stores Redis em `%prod`. Testes unitários usam
   fallback in-memory; `RedisSecurityStoreTest` sobe Redis via Dev Services

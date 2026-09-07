@@ -30,7 +30,7 @@ resultado não depende do fuso horário ou do horário do runner do CI.
 `RedisSecurityStoreTest` cobre CSRF, token state e rate limit contra Redis
 real. O perfil `%test` não define `quarkus.redis.hosts`: um valor explícito
 `redis://127.0.0.1:6379` desliga o Dev Services e o teste passaria contra um
-`redis-server` da máquina, falhando no CI. O container é `redis:7-alpine`,
+`redis-server` da máquina, falhando no CI. O container é `redis:8.10-alpine`,
 alinhado ao Compose.
 
 `BackendResourceTest` cobre 401 anônimo, 415 de content-type, e os rejeites

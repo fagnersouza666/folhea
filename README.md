@@ -1,6 +1,6 @@
 # Folhea
 
-O Folhea é um rastreador de hábito de leitura. O backend é um monolito Java 25 / Quarkus 3.33 com PostgreSQL e Flyway.
+O Folhea é um rastreador de hábito de leitura. O backend é um monolito Java 25 / Quarkus 3.33 LTS com PostgreSQL e Flyway.
 
 ## Versão do produto
 
@@ -11,7 +11,7 @@ Frontend (`frontend/package.json`), backend (`backend/pom.xml`) e OpenAPI
 chore, teste ou infra sem mudança de produto não incrementam. Detalhe em
 `.cursor/rules/versionamento.mdc`.
 
-Versão atual: **0.3.2**
+Versão atual: **0.3.3**
 
 ## Backend
 
@@ -84,7 +84,7 @@ abaixo são o contrato usado pelo CI; execute-os antes de abrir um pull request.
 
 ### Pré-requisitos
 
-- Node.js 22 ou superior e npm;
+- Node.js 24 ou superior e npm;
 - Java 25 e Docker (necessário para Dev Services/Testcontainers);
 - Docker Compose, quando for necessário executar a stack completa.
 

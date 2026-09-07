@@ -1,7 +1,7 @@
 # Operação da infraestrutura
 
 Este runbook cobre a stack inicial do Folhea: Caddy, Quarkus, PostgreSQL 18,
-Keycloak e Redis. PostgreSQL, Keycloak e Redis ficam somente na rede privada do
+Keycloak e Redis 8. PostgreSQL, Keycloak e Redis ficam somente na rede privada do
 Compose; a única superfície publicada é o Caddy.
 
 ## Deploy
@@ -70,13 +70,13 @@ veredicto **APROVADO COM RESSALVAS**.
 
 Imagens base e serviços usam digest SHA256 pinado (`infra/Dockerfile`,
 `docker-compose.yml`). GitHub Actions usam commit SHA imutável com comentário
-de tag (`# v4`).
+de tag (`# v7`, `# v5`).
 
 Regenerar digests:
 
 ```bash
 docker buildx imagetools inspect <imagem:tag>
-gh api repos/actions/checkout/commits/v4 --jq .sha
+gh api repos/actions/checkout/commits/v7 --jq .sha
 ```
 
 Validar overlay de produção:

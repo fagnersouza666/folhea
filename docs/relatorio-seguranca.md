@@ -2,7 +2,7 @@
 
 > Sistema: Folhea (BFF Quarkus + Angular + Keycloak + PostgreSQL + Caddy)
 > Data: 06/09/2026 | Versão: 0.2.0
-> Stack: Java 25, Quarkus 3.33.3 (LTS), Angular 22.1.5, Keycloak 26.7.3, Caddy 2.11.x, PostgreSQL 18, Redis 7
+> Stack: Java 25, Quarkus 3.33.3.2 (LTS), Angular 22.1.5, Keycloak 26.7.3, Caddy 2.11.x, PostgreSQL 18, Redis 8
 > Baseado em: OWASP Top 10:2021, LGPD (Lei 13.709/2018), CWE
 > Modo: audit (playbook completo + LGPD + threat modeling + superfície)
 
@@ -281,7 +281,7 @@ Versões observadas:
 
 | Componente | No repo | Situação em 06/09/2026 |
 | --- | --- | --- |
-| Quarkus | 3.33.3 | LTS recomendada para produção. 3.33.3 inclui correções (ex.: Jackson CVE-2026-59889; path-auth CVE-2026-50559 citado como corrigido em 3.33.3). Linha 3.37/3.39 existe para quem não está em LTS. |
+| Quarkus | 3.33.3.2 | LTS recomendada para produção. 3.33.3.2 é a última micro da linha LTS. Linha 3.37/3.39 existe para quem não está em LTS. |
 | Angular | 22.1.5 | Alinhado ao lockfile; audit de produção limpo |
 | Keycloak | 26.3.3 | **Atrasado.** Patch de CVE-2026-18963 em 26.7.2+ |
 | Caddy | 2.10.0 | Linha 2.11.x já disponível (2.11.4 em jun/2026) |
