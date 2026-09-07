@@ -54,6 +54,24 @@ if [[ -z "${DB_PASSWORD:-}" ]]; then
   die "DB_PASSWORD está vazio após carregar .env. Defina um segredo em .env antes de subir o backend."
 fi
 
+ensure_backend_env_symlink() {
+  local backend_env="$BACKEND_DIR/.env"
+  if [[ -L "$backend_env" ]]; then
+    if [[ "$(readlink -- "$backend_env")" == "../.env" ]]; then
+      return 0
+    fi
+    ln -sfn ../.env "$backend_env"
+    return 0
+  fi
+  if [[ -e "$backend_env" ]]; then
+    warn "backend/.env já existe como arquivo regular e não será sobrescrito. O quarkus:dev lê esse arquivo em vez do .env da raiz."
+    return 0
+  fi
+  ln -sfn ../.env "$backend_env"
+}
+
+ensure_backend_env_symlink
+
 if command -v docker >/dev/null 2>&1; then
   if ! docker ps --format '{{.Names}}' | grep -qx 'folhea-postgres-1'; then
     warn "container folhea-postgres-1 não está em execução. Suba com: docker compose --env-file .env up -d postgres keycloak"

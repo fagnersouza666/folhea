@@ -794,3 +794,26 @@ No `%dev` o mapper reencaminha o `ChallengeData` do `HttpAuthenticator`. A
 substituição do secret no realm usa `sed` (a imagem Keycloak não tem gettext);
 `&` e `\\` no valor são escapados no script gerado (`scripts/tests/test-render-realm.sh`).
 
+---
+
+## Revisão pontual — SCRAM sem senha no `quarkus:dev` (07/09/2026)
+
+Modo **quick** nos arquivos desta correção: `scripts/dev-backend.sh`,
+`scripts/tests/test-dev-backend.sh`, `backend/.gitignore`,
+`docker-compose.yml`.
+
+Nenhum CRÍTICO/ALTO novo. Causa raiz confirmada em runtime: `./mvnw quarkus:dev`
+foi iniciado em `backend/`, onde não havia `.env`. O Quarkus lê `.env` só do
+diretório de trabalho; `quarkus.datasource.password=${DB_PASSWORD:}` resolveu
+para vazio e o Postgres em `localhost:5433` recusou SCRAM. O Flyway falhou no
+start e o proxy do `ng serve` mostrou o stack trace em `/auth/login`.
+
+O `dev-backend.sh` agora cria `backend/.env` → `../.env` quando o caminho
+está ausente, mantém o symlink correto, substitui um symlink apontando para
+outro alvo e avisa sem sobrescrever se o alvo já é um arquivo regular. O link é gitignored. O healthcheck do Keycloak deixou de
+usar `wget` (ausente na imagem `quay.io/keycloak/keycloak:26.7.3`) e passou a
+sondar `127.0.0.1:9000/health/ready` via `/dev/tcp` em bash; `$line` no
+Compose é escapado como `$$line`. Quatorze containers `postgres:18` órfãos de
+Testcontainers (label `org.testcontainers=true`) foram removidos da
+workstation; não entram no repositório.
+
