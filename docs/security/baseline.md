@@ -18,6 +18,14 @@ primeira release; o PRD continua sendo a fonte dos requisitos de produto.
   anterior. Timeout absoluto e de inatividade devem ser configurados no
   Keycloak/BFF e documentados no ambiente. Logout revoga a sessão server-side e
   inicia logout OIDC quando aplicável.
+- A política aplicada pelo realm é de 30 minutos de inatividade e 8 horas de
+  duração máxima para a sessão SSO e para a sessão do cliente. O access token
+  dura 5 minutos; o BFF o renova server-side quando expira ou entra na janela
+  de 1 minuto antes do vencimento, mantendo a sessão ativa somente dentro dos
+  limites do realm.
+- O cookie de sessão do BFF tem `Max-Age=28800` e o estado OIDC é removido do
+  store server-side no logout e na expiração. O logout também envia
+  `Clear-Site-Data: "cookies"` antes de iniciar o logout RP-initiated.
 - O cookie de sessão de produção deve ser equivalente a:
 
   ```http
