@@ -1,11 +1,8 @@
 package com.folhea.shared;
 
-import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
-
-import java.net.URI;
 
 /** Keeps framework-level request failures on the public problem+json contract. */
 @Provider
@@ -28,11 +25,7 @@ public class ProblemWebExceptionMapper implements ExceptionMapper<jakarta.ws.rs.
             case 415 -> "Tipo de conteúdo não suportado";
             default -> "Não foi possível processar a requisição";
         };
-        return Response.status(status)
-                .type(MediaType.valueOf("application/problem+json"))
-                .header("Cache-Control", "no-store")
-                .entity(new ProblemResponse(URI.create(type), title, status, publicDetail(status)))
-                .build();
+        return ProblemResponses.build(status, type, title, publicDetail(status));
     }
 
     private static String publicDetail(int status) {

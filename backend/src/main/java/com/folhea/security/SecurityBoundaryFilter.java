@@ -1,5 +1,6 @@
 package com.folhea.security;
 
+import com.folhea.shared.ProblemResponses;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;

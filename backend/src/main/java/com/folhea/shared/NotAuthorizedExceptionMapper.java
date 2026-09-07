@@ -11,7 +11,6 @@ import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 
-import java.net.URI;
 import java.util.Map;
 
 @Provider
@@ -51,11 +50,7 @@ public class NotAuthorizedExceptionMapper implements ExceptionMapper<NotAuthoriz
     }
 
     private static Response unauthorizedResponse() {
-        return Response.status(Response.Status.UNAUTHORIZED)
-                .header("Content-Type", "application/problem+json")
-                .header("Cache-Control", "no-store")
-                .entity(new ProblemResponse(URI.create("https://folhea.com.br/problems/unauthorized"),
-                        "Não autenticado", 401, "É necessário autenticar-se."))
-                .build();
+        return ProblemResponses.build(401, "https://folhea.com.br/problems/unauthorized",
+                "Não autenticado", "É necessário autenticar-se.");
     }
 }

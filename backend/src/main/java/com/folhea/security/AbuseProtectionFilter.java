@@ -1,5 +1,6 @@
 package com.folhea.security;
 
+import com.folhea.shared.ProblemResponses;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
@@ -43,7 +44,7 @@ public class AbuseProtectionFilter implements ContainerRequestFilter {
         String ip = clientIp(context);
         RateLimiter.Decision decision;
 
-        if (path.equals("auth/login") || path.equals("auth/callback") || path.startsWith("auth/recovery")) {
+        if (isAuthenticationAttempt(path)) {
             decision = limiter.check("login:ip:" + ip, loginPerIp, window);
         } else if (path.equals("api") || path.startsWith("api/")) {
             boolean mutation = isMutation(context.getMethod());
@@ -83,5 +84,11 @@ public class AbuseProtectionFilter implements ContainerRequestFilter {
     private static boolean isMutation(String method) {
         return "POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)
                 || "PATCH".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method);
+    }
+
+    static boolean isAuthenticationAttempt(String path) {
+        return path.equals("auth/login") || path.equals("auth/callback")
+                || path.startsWith("auth/recovery")
+                || path.equals("api/v1/auth/register") || path.equals("api/v1/register");
     }
 }
