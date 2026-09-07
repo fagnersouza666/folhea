@@ -16,3 +16,4 @@ backups/
 # Relatórios gerados pelos validadores locais e da CI.
 contract-report.txt
 seo-report/
+.cursor/debug-02e8c1.log
