@@ -790,7 +790,7 @@ também crashava (`/opt/keycloak/data/import` inexistente) e não publicava
 (HTTP não aceita `__Host-`). `NotAuthorizedExceptionMapper` não pode
 engolir `UnauthorizedException` em `/auth/*` como problem+json — isso
 transformava o challenge OIDC (302) em 401 e o botão Entrar parecia morto.
-No `%dev` o mapper reencaminha o `ChallengeData` do `HttpAuthenticator`. A substituição bash do secret no realm trata
-`&` e `\\` como especiais; o helper `folhea_render_oidc_secret` escapa esses
-caracteres antes de interpolar (`scripts/tests/test-render-realm.sh`).
+No `%dev` o mapper reencaminha o `ChallengeData` do `HttpAuthenticator`. A
+substituição do secret no realm usa `sed` (a imagem Keycloak não tem gettext);
+`&` e `\\` no valor são escapados no script gerado (`scripts/tests/test-render-realm.sh`).
 

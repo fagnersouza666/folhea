@@ -40,9 +40,10 @@ O `abort()` registra `status` e o problema (`invalid-host`, `csrf-origin`,
 `csrf-invalid`, `body-too-large`) sem o token. No `%test` o limite de corpo é
 1024 bytes para o 413 chegar no filtro, não na camada HTTP de 64K.
 
-`scripts/tests/test-render-realm.sh` cobre a substituição de `${OIDC_CLIENT_SECRET}`
-no realm Keycloak sem `envsubst` (a imagem não tem gettext), inclusive secretos
-com `/`, `&` e `\\`.
+`scripts/tests/test-render-realm.sh` e `validate-oidc-surface.mjs` cobrem a
+substituição de `${OIDC_CLIENT_SECRET}` no realm Keycloak sem `envsubst` (a
+imagem não tem gettext). O `render-realm.sh` aplica um script `sed` com o
+segredo escapado, inclusive `/`, `&`, `\\` e trechos como `$(id)`.
 
 `dev-proxy.spec.ts` trava o contrato do `ng serve`: `angular.json` aponta
 `proxy.conf.json`, que encaminha `/auth` e `/api` a `http://localhost:8080` e
