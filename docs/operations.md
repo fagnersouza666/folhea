@@ -104,6 +104,9 @@ para `localhost:5432`, ele pode autenticar no PostgreSQL do sistema e falhar
 com `28P01`. Use `docker-compose.override.example.yml` (`127.0.0.1:5433`,
 Keycloak em `127.0.0.1:8180`, `KC_HOSTNAME=http://localhost:8180` e rede
 `default` + `private`) e `DB_JDBC_URL=jdbc:postgresql://localhost:5433/folhea`.
+Suba o BFF com `./scripts/dev-backend.sh` na raiz do repositório: o script
+carrega o `.env` antes do `quarkus:dev` e evita erro SCRAM por `DB_PASSWORD`
+vazio (sintoma comum: HTTP 500 em `/auth/login` via proxy do `ng serve`).
 O `%dev` liga o OIDC contra `http://localhost:8180/realms/folhea`. Sem isso o
 BFF devolve `/app/inicio` sem sessão e o guard Angular devolve `/entrar` — o
 botão Entrar parece não fazer nada. Crie um usuário no realm `folhea` em

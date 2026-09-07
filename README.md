@@ -35,6 +35,14 @@ pelo Maven, suba o PostgreSQL e o Keycloak com
 `docker compose --env-file .env up -d postgres keycloak` e depois execute:
 
 ```bash
+./scripts/dev-backend.sh
+```
+
+O script carrega o `.env` da raiz antes de invocar `./mvnw quarkus:dev`, evitando
+falha de autenticação SCRAM no PostgreSQL por `DB_PASSWORD` vazio. Alternativa
+manual:
+
+```bash
 cd backend
 set -a && . ../.env && set +a
 ./mvnw quarkus:dev
@@ -85,7 +93,7 @@ antes de `./mvnw` (em Debian/Ubuntu/Pop!_OS: `/usr/lib/jvm/java-25-openjdk-amd64
 
 ### Frontend
 
-Com o BFF em `http://localhost:8080` (`./mvnw quarkus:dev`), o hot reload local é:
+Com o BFF em `http://localhost:8080` (`./scripts/dev-backend.sh`), o hot reload local é:
 
 ```bash
 cd frontend
