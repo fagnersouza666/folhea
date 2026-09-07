@@ -51,6 +51,14 @@ class ServerTokenStateManagerTest {
         assertEquals(0, manager.tokenCount());
     }
 
+    @Test
+    void invalidTokenStateReferencesAreRejected() {
+        ServerTokenStateManager manager = new ServerTokenStateManager();
+
+        assertNull(manager.getTokens(null, null, "not a ticket", null).await().indefinitely());
+        assertNull(manager.getTokens(null, null, "", null).await().indefinitely());
+    }
+
     private static final class MutableClock extends Clock {
         private Instant instant;
 

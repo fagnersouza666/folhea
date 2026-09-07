@@ -16,6 +16,7 @@ import jakarta.inject.Inject;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.util.Base64;
+import java.util.Map;
 
 /**
  * Stores authorization-code tokens behind an opaque browser reference. The
@@ -28,6 +29,7 @@ import java.util.Base64;
 public class ServerTokenStateManager implements TokenStateManager {
     private static final int TOKEN_REFERENCE_BYTES = 32;
     private static final int DEFAULT_MAX_ENTRIES = 100_000;
+    private static final String OIDC_SESSION_COOKIE_PREFIX = "q_session";
     private final TokenStateStore store;
     private final SecureRandom random = new SecureRandom();
     private final Clock clock;
@@ -63,10 +65,19 @@ public class ServerTokenStateManager implements TokenStateManager {
             AuthorizationCodeTokens authorizationCodeTokens,
             OidcRequestContext<String> requestContext) {
         if (store.atCapacity(maxEntries)) return Uni.createFrom().nullItem();
+        String previousReference = currentSessionReference(context);
         String reference;
-        do {
+        for (int attempt = 0; ; attempt++) {
             reference = newReference();
-        } while (!store.save(reference, authorizationCodeTokens, SessionCookiePolicy.MAX_AGE));
+            if (store.save(reference, authorizationCodeTokens, SessionCookiePolicy.MAX_AGE)) break;
+            if (attempt >= 7) return Uni.createFrom().nullItem();
+        }
+        // Quarkus calls this method for both the initial callback and a token
+        // refresh. A refresh replaces the browser reference, so the previous
+        // reference must not remain usable until its TTL elapses.
+        if (previousReference != null && !previousReference.equals(reference)) {
+            store.remove(previousReference);
+        }
         return Uni.createFrom().item(reference);
     }
 
@@ -98,5 +109,15 @@ public class ServerTokenStateManager implements TokenStateManager {
         byte[] bytes = new byte[TOKEN_REFERENCE_BYTES];
         random.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private static String currentSessionReference(RoutingContext context) {
+        if (context == null || context.request() == null) return null;
+        for (Map.Entry<String, io.vertx.core.http.Cookie> entry : context.request().cookieMap().entrySet()) {
+            if (!entry.getKey().startsWith(OIDC_SESSION_COOKIE_PREFIX)) continue;
+            String value = entry.getValue().getValue();
+            if (SessionCookiePolicy.isValidTicket(value)) return value;
+        }
+        return null;
     }
 }
