@@ -38,13 +38,14 @@ pelo Maven, suba o PostgreSQL e o Keycloak com
 ./scripts/dev-backend.sh
 ```
 
-O script carrega o `.env` da raiz antes de invocar `./mvnw quarkus:dev`, evitando
-falha de autenticação SCRAM no PostgreSQL por `DB_PASSWORD` vazio. Alternativa
-manual:
+O script carrega o `.env` da raiz antes de invocar `./mvnw quarkus:dev` e cria
+um symlink local `backend/.env` → `../.env` (gitignored) para o Quarkus ler os
+segredos mesmo quando o Maven é iniciado de dentro de `backend/`. Sem isso o
+`DB_PASSWORD` fica vazio e o Flyway falha com SCRAM. Alternativa manual:
 
 ```bash
 cd backend
-set -a && . ../.env && set +a
+ln -sfn ../.env .env
 ./mvnw quarkus:dev
 ```
 
