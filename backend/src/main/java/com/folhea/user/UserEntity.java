@@ -28,6 +28,14 @@ public class UserEntity {
     @Column(length = 320)
     public String email;
 
+    /** Normalized login identifier for credentials managed by Folhea itself. */
+    @Column(name = "login_identifier", length = 320)
+    public String loginIdentifier;
+
+    /** Encoded password hash. A null value denotes an OIDC-only account. */
+    @Column(name = "password_hash", length = 255)
+    public String passwordHash;
+
     @NotNull
     @Column(nullable = false, length = 80)
     public String timezone;
