@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { catchError, Observable, throwError } from 'rxjs';
-import { Book, BookPatch, Dashboard, ReadingDraft, ReadingSession, ReadingSessionPatch, Stats, User, UserExport } from '../models/models';
+import { Book, BookPatch, Dashboard, ReadingDraft, ReadingSession, ReadingSessionPatch, RegistrationResponse, Stats, User, UserExport } from '../models/models';
 
 @Injectable({ providedIn: 'root' })
 export class ApiClient {
@@ -9,6 +9,9 @@ export class ApiClient {
   private readonly baseUrl = '/api/v1';
 
   getMe(): Observable<User> { return this.request(this.http.get<User>(`${this.baseUrl}/me`, this.options())); }
+  register(input: { email: string; password: string }): Observable<RegistrationResponse> {
+    return this.request(this.http.post<RegistrationResponse>(`${this.baseUrl}/auth/register`, input, this.options()));
+  }
   exportMe(): Observable<UserExport> { return this.request(this.http.get<UserExport>(`${this.baseUrl}/me/export`, this.options())); }
   deleteAccount(): Observable<void> { return this.request(this.http.delete<void>(`${this.baseUrl}/me`, { ...this.options(), body: { confirm: true } })); }
   getDashboard(): Observable<Dashboard> { return this.request(this.http.get<Dashboard>(`${this.baseUrl}/dashboard`, this.options())); }
