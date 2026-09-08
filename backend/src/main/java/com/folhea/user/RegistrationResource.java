@@ -1,10 +1,7 @@
 package com.folhea.user;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -26,7 +23,7 @@ public class RegistrationResource {
 
     @POST
     @Path("/auth/register")
-    @Operation(summary = "Cria uma conta local")
+    @Operation(summary = "Cria uma conta no Keycloak")
     public Response register(@NotNull @Valid RegistrationRequest request) {
         return created(registrations.register(request));
     }
@@ -49,12 +46,7 @@ public class RegistrationResource {
     }
 
     public record RegistrationRequest(
-            @NotBlank(message = "Informe o e-mail.")
-            @Email(message = "Informe um e-mail válido.")
-            @Size(max = 320, message = "O e-mail excede o limite permitido.")
             String email,
-            @NotBlank(message = "Informe a senha.")
-            @Size(min = 8, max = 128, message = "A senha deve ter entre 8 e 128 caracteres.")
             String password) { }
 
     public record RegistrationResponse(UUID id, String email) { }

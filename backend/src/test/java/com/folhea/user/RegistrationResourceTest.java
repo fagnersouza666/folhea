@@ -1,7 +1,7 @@
 package com.folhea.user;
 
-import com.folhea.security.PasswordHasher;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.security.SecurityAttribute;
 import io.quarkus.test.security.TestSecurity;
 import io.restassured.RestAssured;
@@ -14,23 +14,25 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.UUID;
+
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
-/** REST contract coverage for local account registration. */
+/** REST contract coverage for Keycloak-backed account registration. */
 @QuarkusTest
 class RegistrationResourceTest {
     private static final String REGISTRATION_PATH = "/api/v1/auth/register";
-    private static final String LOCAL_EMAIL = "ana@example.com";
-    private static final String LOCAL_PASSWORD = "senha-segura-2026";
+    private static final String EMAIL = "ana@example.com";
+    private static final String REGISTRATION_PASSWORD = UUID.randomUUID().toString();
 
     @Inject EntityManager entityManager;
-    @Inject PasswordHasher passwordHasher;
+    @InjectMock KeycloakAdminClient keycloak;
 
     @BeforeEach
     @Transactional
@@ -42,6 +44,8 @@ class RegistrationResourceTest {
         RestAssured.requestSpecification = new RequestSpecBuilder()
                 .addHeader("Host", "localhost:8081")
                 .build();
+        when(keycloak.provision(anyString(), anyString()))
+                .thenReturn(new KeycloakAdminClient.ProvisionedUser("keycloak-user-id"));
     }
 
     @AfterEach
@@ -50,10 +54,10 @@ class RegistrationResourceTest {
     }
 
     @Test
-    void validRegistrationCreatesOneNormalizedUserAndReturnsNoStoreResponse() {
+    void validRegistrationCreatesOneNormalizedProviderLinkedUserAndReturnsNoStoreResponse() {
         given()
                 .contentType(ContentType.JSON)
-                .body("{\"email\":\"Ana@EXAMPLE.COM\",\"password\":\"" + LOCAL_PASSWORD + "\"}")
+                .body(registrationJson("Ana@EXAMPLE.COM", REGISTRATION_PASSWORD))
                 .when()
                 .post(REGISTRATION_PATH)
                 .then()
@@ -62,18 +66,15 @@ class RegistrationResourceTest {
                 .header("Cache-Control", equalTo("no-store"))
                 .header("Location", equalTo("/api/v1/me"))
                 .body("id", notNullValue())
-                .body("email", equalTo(LOCAL_EMAIL));
+                .body("email", equalTo(EMAIL));
 
-        UserEntity user = findUserByLogin(LOCAL_EMAIL);
+        UserEntity user = findUserByEmail(EMAIL);
         assertNotNull(user);
-        assertEquals(LOCAL_EMAIL, user.email);
-        assertEquals(LOCAL_EMAIL, user.loginIdentifier);
-        assertTrue(user.identitySubject.startsWith("local:"));
+        assertEquals(EMAIL, user.email);
+        assertEquals("keycloak-user-id", user.identitySubject);
+        assertEquals(null, user.loginIdentifier);
+        assertEquals(null, user.passwordHash);
         assertEquals("UTC", user.timezone);
-        assertNotNull(user.passwordHash);
-        assertFalse(user.passwordHash.contains(LOCAL_PASSWORD));
-        assertTrue(passwordHasher.matches(LOCAL_PASSWORD, user.passwordHash));
-        assertFalse(passwordHasher.matches("senha-incorreta", user.passwordHash));
         assertEquals(1L, userCount());
     }
 
@@ -81,24 +82,24 @@ class RegistrationResourceTest {
     void invalidRegistrationReturnsValidationProblemAndDoesNotPersist() {
         given()
                 .contentType(ContentType.JSON)
-                .body("{\"email\":\"nao-e-mail\",\"password\":\"" + LOCAL_PASSWORD + "\"}")
+                .body(registrationJson("nao-e-mail", REGISTRATION_PASSWORD))
                 .when()
                 .post(REGISTRATION_PATH)
                 .then()
                 .statusCode(400)
                 .contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/validation"))
+                .body("type", equalTo("https://folhea.com.br/problems/invalid-registration"))
                 .body("status", equalTo(400));
 
         given()
                 .contentType(ContentType.JSON)
-                .body("{\"email\":\"" + LOCAL_EMAIL + "\",\"password\":\"curta\"}")
+                .body(registrationJson(EMAIL, "x"))
                 .when()
                 .post(REGISTRATION_PATH)
                 .then()
                 .statusCode(400)
                 .contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/validation"))
+                .body("type", equalTo("https://folhea.com.br/problems/invalid-registration"))
                 .body("status", equalTo(400));
 
         assertEquals(0L, userCount());
@@ -106,11 +107,11 @@ class RegistrationResourceTest {
 
     @Test
     void duplicateEmailIsRejectedAfterNormalization() {
-        register(LOCAL_EMAIL, LOCAL_PASSWORD);
+        register(EMAIL, REGISTRATION_PASSWORD);
 
         given()
                 .contentType(ContentType.JSON)
-                .body("{\"email\":\"ANA@EXAMPLE.COM\",\"password\":\"outra-senha-2026\"}")
+                .body(registrationJson("ANA@EXAMPLE.COM", UUID.randomUUID().toString()))
                 .when()
                 .post(REGISTRATION_PATH)
                 .then()
@@ -124,7 +125,7 @@ class RegistrationResourceTest {
 
     @Test
     @TestSecurity(user = "oidc-existing-subject", attributes = {
-            @SecurityAttribute(key = "email", value = LOCAL_EMAIL),
+            @SecurityAttribute(key = "email", value = EMAIL),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
     void duplicateEmailAgainstExistingOidcUserIsRejected() {
@@ -136,7 +137,7 @@ class RegistrationResourceTest {
 
         given()
                 .contentType(ContentType.JSON)
-                .body("{\"email\":\"" + LOCAL_EMAIL + "\",\"password\":\"" + LOCAL_PASSWORD + "\"}")
+                .body(registrationJson(EMAIL, REGISTRATION_PASSWORD))
                 .when()
                 .post(REGISTRATION_PATH)
                 .then()
@@ -151,18 +152,22 @@ class RegistrationResourceTest {
     private void register(String email, String password) {
         given()
                 .contentType(ContentType.JSON)
-                .body("{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}")
+                .body(registrationJson(email, password))
                 .when()
                 .post(REGISTRATION_PATH)
                 .then()
                 .statusCode(201);
     }
 
+    private static String registrationJson(String email, String password) {
+        return "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}";
+    }
+
     @Transactional
-    UserEntity findUserByLogin(String loginIdentifier) {
+    UserEntity findUserByEmail(String email) {
         return entityManager.createQuery(
-                        "select u from UserEntity u where u.loginIdentifier = :loginIdentifier", UserEntity.class)
-                .setParameter("loginIdentifier", loginIdentifier)
+                        "select u from UserEntity u where u.email = :email", UserEntity.class)
+                .setParameter("email", email)
                 .getResultStream()
                 .findFirst()
                 .orElse(null);
