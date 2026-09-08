@@ -1,8 +1,7 @@
 # Especificação do formulário de cadastro
 
-**Status:** pronta para implementação da tela; o contrato server-side está em
-[Contrato server-side do cadastro no Keycloak](../api/registration-keycloak-contract.md)
-e as pendências de produto permanecem explicitamente registradas
+**Status:** pronta para implementação da tela, com pendências de produto
+explicitamente registradas
 **Fonte da decisão:** `hq-2e7y.1` / `hq-2e7y.2.1.1`
 **Escopo:** formulário público que solicita a criação de uma conta no Keycloak
 
@@ -60,8 +59,7 @@ inferidas pela implementação:
   ou outra tela);
 - tratamento de falhas do Keycloak, indisponibilidade e limite de tentativas;
 - indicação explícita de termos/política de privacidade no cadastro;
-- destino pós-cadastro e política de erro permanecem sujeitos às decisões
-  registradas em [Estados do formulário de cadastro](../requisitos-cadastro-estados.md).
+- endpoint e payload finais do contrato frontend–backend.
 
 Até que essas pendências sejam decididas, a tela deve manter o escopo mínimo de
 e-mail + senha, usar mensagens genéricas e delegar as regras de credencial ao
