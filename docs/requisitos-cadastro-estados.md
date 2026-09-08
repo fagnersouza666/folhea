@@ -1,9 +1,6 @@
 # Estados do formulário de cadastro
 
-Referências: `hq-2e7y.2.1.2` / `fo-4fd` e `hq-2e7y.3.1.2` / `fo-5ny`.
-
-O contrato detalhado de classificação e projeção HTTP está em
-[`docs/contrato-erros-cadastro.md`](contrato-erros-cadastro.md).
+Referência: `hq-2e7y.2.1.2` / `fo-4fd`.
 
 Este documento registra apenas o que foi aprovado para o fluxo de cadastro:
 
