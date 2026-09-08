@@ -75,3 +75,8 @@ export interface ProblemDetails {
   status?: number;
   detail?: string;
 }
+
+export interface RegistrationResponse {
+  id: string;
+  email: string;
+}
