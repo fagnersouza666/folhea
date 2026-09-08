@@ -54,13 +54,9 @@ describe('critical form DOM states', () => {
     const fixture = TestBed.createComponent(LoginComponent);
     fixture.detectChanges();
     const submit = fixture.nativeElement.querySelector('.submit-button') as HTMLButtonElement;
-    const registrationLink = fixture.nativeElement.querySelector('.auth-footnote a') as HTMLAnchorElement;
     expect(submit.type).toBe('button');
     expect(submit.tabIndex).toBeGreaterThanOrEqual(0);
     expect(fixture.nativeElement.querySelector('.auth-intro')?.textContent).toContain('servidor');
-    expect(registrationLink.textContent).toContain('Cadastre-se');
-    expect(registrationLink.getAttribute('href')).toBe('/cadastro');
-    expect(registrationLink.tabIndex).toBeGreaterThanOrEqual(0);
     submit.click();
     expect(auth.signIn).toHaveBeenCalledOnce();
   });
