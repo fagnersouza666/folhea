@@ -10,8 +10,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
-        <quarkus.platform.version>3.33.3.2</quarkus.platform.version>
-        <surefire-plugin.version>3.5.6</surefire-plugin.version>
+        <quarkus.platform.version>3.39.2</quarkus.platform.version>
+        <surefire-plugin.version>3.6.0</surefire-plugin.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -31,11 +31,13 @@
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-flyway</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-hibernate-validator</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-oidc</artifactId></dependency>
+        <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-rest-client-jackson</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-redis-client</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-smallrye-openapi</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-smallrye-health</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-logging-json</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-junit</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-junit-mockito</artifactId><scope>test</scope></dependency>
         <dependency><groupId>io.rest-assured</groupId><artifactId>rest-assured</artifactId><scope>test</scope></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-test-security</artifactId><scope>test</scope></dependency>
     </dependencies>
