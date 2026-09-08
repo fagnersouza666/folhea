@@ -45,10 +45,6 @@ outro campo até que exista uma decisão de produto correspondente.
    aprovado para provisionamento no Keycloak. A tela não deve consultar tabelas
    internas do Keycloak nem implementar autenticação local concorrente.
 
-O comportamento público para validação, duplicidade, indisponibilidade do
-Keycloak e falha de associação local está definido em
-[`docs/contrato-erros-cadastro.md`](../contrato-erros-cadastro.md).
-
 ## Pendências que bloqueiam decisões de implementação
 
 Estas regras não foram aprovadas na decisão de requisitos e não devem ser
@@ -62,6 +58,7 @@ inferidas pela implementação:
 - confirmação de endereço de e-mail antes do login, incluindo prazo e reenvio;
 - mensagem e destino após sucesso (login automático, redirecionamento para login
   ou outra tela);
+- tratamento de falhas do Keycloak, indisponibilidade e limite de tentativas;
 - indicação explícita de termos/política de privacidade no cadastro;
 - destino pós-cadastro e política de erro permanecem sujeitos às decisões
   registradas em [Estados do formulário de cadastro](../requisitos-cadastro-estados.md).
