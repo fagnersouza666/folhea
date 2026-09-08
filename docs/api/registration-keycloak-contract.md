@@ -1,6 +1,6 @@
 # Contrato server-side do cadastro no Keycloak
 
-**Referência:** `fo-lp7` / `hq-2e7y.3.1.1`
+**Referência:** `fo-lp7` / `hq-2e7y.3.1.1`; integração segura: `hq-2e7y.3.2.1`
 **Status:** contrato aprovado para a implementação do provisionamento
 **Escopo:** entrada pública do cadastro, chamada privada ao Keycloak e
 respostas observáveis pelo BFF/frontend.
@@ -181,7 +181,122 @@ pública é `/api/v1/me`.
   provedor seguem o contrato de erros do cadastro. O corpo, código interno e
   mensagem bruta do Keycloak nunca são encaminhados.
 
-## 6. Compatibilidade com a implementação
+## 6. Integração administrativa segura
+
+Esta é a decisão operacional para a credencial usada pelo provisionamento. Ela
+é separada do cliente OIDC `folhea-api`, que continua reservado ao fluxo de
+login do BFF. O backend deve falhar durante o startup se a configuração
+obrigatória estiver ausente ou inconsistente; não existe fallback para uma
+conta administrativa ou para o cliente OIDC.
+
+### Credencial e permissões
+
+| Item | Decisão | Regra de segurança |
+| --- | --- | --- |
+| Realm | `folhea` | Fixo no backend; nunca é lido do payload do cadastro. |
+| Client ID | `folhea-registration-provisioner` | Cliente confidencial dedicado ao BFF; o valor não é controlado pelo navegador. |
+| Autenticação | `client_secret_basic` | O client secret é enviado somente no header `Authorization: Basic` da requisição de token; nunca em query string ou body. |
+| Grant | `client_credentials` | Não há usuário, login interativo, redirect URI ou direct access grant. |
+| Service account | habilitada | Conta técnica sem acesso ao console e sem sessão de usuário. |
+| Role mínima | `realm-management/manage-users` no realm `folhea` | Permite o ciclo de usuários necessário (`GET` por e-mail, `POST` e `DELETE` por ID). |
+| Roles proibidas | `realm-admin`, `admin`, `manage-realm`, `manage-clients`, `view-clients`, `impersonation`, roles de grupos e roles de mapeamento | Não conceder privilégios fora do recurso Users. Não usar `Full Scope Allowed`. |
+
+O cliente técnico não deve ser o `admin-cli`, o usuário bootstrap
+`KEYCLOAK_ADMIN_*` ou o cliente `folhea-api`. A role `manage-users` deve ser
+atribuída diretamente à service account no client `realm-management`; não deve
+ser obtida por mapper, grupo amplo ou role composta criada para administradores.
+Se o realm adotar permissões administrativas de granularidade fina, a
+alternativa aprovada é conceder apenas `view` e `manage` do recurso Users ao
+service account, sem também atribuir `realm-admin`.
+
+### Endpoints permitidos
+
+O backend recebe apenas a origem interna do Keycloak; o realm e os caminhos
+abaixo são constantes da integração. O cliente HTTP deve rejeitar redirects,
+validar o certificado TLS em produção e não aceitar um host derivado da
+requisição pública.
+
+| Finalidade | Método e caminho | Resposta esperada |
+| --- | --- | --- |
+| Obter token técnico | `POST /realms/folhea/protocol/openid-connect/token` | `200` com `access_token`; descartar o token ao terminar a operação. |
+| Detectar duplicidade | `GET /admin/realms/folhea/users?email={email-normalizado}&exact=true&briefRepresentation=true&max=2` | `200`; qualquer resultado é conflito. O backend não persiste a representação. |
+| Criar usuário | `POST /admin/realms/folhea/users` | Somente `201` com `Location` válido é sucesso. |
+| Compensar criação órfã | `DELETE /admin/realms/folhea/users/{id-retornado-na-criação}` | Usar somente o ID extraído da criação atual; nunca apagar por e-mail. |
+
+Não são permitidos endpoints do console, master realm, token de usuário,
+introspection, `kcadm`, consulta de tabelas do Keycloak ou qualquer chamada de
+roles/grupos/clientes durante o cadastro. O `Location` da criação deve ser
+interpretado como um caminho relativo e deve corresponder exatamente a
+`/admin/realms/folhea/users/{id}`; uma URL absoluta, host diferente, query,
+fragmento, caminho extra ou ID vazio torna o resultado ambíguo e impede o
+sucesso público.
+
+### Segredos e configuração
+
+Os nomes abaixo formam o contrato de configuração do adaptador. Os valores
+devem vir do secret manager ou de variáveis injetadas fora do Git; os valores de
+produção não devem ser colocados em `.env`, argumentos do processo, imagem ou
+arquivo de realm versionado.
+
+| Configuração | Exemplo não secreto/default | Obrigatoriedade |
+| --- | --- | --- |
+| `KEYCLOAK_ADMIN_ORIGIN` | `http://keycloak:8080` somente em desenvolvimento isolado; `https://keycloak.internal` em produção | Obrigatória; origem, sem `/admin` ou `/realms`. |
+| `KEYCLOAK_ADMIN_REALM` | `folhea` | Obrigatória e imutável para esta integração. |
+| `KEYCLOAK_PROVISIONING_CLIENT_ID` | `folhea-registration-provisioner` | Obrigatória; não aceitar valor vindo do request. |
+| `KEYCLOAK_PROVISIONING_CLIENT_SECRET` | nenhum | Obrigatória em ambientes que habilitam o cadastro; segredo crítico, com rotação controlada. |
+| `KEYCLOAK_ADMIN_CONNECT_TIMEOUT` | `PT2S` | Limite de conexão TCP/TLS. |
+| `KEYCLOAK_ADMIN_READ_TIMEOUT` | `PT3S` | Limite de leitura da resposta. |
+| `KEYCLOAK_ADMIN_REQUEST_TIMEOUT` | `PT5S` | Prazo total por chamada; menor que o timeout público do endpoint. |
+
+O secret é lido somente pela camada de configuração, não deve ser impresso em
+logs de startup e deve ser removido de qualquer objeto de requisição assim que
+a chamada de token terminar. O access token não deve ser persistido em banco,
+Redis, cache distribuído, MDC, métrica ou arquivo. A rotação substitui o secret
+no secret manager e reinicia o BFF; o client anterior deve ser revogado depois
+da confirmação de que todas as instâncias usam o novo valor.
+
+Em desenvolvimento, HTTP só é permitido para o host privado do Compose e
+nunca para uma origem fornecida pelo cliente. Em produção, exigir HTTPS com
+validação normal da cadeia e do hostname. Ausência do secret, origem pública,
+realm diferente de `folhea` ou URI que já contenha um caminho administrativo é
+erro de configuração e deve deixar o cadastro indisponível, sem tentar usar
+credenciais alternativas.
+
+### Timeout, repetição e descarte de dados
+
+- Não repetir automaticamente o `POST /users`: timeout depois do envio deixa o
+  resultado indeterminado e uma segunda criação pode gerar uma conta órfã ou
+  associar o registro errado. O caso deve seguir reconciliação server-side.
+- Não seguir redirects e limitar o corpo lido da resposta administrativa a
+  poucos KiB; para `201`, consumir somente headers/status e descartar o corpo.
+- O token técnico, a senha do usuário e o `UserRepresentation` ficam apenas na
+  memória durante a chamada. Logs, traces e métricas registram somente rota
+  fixa, status, duração, categoria do erro e um request ID não sensível.
+- O timeout de token e o timeout de administração usam a mesma política; um
+  `401`/`403` nunca dispara tentativa com outra credencial.
+
+### Mapeamento interno para o contrato público
+
+O adaptador deve converter status e falhas em categorias controladas antes de
+alcançar o recurso REST. Mensagens e corpos retornados pelo Keycloak são
+descartados.
+
+| Resultado interno | Categoria | Resposta pública |
+| --- | --- | --- |
+| Token `200` sem `access_token`, token endpoint `400/401/403`, ou `401/403` no Admin API | `provider_auth_or_config` | `503 registration-unavailable` |
+| Admin API `400` por payload/política de senha conhecida | `validation_error` | `400 invalid-registration` |
+| Admin API `409` ou usuário encontrado na consulta exata | `conflict_error` | `409 registration-unavailable` |
+| Admin API `404` para realm/caminho fixo, `5xx`, `429`, falha TLS, DNS, conexão ou timeout | `provider_error` | `503 registration-unavailable` |
+| `201` sem `Location` válido ou resposta fora do contrato | `ambiguous_provider_result` | `503 registration-unavailable`; iniciar reconciliação, sem novo create automático |
+| Associação local falha após `201` | `local_link_error` | `503 registration-unavailable`; compensar somente pelo ID recém-retornado |
+| Compensação falha ou não pode ser confirmada | `compensation_error` | `503 registration-unavailable`; encaminhar para reconciliação |
+
+Os valores `400`, `409` e `503` acima são as projeções descritas em
+[`docs/contrato-erros-cadastro.md`](../contrato-erros-cadastro.md). Qualquer
+status, header, corpo ou exceção não reconhecida segue o caminho seguro de
+`503`/`provider_error`; nenhuma falha administrativa vira sucesso.
+
+## 7. Compatibilidade com a implementação
 
 Este arquivo define o contrato aprovado para o provisionamento server-side. A
 rota atualmente existente no backend ainda contém o comportamento legado de
