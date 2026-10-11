@@ -88,8 +88,13 @@ na próxima consulta, sem cache de domínio.
 
 ## Stack e operação
 
-Backend: Java 25, Quarkus 3.40.1 LTS e Maven 3.10.0, sem alteração isolada da
-versão do produto. O wrapper usa a versão estável conferida no
+Backend: Java 27 (Temurin 27+35), Quarkus 3.40.1 LTS e Maven 3.10.0, sem alteração isolada da
+versão do produto. A instrução mais recente de usar a última versão estável
+prevalece sobre a recomendação Java 25 LTS do PRD, cujo texto fonte é preservado.
+O JDK é a [release GA oficial Temurin 27+35](https://github.com/adoptium/temurin27-binaries/releases/tag/jdk-27+35),
+com SHA-256 do arquivo Linux x64 HotSpot conferido antes da instalação:
+`1cf69a4848ffb728b3b260dfd45206a51566ab571a02a30092271d4c580bccbc`.
+O wrapper usa a versão estável conferida no
 [Maven Central](https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/maven-metadata.xml).
 O TLS público termina no Caddy. Quarkus aceita HTTP somente na rede privada
 do Compose (`insecure-requests=enabled`); ele não redireciona para um listener
@@ -129,3 +134,24 @@ e retorna `Uni<Void>`; a rotação/revogação CSRF com Redis executa em worker.
 Ele mantém cookies Secure/HttpOnly/SameSite=Lax e aguarda a identidade autenticada,
 sem acessar a identidade lazy de forma bloqueante na thread de I/O.
 Veja a [referência oficial de autenticação lazy](https://quarkus.io/guides/security-proactive-authentication/).
+
+Regressões de integridade usam JDBC direto contra PostgreSQL para comprovar
+os três CHECKs de progresso, ownership e tipos DATE, sem passar pelos
+validadores REST/ORM. A regressão do callback executa o filtro em um event loop
+Vert.x real, usa a associação de identidade lazy do Quarkus e CSRF em Redis real,
+e verifica que rotação/revogação executam fora da thread de I/O. A jornada OIDC
+com Keycloak e proxy reais permanece necessária para validar o fluxo completo.
+
+A rotação no filtro gerado REST ocorre somente na resposta 303 de `/auth/callback` ou `/auth/login`
+autenticado, uma vez por requisição. Respostas de erro ou challenge preservam
+o resultado original sem consultar novamente uma identidade rejeitada. Isso
+impede reentrada pelo `FilterUtil.handleUniVoid` durante tratamento de falha.
+Testes HTTP exercitam esse pipeline gerado, além da regressão Vert.x/Redis;
+o aceite do login continua sendo a jornada assinada com Keycloak e proxy reais.
+Com `restore-path-after-redirect=true`, Quarkus pode concluir a troca do código
+e redirecionar ao `/auth/login` original antes de executar um recurso REST no
+callback; a resposta autenticada desse recurso também cria o binding CSRF.
+Redirects 302 do mecanismo OIDC nunca criam esse binding por si só.
+O próprio mecanismo usa `AuthenticationRedirectException` após trocar e validar
+o código quando remove parâmetros/restaura a rota; não se deve consultar essa
+identidade novamente na resposta 302. Referência: [fonte Quarkus 3.40.1](https://github.com/quarkusio/quarkus/blob/3.40.1/extensions/oidc/runtime/src/main/java/io/quarkus/oidc/runtime/CodeAuthenticationMechanism.java).

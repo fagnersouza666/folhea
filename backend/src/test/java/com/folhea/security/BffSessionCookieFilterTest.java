@@ -20,6 +20,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -73,6 +74,24 @@ class BffSessionCookieFilterTest {
         assertFalse(csrfTokens.isValid(ticket, csrf));
     }
 
+    @Test
+    void failedCallbackResponseDoesNotResubscribeToRejectedIdentity() {
+        var csrf = new CsrfTokenService(Duration.ofMinutes(5), Clock.systemUTC(), new SecureRandom());
+        var filter = filter(csrf, false);
+        var association = new SecurityIdentityAssociation();
+        association.setIdentity(Uni.createFrom().failure(new io.quarkus.security.AuthenticationFailedException()));
+        filter.identities = association;
+        var headers = new MultivaluedHashMap<String, Object>();
+        var response = proxy(ContainerResponseContext.class, (proxy, method, arguments) -> {
+            if ("getStatus".equals(method.getName())) return 401;
+            if ("getHeaders".equals(method.getName())) return headers;
+            return defaultValue(method.getReturnType());
+        });
+        assertDoesNotThrow(() -> filter.filter(request("auth/callback", null), response)
+                .await().atMost(Duration.ofSeconds(2)));
+        assertTrue(headers.isEmpty());
+    }
+
     private BffSessionCookieFilter filter(CsrfTokenService csrfTokens, boolean anonymous) {
         BffSessionCookieFilter filter = new BffSessionCookieFilter();
         SecurityIdentityAssociation association = new SecurityIdentityAssociation();
@@ -100,8 +119,11 @@ class BffSessionCookieFilterTest {
     }
 
     private static ContainerResponseContext response(MultivaluedMap<String, Object> headers) {
-        return proxy(ContainerResponseContext.class, (proxy, method, arguments) ->
-                "getHeaders".equals(method.getName()) ? headers : defaultValue(method.getReturnType()));
+        return proxy(ContainerResponseContext.class, (proxy, method, arguments) -> {
+            if ("getStatus".equals(method.getName())) return 303;
+            if ("getHeaders".equals(method.getName())) return headers;
+            return defaultValue(method.getReturnType());
+        });
     }
 
     private static <T> T proxy(Class<T> type, InvocationHandler handler) {

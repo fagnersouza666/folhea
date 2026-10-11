@@ -15,6 +15,7 @@ import java.security.SecureRandom;
 
 /** Rotates the opaque CSRF/session binding around the OIDC login lifecycle. */
 public class BffSessionCookieFilter {
+    private static final String CALLBACK_ROTATION_STARTED = BffSessionCookieFilter.class.getName() + ".rotationStarted";
     @Inject CurrentIdentityAssociation identities;
     @Inject CsrfTokenService csrfTokens;
     @Inject SessionCookieSettings sessionCookies;
@@ -26,7 +27,17 @@ public class BffSessionCookieFilter {
         if (path != null && path.startsWith("/")) path = path.substring(1);
         if (path == null) return Uni.createFrom().voidItem();
         Cookie current = request.getCookies().get(sessionCookies.name());
-        if (path.equals("auth/callback")) {
+        if (path.equals("auth/callback") || path.equals("auth/login")) {
+            // Global response filters also run for authentication failures and
+            // challenges. Resubscribing to the rejected lazy identity there
+            // restarts the REST failure pipeline recursively. Only the
+            // authenticated resource's 303 can rotate the binding, once.
+            // restore-path-after-redirect may return the completed callback
+            // to /auth/login before REST runs, so both entry points qualify.
+            if (response.getStatus() != 303 || Boolean.TRUE.equals(request.getProperty(CALLBACK_ROTATION_STARTED))) {
+                return Uni.createFrom().voidItem();
+            }
+            request.setProperty(CALLBACK_ROTATION_STARTED, Boolean.TRUE);
             // With lazy authentication, resolving SecurityIdentity synchronously
             // can block the REST response event loop. Wait for the actual identity,
             // then run the synchronous Redis-backed CSRF operations on a worker.
