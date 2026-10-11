@@ -47,8 +47,8 @@ class OidcConfigurationTest {
         assertEquals("${OIDC_SESSION_AGE_EXTENSION:30M}",
                 CONFIG.getProperty("quarkus.oidc.authentication.session-age-extension"));
         assertEquals("/auth/logout", CONFIG.getProperty("quarkus.oidc.logout.path"));
-        assertEquals("/", CONFIG.getProperty("quarkus.oidc.logout.post-logout-path"));
-        assertEquals("${OIDC_LOGOUT_CLEAR_SITE_DATA:cookies}",
+        assertEquals("/auth/logged-out", CONFIG.getProperty("quarkus.oidc.logout.post-logout-path"));
+        assertEquals("${OIDC_LOGOUT_CLEAR_SITE_DATA:cache,storage}",
                 CONFIG.getProperty("quarkus.oidc.logout.clear-site-data"));
     }
 
@@ -56,6 +56,15 @@ class OidcConfigurationTest {
     void productionProfileRequiresConfidentialClientSecret() {
         assertTrue(CONFIG.containsKey("%prod.quarkus.oidc.credentials.secret"));
         assertEquals("${OIDC_CLIENT_SECRET}", CONFIG.getProperty("%prod.quarkus.oidc.credentials.secret"));
+    }
+
+    @Test
+    void productionAcceptsPrivateProxyHttpWhileBrowserCookiesStaySecure() {
+        assertEquals("enabled", CONFIG.getProperty("%prod.quarkus.http.insecure-requests"));
+        assertEquals("true", CONFIG.getProperty("quarkus.oidc.authentication.cookie-force-secure"));
+        assertEquals("true", CONFIG.getProperty("quarkus.oidc.authentication.force-redirect-https-scheme"));
+        assertEquals("${TRUSTED_PROXIES}", CONFIG.getProperty("%prod.quarkus.http.proxy.trusted-proxies"));
+        assertEquals("false", CONFIG.getProperty("%prod.quarkus.http.proxy.allow-forwarded"));
     }
 
     @Test

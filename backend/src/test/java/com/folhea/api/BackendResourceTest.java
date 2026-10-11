@@ -7,9 +7,15 @@ import com.folhea.security.CsrfTokenService;
 import com.folhea.security.SessionCookiePolicy;
 import com.folhea.security.store.TokenStateStore;
 import com.folhea.user.UserEntity;
+import com.folhea.user.AccountDeletionPersistence;
+import com.folhea.user.AccountDeletionRecovery;
+import com.folhea.security.store.SubjectReference;
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.mockito.InjectSpy;
+import com.folhea.user.KeycloakAdminClient;
 import io.quarkus.test.security.SecurityAttribute;
 import io.quarkus.test.security.TestSecurity;
 import io.restassured.http.ContentType;
@@ -42,15 +48,27 @@ class BackendResourceTest {
     private static final LocalDate TODAY = LocalDate.of(2026, 9, 6);
 
     @Inject EntityManager entityManager;
-    @Inject CsrfTokenService csrfTokens;
+    @InjectSpy CsrfTokenService csrfTokens;
     @Inject TokenStateStore tokenStateStore;
+    @InjectMock KeycloakAdminClient keycloak;
+    @Inject AccountDeletionPersistence deletions;
+    @Inject AccountDeletionRecovery recovery;
+    @Inject javax.sql.DataSource dataSource;
     private UUID seededAliceBookId;
     private UUID seededBobBookId;
     private UUID seededBobSessionId;
+    private String seededSessionTicket;
 
     @BeforeEach
     @Transactional
     void clearDatabase() {
+        // Domain REST tests isolate the external IdP; the real Keycloak/BFF
+        // flow is validated separately by the integration acceptance suite.
+        org.mockito.Mockito.doNothing().when(keycloak).deleteAccount(org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.doCallRealMethod().when(csrfTokens).revoke(org.mockito.ArgumentMatchers.anyString());
+        tokenStateStore.revokeSubject(ALICE, java.time.Duration.ZERO);
+        tokenStateStore.revokeSubject(BOB, java.time.Duration.ZERO);
+        entityManager.createQuery("delete from AccountDeletionIntent").executeUpdate();
         entityManager.createQuery("delete from ReadingSessionEntity").executeUpdate();
         entityManager.createQuery("delete from BookEntity").executeUpdate();
         entityManager.createQuery("delete from UserEntity").executeUpdate();
@@ -79,6 +97,7 @@ class BackendResourceTest {
         seededBobSessionId = bobSession.id;
 
         String ticket = SessionCookiePolicy.newTicket(new SecureRandom());
+        seededSessionTicket = ticket;
         String csrf = csrfTokens.getOrIssue(ticket);
         RestAssured.requestSpecification = new RequestSpecBuilder()
                 .addHeader("Origin", "http://localhost:8081")
@@ -312,7 +331,9 @@ class BackendResourceTest {
     void timezoneBoundaryUsesTheUsersLocalDateForFinishAndStats() {
         UUID bookId = createBook("A hora da estrela");
         createSession(bookId, TODAY.minusDays(1), 7, 11);
-        createSession(bookId, TODAY, 99, 99);
+        given().contentType(ContentType.JSON)
+                .body("{\"bookId\":\"" + bookId + "\",\"readingDate\":\"" + TODAY + "\",\"pages\":99,\"minutes\":99}")
+                .when().post("/api/v1/sessions").then().statusCode(400);
 
         // 02:30Z is still 23:30 on the previous day in São Paulo.
         given().when().get("/api/v1/me").then().statusCode(200)
@@ -433,6 +454,330 @@ class BackendResourceTest {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
+    void streakHasNoFourHundredDayCapAndStatsAggregateBeyondListLimits() {
+        seedLongStreak();
+        for (String period : new String[]{"today", "7", "30", "all"}) {
+            given().when().get("/api/v1/stats?period=" + period).then().statusCode(200)
+                    .body("currentStreakDays", equalTo(450));
+        }
+        given().when().get("/api/v1/stats?period=all").then().statusCode(200)
+                .body("pages", equalTo(470)).body("minutes", equalTo(455))
+                .body("period.from", equalTo(TODAY.minusDays(449).toString()));
+        given().when().get("/api/v1/dashboard").then().statusCode(200)
+                .body("currentStreakDays", equalTo(450))
+                .body("week.pages", equalTo(27)).body("week.minutes", equalTo(12));
+    }
+
+    @Transactional
+    void seedLongStreak() {
+        var alice = findUserBySubject(ALICE);
+        for (int i = 0; i < 450; i++) entityManager.persist(session(alice.id, seededAliceBookId, TODAY.minusDays(i), 1, 1));
+        entityManager.persist(session(alice.id, seededAliceBookId, TODAY, 20, 5));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
+    void unfilteredSessionPagesIncludeTheFullOwnedHistory() {
+        seedLongStreak();
+
+        given().when().get("/api/v1/sessions?limit=500")
+                .then().statusCode(200).body("size()", equalTo(100));
+        given().when().get("/api/v1/sessions?offset=400")
+                .then().statusCode(200)
+                .body("size()", equalTo(51))
+                .body("[0].readingDate", equalTo(TODAY.minusDays(399).toString()))
+                .body("[50].readingDate", equalTo(TODAY.minusDays(449).toString()))
+                .body("bookId", org.hamcrest.Matchers.everyItem(equalTo(seededAliceBookId.toString())));
+        String oldestId = given().when().get("/api/v1/sessions?limit=1&offset=450")
+                .then().statusCode(200).body("size()", equalTo(1))
+                .extract().path("[0].id");
+        given().when().get("/api/v1/sessions/{id}", oldestId)
+                .then().statusCode(200)
+                .body("readingDate", equalTo(TODAY.minusDays(449).toString()));
+        given().when().get("/api/v1/sessions?offset=451")
+                .then().statusCode(200).body("size()", equalTo(0));
+        given().when().get("/api/v1/stats?period=today")
+                .then().statusCode(200).body("currentStreakDays", equalTo(450));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
+    void statisticsAggregateTenThousandRowsAndRecalculateAfterCascadeDeletion() {
+        seedLargeHistory();
+        given().when().get("/api/v1/sessions").then().statusCode(200).body("size()", equalTo(100));
+        given().when().get("/api/v1/stats?period=all").then().statusCode(200)
+                .body("pages", equalTo(20_000)).body("minutes", equalTo(30_000))
+                .body("currentStreakDays", equalTo(1));
+        given().when().delete("/api/v1/books/{id}", seededAliceBookId).then().statusCode(204);
+        given().when().get("/api/v1/stats?period=all").then().statusCode(200)
+                .body("pages", equalTo(0)).body("minutes", equalTo(0))
+                .body("currentStreakDays", equalTo(0));
+    }
+
+    @Transactional
+    void seedLargeHistory() {
+        entityManager.createNativeQuery("""
+                INSERT INTO reading_session(id, user_id, book_id, reading_date, pages, minutes, created_at, updated_at)
+                SELECT gen_random_uuid(), :userId, :bookId, :day, 2, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                FROM generate_series(1, 10000)
+                """).setParameter("userId", findUserBySubject(ALICE).id)
+                .setParameter("bookId", seededAliceBookId).setParameter("day", TODAY).executeUpdate();
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
+    void numericalAndDateValidationRejectsInvalidInputWithoutChangingMetrics() {
+        UUID id = createSession(seededAliceBookId, TODAY, 5, 0);
+        for (String pages : new String[]{"1.9", "\"2\"", "-1", "2147483648", "10001", "true"}) {
+            given().contentType(ContentType.JSON).body("{\"pages\":" + pages + "}")
+                    .when().patch("/api/v1/sessions/{id}", id)
+                    .then().statusCode(400).contentType("application/problem+json");
+        }
+        for (String body : new String[]{"null", "{}", "{\"pages\":0,\"minutes\":0}",
+                "{\"readingDate\":\"2026-02-30\"}", "{\"readingDate\":\"" + TODAY.plusDays(1) + "\"}"}) {
+            given().contentType(ContentType.JSON).body(body).when().patch("/api/v1/sessions/{id}", id)
+                    .then().statusCode(400).contentType("application/problem+json");
+        }
+        given().contentType(ContentType.JSON).body("null").when().post("/api/v1/sessions")
+                .then().statusCode(400);
+        given().contentType(ContentType.JSON).body("{\"finishedOn\":\"" + TODAY.plusDays(1) + "\"}")
+                .when().post("/api/v1/books/{id}/finish", seededAliceBookId).then().statusCode(400);
+        given().when().get("/api/v1/stats?period=all").then().statusCode(200)
+                .body("pages", equalTo(5)).body("minutes", equalTo(0)).body("booksFinished", equalTo(0));
+        // Each numeric input is optional individually.
+        given().contentType(ContentType.JSON)
+                .body("{\"bookId\":\"" + seededAliceBookId + "\",\"readingDate\":\"" + TODAY + "\",\"minutes\":10}")
+                .when().post("/api/v1/sessions").then().statusCode(201).body("pages", equalTo(0));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
+    void explicitTimezonePreferencePersistsOverIdentityDefaults() {
+        given().contentType(ContentType.JSON).body("{\"timezone\":\"America/Sao_Paulo\"}")
+                .when().patch("/api/v1/me").then().statusCode(200)
+                .body("timezone", equalTo("America/Sao_Paulo"));
+        given().when().get("/api/v1/me").then().statusCode(200).body("timezone", equalTo("America/Sao_Paulo"));
+        given().when().get("/api/v1/stats?period=today").then().statusCode(200)
+                .body("period.to", equalTo(TODAY.minusDays(1).toString()));
+        given().contentType(ContentType.JSON).body("{\"timezone\":\"Invalid/Zone\"}")
+                .when().patch("/api/v1/me").then().statusCode(400);
+        given().contentType(ContentType.JSON).body("{\"timezone\":\"+03:00\"}")
+                .when().patch("/api/v1/me").then().statusCode(400);
+    }
+
+    @Test
+    @TestSecurity(user = ALICE)
+    void deletionRevokesTheOidcReferenceInsteadOfTheIndependentCsrfTicket() {
+        String reference = SessionCookiePolicy.newTicket(new SecureRandom());
+        tokenStateStore.save(reference, new io.quarkus.oidc.AuthorizationCodeTokens("id", "access", "refresh"), java.time.Duration.ofMinutes(5));
+        String ticket = SessionCookiePolicy.newTicket(new SecureRandom());
+        String csrf = csrfTokens.getOrIssue(ticket);
+        // Replace the default CSRF fixture rather than append duplicate cookies/headers.
+        RestAssured.requestSpecification = null;
+        RestAssured.requestSpecification = new RequestSpecBuilder()
+                .addHeader("Origin", "http://localhost:8081").build();
+        given().cookie("q_session_Default_folhea", reference).cookie(SessionCookiePolicy.NAME, ticket)
+                .header("X-CSRF-Token", csrf).contentType(ContentType.JSON).body("{\"confirm\":true}")
+                .when().delete("/api/v1/me").then().statusCode(204)
+                .cookie("q_session_Default_folhea", equalTo(""));
+        org.junit.jupiter.api.Assertions.assertTrue(tokenStateStore.find(reference).isEmpty());
+        org.junit.jupiter.api.Assertions.assertFalse(csrfTokens.isValid(ticket, csrf));
+        given().when().get("/api/v1/me").then().statusCode(401).contentType("application/problem+json");
+        assertNull(findUserBySubject(ALICE));
+        org.mockito.Mockito.verify(keycloak).deleteAccount(ALICE);
+    }
+
+    @Test
+    @TestSecurity(user = ALICE)
+    void providerFailureKeepsTheAccountAndAllowsDeletionRetry() {
+        org.mockito.Mockito.doThrow(new KeycloakAdminClient.ProvisioningException(KeycloakAdminClient.Failure.UNAVAILABLE))
+                .when(keycloak).deleteAccount(ALICE);
+        given().contentType(ContentType.JSON).body("{\"confirm\":true}").when().delete("/api/v1/me")
+                .then().statusCode(503).contentType("application/problem+json")
+                .body("type", equalTo("https://folhea.com.br/problems/account-deletion-unavailable"));
+        given().when().get("/api/v1/me").then().statusCode(200);
+        given().when().get("/api/v1/books").then().statusCode(200).body("size()", equalTo(1));
+        org.mockito.Mockito.doNothing().when(keycloak).deleteAccount(ALICE);
+        given().contentType(ContentType.JSON).body("{\"confirm\":true}").when().delete("/api/v1/me")
+                .then().statusCode(204);
+    }
+
+    @Test
+    @TestSecurity(user = ALICE)
+    void csrfCleanupFailureCannotRollBackAnAccountAlreadyDeletedInTheProvider() throws Exception {
+        String ticket = seededSessionTicket;
+        String csrf = csrfTokens.getOrIssue(ticket);
+        org.mockito.Mockito.doThrow(new IllegalStateException("test-only csrf outage"))
+                .when(csrfTokens).revoke(org.mockito.ArgumentMatchers.anyString());
+        given().contentType(ContentType.JSON).body("{\"confirm\":true}")
+                .when().delete("/api/v1/me").then().statusCode(204)
+                .cookie(SessionCookiePolicy.NAME, equalTo(""))
+                .cookie("q_session_Default_folhea", equalTo(""));
+        assertNull(findUserBySubject(ALICE));
+        assertEquals(0, countBooksForSubject(ALICE));
+        assertEquals(0, countSessionsForSubject(ALICE));
+        assertNotNull(findUserBySubject(BOB));
+        assertEquals(1, pendingDeletionCount());
+        org.junit.jupiter.api.Assertions.assertTrue(csrfTokens.isValid(ticket, csrf));
+        // PostgreSQL must reject reprovisioning even without the Redis tombstone.
+        tokenStateStore.revokeSubject(ALICE, java.time.Duration.ZERO);
+        given().when().get("/api/v1/me").then().statusCode(401);
+        assertNull(findUserBySubject(ALICE));
+        org.mockito.Mockito.doCallRealMethod().when(csrfTokens).revoke(org.mockito.ArgumentMatchers.anyString());
+        makeDeletionDue();
+        recovery.retryPending();
+        assertEquals(0, pendingDeletionCount());
+        org.junit.jupiter.api.Assertions.assertFalse(csrfTokens.isValid(ticket, csrf));
+        assertCompactedMarker();
+    }
+
+    @Test
+    @TestSecurity(user = ALICE)
+    void localFlushFailureRetainsTheIntentAndRecoveryCompletesWithoutLogin() throws Exception {
+        verifyLocalDeletionRecovery(false);
+    }
+
+    @Test
+    @TestSecurity(user = ALICE)
+    void localCommitFailureRetainsTheIntentAndRecoveryCompletesWithoutLogin() throws Exception {
+        verifyLocalDeletionRecovery(true);
+    }
+
+    @Test
+    void recoveryCompletesAnIntentPersistedBeforeACrashWithoutAnyAuthenticatedRequest() throws Exception {
+        deletions.request(findUserBySubject(ALICE), null, null);
+        assertEquals(1, pendingDeletionCount());
+        // Only persisted state is supplied to the production recovery path.
+        recovery.retryPending();
+        assertNull(findUserBySubject(ALICE));
+        assertEquals(0, countBooksForSubject(ALICE));
+        assertNotNull(findUserBySubject(BOB));
+        assertEquals(0, pendingDeletionCount());
+        assertCompactedMarker();
+    }
+
+    private void verifyLocalDeletionRecovery(boolean deferred) throws Exception {
+        org.mockito.Mockito.doAnswer(call -> {
+            // Independent JDBC connection proves the intent committed before IdP DELETE.
+            assertEquals(1, pendingDeletionCount());
+            return null;
+        }).when(keycloak).deleteAccount(ALICE);
+        try (var connection = dataSource.getConnection(); var sql = connection.createStatement()) {
+            sql.execute("""
+                    CREATE FUNCTION test_fail_account_delete() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+                    BEGIN
+                        IF OLD.identity_subject = 'alice-subject' THEN
+                            RAISE EXCEPTION 'test-only delete failure' USING ERRCODE = '23514';
+                        END IF;
+                        RETURN OLD;
+                    END $$
+                    """);
+            sql.execute(deferred
+                    ? "CREATE CONSTRAINT TRIGGER test_fail_account_delete AFTER DELETE ON folhea_user DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION test_fail_account_delete()"
+                    : "CREATE TRIGGER test_fail_account_delete BEFORE DELETE ON folhea_user FOR EACH ROW EXECUTE FUNCTION test_fail_account_delete()");
+        }
+        try {
+            given().contentType(ContentType.JSON).body("{\"confirm\":true}").when().delete("/api/v1/me")
+                    .then().statusCode(503).contentType("application/problem+json");
+            assertNotNull(findUserBySubject(ALICE));
+            assertEquals(1, countBooksForSubject(ALICE));
+            assertEquals(1, pendingDeletionCount());
+            org.junit.jupiter.api.Assertions.assertFalse(tokenStateStore.isSubjectRevoked(ALICE));
+        } finally {
+            try (var connection = dataSource.getConnection(); var sql = connection.createStatement()) {
+                sql.execute("DROP TRIGGER test_fail_account_delete ON folhea_user");
+                sql.execute("DROP FUNCTION test_fail_account_delete()");
+            }
+        }
+        // Model the provider's already-absent identity; DELETE 404 is idempotent success.
+        org.mockito.Mockito.doNothing().when(keycloak).deleteAccount(ALICE);
+        makeDeletionDue();
+        recovery.retryPending();
+        assertNull(findUserBySubject(ALICE));
+        assertEquals(0, countBooksForSubject(ALICE));
+        assertEquals(0, countSessionsForSubject(ALICE));
+        assertNotNull(findUserBySubject(BOB));
+        assertEquals(0, pendingDeletionCount());
+        assertCompactedMarker();
+        org.mockito.Mockito.when(keycloak.provision(org.mockito.ArgumentMatchers.eq("alice@example.test"),
+                org.mockito.ArgumentMatchers.anyString())).thenReturn(new KeycloakAdminClient.ProvisionedUser("alice-new-subject"));
+        given().contentType(ContentType.JSON).body("{\"email\":\"alice@example.test\",\"password\":\"test-only-password\"}")
+                .when().post("/api/v1/registration").then().statusCode(201);
+    }
+
+    private long pendingDeletionCount() throws Exception {
+        try (var connection = dataSource.getConnection(); var sql = connection.createStatement();
+             var rows = sql.executeQuery("SELECT count(*) FROM account_deletion WHERE completed_at IS NULL")) {
+            rows.next();
+            return rows.getLong(1);
+        }
+    }
+
+    private void makeDeletionDue() throws Exception {
+        try (var connection = dataSource.getConnection(); var sql = connection.createStatement()) {
+            sql.executeUpdate("UPDATE account_deletion SET next_attempt_at = CURRENT_TIMESTAMP WHERE completed_at IS NULL");
+        }
+    }
+
+    private void assertCompactedMarker() throws Exception {
+        try (var connection = dataSource.getConnection(); var sql = connection.prepareStatement("""
+                SELECT local_deleted, completed_at, user_id, identity_subject, csrf_ticket, oidc_reference
+                FROM account_deletion WHERE subject_hash = ?
+                """)) {
+            sql.setString(1, SubjectReference.of(ALICE));
+            try (var rows = sql.executeQuery()) {
+                org.junit.jupiter.api.Assertions.assertTrue(rows.next());
+                org.junit.jupiter.api.Assertions.assertTrue(rows.getBoolean(1));
+                assertNotNull(rows.getObject(2));
+                for (int column = 3; column <= 6; column++) assertNull(rows.getObject(column));
+            }
+        }
+    }
+
+    @Test
+    @TestSecurity(user = ALICE)
+    void analyticsAcceptsOnlyDeclaredEventsAndCategoricalOrNumericProperties() {
+        given().contentType(ContentType.JSON).body("{\"event\":\"card_shared\",\"properties\":{\"method\":\"native\",\"card_count\":1}}")
+                .when().post("/api/v1/analytics/events").then().statusCode(202);
+        for (String payload : new String[]{
+                "{\"event\":\"unknown\"}",
+                "{\"event\":\"book_created\",\"properties\":{\"title\":\"secret\"}}",
+                "{\"event\":\"book_created\",\"properties\":{\"source\":\"secret-book\"}}",
+                "{\"event\":\"book_created\",\"properties\":{\"pages\":\"private\"}}",
+                "{\"event\":\"book_created\",\"properties\":{\"pages\":1.5}}"}) {
+            given().contentType(ContentType.JSON).body(payload).when().post("/api/v1/analytics/events")
+                    .then().statusCode(400).contentType("application/problem+json");
+        }
+    }
+
+    @Test
+    void technicalMetricsExposeJvmHttpAndPoolWithoutPersonalLabels() {
+        given().when().get("/q/health/ready").then().statusCode(200);
+        given().when().get("/q/metrics").then().statusCode(200)
+                .body(containsString("jvm_memory_used_bytes"))
+                .body(containsString("process_cpu_usage"))
+                .body(containsString("http_server_requests_seconds_count"))
+                .body(containsString("agroal_active_count"))
+                .body(not(containsString("alice@example.test")));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
     void listingsRejectOverlongIntervalsAndPaginateResults() {
         UUID bookId = createBook("Paginação");
         createSession(bookId, TODAY, 1, 1);
@@ -461,6 +806,12 @@ class BackendResourceTest {
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
     void aliceCannotReadMutateOrReferenceBobsBooksAndSessions() {
+        given().when().get("/api/v1/sessions/{id}", seededBobSessionId)
+                .then().statusCode(404).contentType("application/problem+json");
+        given().when().post("/api/v1/books/{id}/finish", seededBobBookId)
+                .then().statusCode(404).contentType("application/problem+json");
+        given().when().delete("/api/v1/books/{id}/finish", seededBobBookId)
+                .then().statusCode(404).contentType("application/problem+json");
         given().when().get("/api/v1/books/{id}", seededBobBookId)
                 .then().statusCode(404).contentType("application/problem+json");
         given().contentType(ContentType.JSON).body("{\"title\":\"Tentativa\"}")
@@ -491,6 +842,8 @@ class BackendResourceTest {
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
     void bobSeesOnlyHisOwnResourcesAndStatistics() {
+        given().when().get("/api/v1/sessions/{id}", seededBobSessionId)
+                .then().statusCode(200).body("id", equalTo(seededBobSessionId.toString()));
         given().when().get("/api/v1/books/{id}", seededAliceBookId)
                 .then().statusCode(404).contentType("application/problem+json");
         given().when().get("/api/v1/books").then().statusCode(200).body("size()", equalTo(1));

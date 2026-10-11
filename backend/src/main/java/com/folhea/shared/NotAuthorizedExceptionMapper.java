@@ -1,11 +1,13 @@
 package com.folhea.shared;
 
+import io.quarkus.security.AuthenticationFailedException;
 import io.quarkus.vertx.http.runtime.security.ChallengeData;
 import io.quarkus.vertx.http.runtime.security.HttpAuthenticator;
 import io.smallrye.mutiny.Uni;
 import io.vertx.ext.web.RoutingContext;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.NotAuthorizedException;
+import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
@@ -13,9 +15,25 @@ import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 
 import java.util.Map;
 
+import static io.quarkus.vertx.http.runtime.security.HttpSecurityUtils.addAuthenticationFailureToEvent;
+
 @Provider
 public class NotAuthorizedExceptionMapper implements ExceptionMapper<NotAuthorizedException> {
     @Inject HttpAuthenticator authenticator;
+
+    @ServerExceptionMapper(value = AuthenticationFailedException.class, priority = Priorities.AUTHENTICATION)
+    public Uni<Response> failedAuthentication(AuthenticationFailedException exception, RoutingContext routingContext) {
+        addAuthenticationFailureToEvent(exception, routingContext);
+        String path = routingContext == null ? null : routingContext.request().path();
+        // OIDC has already removed unavailable token state and expired its
+        // cookie. Calling the authenticator here would start a new code flow
+        // for an API request, yielding an IdP redirect instead of a REST error.
+        if (path == null || path.equals("/api") || path.startsWith("/api/")) {
+            return Uni.createFrom().item(unauthorizedResponse());
+        }
+        // Preserve the mechanism's state/nonce/PKCE challenge for browser paths.
+        return authenticator.getChallenge(routingContext).map(NotAuthorizedExceptionMapper::fromChallenge);
+    }
 
     @ServerExceptionMapper(io.quarkus.security.UnauthorizedException.class)
     public Uni<Response> toResponse(io.quarkus.security.UnauthorizedException exception, RoutingContext routingContext) {

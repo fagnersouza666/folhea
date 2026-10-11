@@ -126,4 +126,24 @@ assert.equal(
 );
 fs.rmSync(renderDir, { recursive: true, force: true });
 
+const logoutRenderDir = fs.mkdtempSync(path.join(os.tmpdir(), 'folhea-logout-realm-'));
+try {
+  for (const [profile, expected] of [
+    ['dev', ['http://localhost:8080/auth/logged-out', 'http://localhost:4200/auth/logged-out', 'https://localhost:8443/auth/logged-out']],
+    ['prod', ['https://folhea.com.br/auth/logged-out']]
+  ]) {
+    const output = path.join(logoutRenderDir, `${profile}.json`);
+    execFileSync('bash', [path.join(root, 'infra/keycloak/render-realm.sh')], {
+      env: { ...process.env, OIDC_CLIENT_SECRET: 'realm-render-test-secret',
+        KEYCLOAK_REALM_TEMPLATE: path.join(root, `infra/keycloak/folhea-realm.${profile}.template.json`),
+        KEYCLOAK_REALM_OUTPUT: output, FOLHEA_REALM_RENDER_ONLY: '1' }
+    });
+    const client = JSON.parse(fs.readFileSync(output, 'utf8')).clients.find(c => c.clientId === 'folhea-api');
+    assert.deepEqual(client.attributes?.['post.logout.redirect.uris']?.split('##'), expected,
+      `${profile}: rendered realm must authorize the exact post-logout return paths`);
+  }
+} finally {
+  fs.rmSync(logoutRenderDir, { recursive: true, force: true });
+}
+
 console.log('OIDC Compose/Caddy surface: valid');

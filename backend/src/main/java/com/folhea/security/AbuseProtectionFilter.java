@@ -89,6 +89,6 @@ public class AbuseProtectionFilter implements ContainerRequestFilter {
     static boolean isAuthenticationAttempt(String path) {
         return path.equals("auth/login") || path.equals("auth/callback")
                 || path.startsWith("auth/recovery")
-                || path.equals("api/v1/auth/register") || path.equals("api/v1/register");
+                || path.equals("api/v1/registration") || path.equals("api/v1/auth/register") || path.equals("api/v1/register");
     }
 }

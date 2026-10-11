@@ -52,6 +52,23 @@ Compose; a única superfície publicada é o Caddy.
    `%prod`. Defina `REDIS_PASSWORD` e `OIDC_CLIENT_SECRET` no secret store; o
    backend usa `REDIS_URL=redis://:<senha>@redis:6379` na rede privada.
 
+## Retorno do logout OIDC
+
+O cliente `folhea-api` autoriza o retorno de logout em `/auth/logged-out`
+por `attributes["post.logout.redirect.uris"]`, separado das URLs de login
+`/auth/callback`. O template dev inclui os caminhos exatos em
+`http://localhost:8080`, `http://localhost:4200` e `https://localhost:8443`;
+o template prod inclui somente `https://folhea.com.br/auth/logged-out`.
+O backend valida o state/cookie nesse retorno antes de navegar para a Home.
+Essa URI deve corresponder às URLs autorizadas no cliente
+([contrato Keycloak](https://www.keycloak.org/docs/26.7.0/server_admin/index.html#_oidc-logout)).
+
+A importação de inicialização não atualiza realms existentes. Ao atualizar um
+ambiente, ajuste somente esse atributo do cliente no console administrativo,
+preservando usuários, credenciais e volumes. O gate
+`node scripts/ci/validate-oidc-surface.mjs` renderiza ambos os templates e
+verifica as URLs de pós-logout do JSON produzido.
+
 ## Redis (store de sessão)
 
 O Redis persiste referências opacas de sessão OIDC, tokens CSRF e janelas de

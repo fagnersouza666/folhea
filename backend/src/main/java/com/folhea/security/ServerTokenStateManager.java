@@ -59,18 +59,22 @@ public class ServerTokenStateManager implements TokenStateManager {
     }
 
     @Override
-    public synchronized Uni<String> createTokenState(
+    public Uni<String> createTokenState(
             RoutingContext context,
             OidcTenantConfig tenantConfig,
             AuthorizationCodeTokens authorizationCodeTokens,
             OidcRequestContext<String> requestContext) {
-        if (store.atCapacity(maxEntries)) return Uni.createFrom().nullItem();
+        return blocking(requestContext, () -> saveTokenState(context, authorizationCodeTokens));
+    }
+
+    private synchronized String saveTokenState(RoutingContext context, AuthorizationCodeTokens authorizationCodeTokens) {
+        if (store.atCapacity(maxEntries)) return null;
         String previousReference = currentSessionReference(context);
         String reference;
         for (int attempt = 0; ; attempt++) {
             reference = newReference();
             if (store.save(reference, authorizationCodeTokens, SessionCookiePolicy.MAX_AGE)) break;
-            if (attempt >= 7) return Uni.createFrom().nullItem();
+            if (attempt >= 7) return null;
         }
         // Quarkus calls this method for both the initial callback and a token
         // refresh. A refresh replaces the browser reference, so the previous
@@ -78,7 +82,7 @@ public class ServerTokenStateManager implements TokenStateManager {
         if (previousReference != null && !previousReference.equals(reference)) {
             store.remove(previousReference);
         }
-        return Uni.createFrom().item(reference);
+        return reference;
     }
 
     @Override
@@ -88,7 +92,7 @@ public class ServerTokenStateManager implements TokenStateManager {
             String tokenState,
             OidcRequestContext<AuthorizationCodeTokens> requestContext) {
         if (!SessionCookiePolicy.isValidTicket(tokenState)) return Uni.createFrom().nullItem();
-        return Uni.createFrom().item(store.find(tokenState).orElse(null));
+        return blocking(requestContext, () -> store.find(tokenState).orElse(null));
     }
 
     @Override
@@ -97,8 +101,11 @@ public class ServerTokenStateManager implements TokenStateManager {
             OidcTenantConfig tenantConfig,
             String tokenState,
             OidcRequestContext<Void> requestContext) {
-        store.remove(tokenState);
-        return Uni.createFrom().nullItem();
+        return blocking(requestContext, () -> { store.remove(tokenState); return null; });
+    }
+
+    private static <T> Uni<T> blocking(OidcRequestContext<T> context, java.util.function.Supplier<T> operation) {
+        return context == null ? Uni.createFrom().item(operation) : context.runBlocking(operation);
     }
 
     int tokenCount() {

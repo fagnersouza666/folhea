@@ -17,7 +17,7 @@ public final class QueryLimits {
 
     public static int sanitizeOffset(Integer offset) {
         if (offset == null || offset < 0) return 0;
-        return offset;
+        return Math.min(offset, Integer.MAX_VALUE - MAX_LIST_LIMIT);
     }
 
     public static LocalDate defaultRangeStart(LocalDate today) {

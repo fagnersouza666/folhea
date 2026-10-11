@@ -1,6 +1,7 @@
 package com.folhea.user;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -24,6 +25,7 @@ public interface KeycloakTokenRestClient {
             @RestForm("client_secret") String clientSecret);
 
     /** Deliberately has no toString implementation so the token cannot leak through diagnostics. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     final class TokenResponse {
         @JsonProperty("access_token")
         public String accessToken;

@@ -6,6 +6,15 @@ import java.util.UUID;
 
 @ApplicationScoped
 public class UserRepository implements PanacheRepositoryBase<UserEntity, UUID> {
+    public void createIfAbsent(String subject, String email, String timezone) {
+        getEntityManager().createNativeQuery("""
+                INSERT INTO folhea_user(id, identity_subject, email, timezone, created_at, updated_at)
+                VALUES (:id, :subject, :email, :timezone, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT (identity_subject) DO NOTHING
+                """)
+                .setParameter("id", UUID.randomUUID()).setParameter("subject", subject)
+                .setParameter("email", email).setParameter("timezone", timezone).executeUpdate();
+    }
     public UserEntity findByIdentitySubject(String subject) {
         return find("identitySubject", subject).firstResult();
     }

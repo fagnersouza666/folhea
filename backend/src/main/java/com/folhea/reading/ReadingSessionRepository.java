@@ -13,14 +13,20 @@ public class ReadingSessionRepository implements PanacheRepositoryBase<ReadingSe
     }
 
     public List<ReadingSessionEntity> findOwned(UUID userId, LocalDate from, LocalDate to, int limit, int offset) {
-        return find("userId = ?1 and readingDate between ?2 and ?3 order by readingDate desc, createdAt desc", userId, from, to)
+        return find("userId = ?1 and readingDate between ?2 and ?3 order by readingDate desc, createdAt desc, id desc", userId, from, to)
+                .range(offset, offset + limit - 1)
+                .list();
+    }
+
+    public List<ReadingSessionEntity> findOwned(UUID userId, int limit, int offset) {
+        return find("userId = ?1 order by readingDate desc, createdAt desc, id desc", userId)
                 .range(offset, offset + limit - 1)
                 .list();
     }
 
     public ReadingSessionEntity findOwned(UUID userId, UUID id) { return find("id = ?1 and userId = ?2", id, userId).firstResult(); }
 
-    /** Full history for LGPD export; not exposed via the public list API. */
+    /** Unpaginated history for LGPD export; the public list always bounds its page. */
     public List<ReadingSessionEntity> allOwned(UUID userId) {
         return find("userId = ?1 order by readingDate desc, createdAt desc", userId).list();
     }
@@ -38,6 +44,46 @@ public class ReadingSessionRepository implements PanacheRepositoryBase<ReadingSe
                 .setMaxResults(limit)
                 .getResultList();
     }
+
+    /** Counts the current consecutive island in PostgreSQL, without a history cap. */
+    public int currentStreakDays(UUID userId, LocalDate today) {
+        Number count = (Number) getEntityManager().createNativeQuery("""
+                WITH days AS (
+                    SELECT DISTINCT reading_date
+                    FROM reading_session
+                    WHERE user_id = :userId AND reading_date <= :today
+                      AND (pages > 0 OR minutes > 0)
+                ), runs AS (
+                    SELECT reading_date,
+                           reading_date + CAST(row_number() OVER (ORDER BY reading_date DESC) AS integer) AS run
+                    FROM days
+                )
+                SELECT COUNT(*) FROM runs
+                WHERE run = (
+                    SELECT run FROM runs
+                    WHERE reading_date BETWEEN :yesterday AND :today
+                    ORDER BY reading_date DESC LIMIT 1
+                )
+                """)
+                .setParameter("userId", userId)
+                .setParameter("today", today)
+                .setParameter("yesterday", today.minusDays(1))
+                .getSingleResult();
+        return count.intValue();
+    }
+
+    public Totals totals(UUID userId, LocalDate from, LocalDate to) {
+        Object[] sums = getEntityManager().createQuery("""
+                SELECT COALESCE(SUM(r.pages), 0), COALESCE(SUM(r.minutes), 0)
+                FROM ReadingSessionEntity r
+                WHERE r.userId = :userId AND r.readingDate BETWEEN :from AND :to
+                """, Object[].class)
+                .setParameter("userId", userId).setParameter("from", from).setParameter("to", to)
+                .getSingleResult();
+        return new Totals(((Number) sums[0]).longValue(), ((Number) sums[1]).longValue());
+    }
+
+    public record Totals(long pages, long minutes) { }
 
     public long sumPagesOwned(UUID userId) {
         Long total = getEntityManager()

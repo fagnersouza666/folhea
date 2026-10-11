@@ -1,6 +1,8 @@
 package com.folhea.security;
 
-import io.quarkus.security.identity.SecurityIdentity;
+import io.quarkus.security.runtime.QuarkusSecurityIdentity;
+import io.quarkus.security.runtime.SecurityIdentityAssociation;
+import io.smallrye.mutiny.Uni;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerResponseContext;
 import jakarta.ws.rs.core.Cookie;
@@ -18,6 +20,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -36,7 +39,8 @@ class BffSessionCookieFilterTest {
         BffSessionCookieFilter filter = filter(csrfTokens, false);
         MultivaluedMap<String, Object> headers = new MultivaluedHashMap<>();
 
-        filter.filter(request("/auth/callback", previousTicket), response(headers));
+        filter.filter(request("/auth/callback", previousTicket), response(headers))
+                .await().atMost(Duration.ofSeconds(5));
 
         NewCookie issued = (NewCookie) headers.getFirst(HttpHeaders.SET_COOKIE);
         assertNotNull(issued);
@@ -59,7 +63,8 @@ class BffSessionCookieFilterTest {
         BffSessionCookieFilter filter = filter(csrfTokens, true);
         MultivaluedMap<String, Object> headers = new MultivaluedHashMap<>();
 
-        filter.filter(request("auth/logout", ticket), response(headers));
+        filter.filter(request("auth/logout", ticket), response(headers))
+                .await().atMost(Duration.ofSeconds(5));
 
         NewCookie cleared = (NewCookie) headers.getFirst(HttpHeaders.SET_COOKIE);
         assertNotNull(cleared);
@@ -69,9 +74,31 @@ class BffSessionCookieFilterTest {
         assertFalse(csrfTokens.isValid(ticket, csrf));
     }
 
+    @Test
+    void failedCallbackResponseDoesNotResubscribeToRejectedIdentity() {
+        var csrf = new CsrfTokenService(Duration.ofMinutes(5), Clock.systemUTC(), new SecureRandom());
+        var filter = filter(csrf, false);
+        var association = new SecurityIdentityAssociation();
+        association.setIdentity(Uni.createFrom().failure(new io.quarkus.security.AuthenticationFailedException()));
+        filter.identities = association;
+        var headers = new MultivaluedHashMap<String, Object>();
+        var response = proxy(ContainerResponseContext.class, (proxy, method, arguments) -> {
+            if ("getStatus".equals(method.getName())) return 401;
+            if ("getHeaders".equals(method.getName())) return headers;
+            return defaultValue(method.getReturnType());
+        });
+        assertDoesNotThrow(() -> filter.filter(request("auth/callback", null), response)
+                .await().atMost(Duration.ofSeconds(2)));
+        assertTrue(headers.isEmpty());
+    }
+
     private BffSessionCookieFilter filter(CsrfTokenService csrfTokens, boolean anonymous) {
         BffSessionCookieFilter filter = new BffSessionCookieFilter();
-        filter.identity = securityIdentity(anonymous);
+        SecurityIdentityAssociation association = new SecurityIdentityAssociation();
+        association.setIdentity(Uni.createFrom().item(
+                QuarkusSecurityIdentity.builder().setAnonymous(anonymous)
+                        .setPrincipal(() -> "filter-regression-subject").build()));
+        filter.identities = association;
         filter.csrfTokens = csrfTokens;
         filter.sessionCookies = sessionCookies;
         filter.random = new SecureRandom();
@@ -92,13 +119,11 @@ class BffSessionCookieFilterTest {
     }
 
     private static ContainerResponseContext response(MultivaluedMap<String, Object> headers) {
-        return proxy(ContainerResponseContext.class, (proxy, method, arguments) ->
-                "getHeaders".equals(method.getName()) ? headers : defaultValue(method.getReturnType()));
-    }
-
-    private static SecurityIdentity securityIdentity(boolean anonymous) {
-        return proxy(SecurityIdentity.class, (proxy, method, arguments) ->
-                "isAnonymous".equals(method.getName()) ? anonymous : defaultValue(method.getReturnType()));
+        return proxy(ContainerResponseContext.class, (proxy, method, arguments) -> {
+            if ("getStatus".equals(method.getName())) return 303;
+            if ("getHeaders".equals(method.getName())) return headers;
+            return defaultValue(method.getReturnType());
+        });
     }
 
     private static <T> T proxy(Class<T> type, InvocationHandler handler) {

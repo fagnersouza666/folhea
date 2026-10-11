@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class InMemoryTokenStateStore implements TokenStateStore {
     private final Map<String, StoredTokens> tokens = new ConcurrentHashMap<>();
+    private final Map<String, Instant> revokedSubjects = new ConcurrentHashMap<>();
     private final Clock clock;
     private long checks;
 
@@ -56,6 +57,24 @@ public final class InMemoryTokenStateStore implements TokenStateStore {
     public boolean atCapacity(int maxEntries) {
         purgeExpired(clock.instant());
         return tokens.size() >= maxEntries;
+    }
+
+    @Override
+    public void revokeSubject(String subject, Duration ttl) {
+        String reference = SubjectReference.of(subject);
+        if (ttl.isZero() || ttl.isNegative()) revokedSubjects.remove(reference);
+        else revokedSubjects.put(reference, clock.instant().plus(ttl));
+        revokedSubjects.entrySet().removeIf(entry -> !clock.instant().isBefore(entry.getValue()));
+    }
+
+    @Override
+    public boolean isSubjectRevoked(String subject) {
+        String reference = SubjectReference.of(subject);
+        Instant expires = revokedSubjects.get(reference);
+        if (expires == null) return false;
+        if (clock.instant().isBefore(expires)) return true;
+        revokedSubjects.remove(reference, expires);
+        return false;
     }
 
     void purgeExpired(Instant now) {

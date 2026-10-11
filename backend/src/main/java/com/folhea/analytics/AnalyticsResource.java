@@ -13,6 +13,8 @@ import org.jboss.logging.Logger;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+import jakarta.inject.Inject;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @Path("/api/v1/analytics/events")
 @Authenticated
@@ -28,7 +30,11 @@ public class AnalyticsResource {
     private static final Set<String> PROPERTY_NAMES = Set.of(
             "source", "screen", "method", "days", "pages", "minutes",
             "session_count", "book_count", "card_count");
-    private static final Pattern SAFE_TEXT = Pattern.compile("[a-z0-9_-]{1,64}");
+    private static final Map<String, Set<String>> CATEGORIES = Map.of(
+            "source", Set.of("cards", "progress", "home", "books", "reading", "registration"),
+            "screen", Set.of("cards", "progress", "home", "books", "reading", "settings", "registration"),
+            "method", Set.of("native", "download", "email", "google"));
+    @Inject MeterRegistry metrics;
 
     @POST
     public Response collect(EventRequest request) {
@@ -37,6 +43,7 @@ public class AnalyticsResource {
                     "Evento inválido", "O evento informado não faz parte do contrato de analytics.");
         }
         Map<String, Object> safeProperties = sanitize(request.properties());
+        metrics.counter("folhea.product.events", "event", request.event()).increment();
         // The structured logging pipeline can aggregate this line. Never log the
         // original request: it may have been crafted outside the trusted client.
         LOG.infof("product_event=%s product_properties=%s", request.event(), safeProperties);
@@ -52,9 +59,11 @@ public class AnalyticsResource {
                         "Evento inválido", "A propriedade não faz parte do contrato de analytics.");
             }
             Object value = entry.getValue();
-            if (value instanceof String text && SAFE_TEXT.matcher(text).matches()) safe.put(entry.getKey(), text);
-            else if (value instanceof Number number && number.doubleValue() >= 0 && number.doubleValue() <= 1_000_000) safe.put(entry.getKey(), number);
-            else if (value instanceof Boolean bool) safe.put(entry.getKey(), bool);
+            Set<String> allowed = CATEGORIES.get(entry.getKey());
+            if (allowed != null && value instanceof String text && allowed.contains(text)) safe.put(entry.getKey(), text);
+            else if (allowed == null && value instanceof Number number && Double.isFinite(number.doubleValue())
+                    && number.doubleValue() == Math.rint(number.doubleValue())
+                    && number.doubleValue() >= 0 && number.doubleValue() <= 1_000_000) safe.put(entry.getKey(), number);
             else throw new ProblemException(400, "https://folhea.com.br/problems/invalid-analytics-event",
                     "Evento inválido", "O valor da propriedade não é seguro para analytics.");
         }

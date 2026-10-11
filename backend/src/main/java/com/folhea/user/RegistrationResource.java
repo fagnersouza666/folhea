@@ -22,9 +22,16 @@ public class RegistrationResource {
     @Inject RegistrationService registrations;
 
     @POST
-    @Path("/auth/register")
+    @Path("/registration")
     @Operation(summary = "Cria uma conta no Keycloak")
     public Response register(@NotNull @Valid RegistrationRequest request) {
+        return created(registrations.register(request));
+    }
+
+    @POST
+    @Path("/auth/register")
+    @Operation(hidden = true)
+    public Response registerAtAuthPath(@NotNull @Valid RegistrationRequest request) {
         return created(registrations.register(request));
     }
 
