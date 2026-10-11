@@ -1,6 +1,6 @@
 {
   "name": "folhea-frontend",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "private": true,
   "scripts": {
     "start": "ng serve",
@@ -10,8 +10,10 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
-    "lint": "eslint \"src/**/*.ts\" \"e2e/**/*.ts\" \"playwright.config.ts\"",
-    "e2e:critical": "playwright test --config=playwright.config.ts"
+    "lint": "eslint \"src/**/*.ts\" \"e2e/**/*.ts\" \"playwright*.config.ts\"",
+    "e2e:critical": "playwright test --config=playwright.config.ts",
+    "e2e:integrated": "playwright test --config=playwright.integrated.config.ts",
+    "validate:ssg": "node scripts/validate-ssg.mjs"
   },
   "dependencies": {
     "@angular/animations": "22.2.2",
@@ -48,5 +50,6 @@
     "typescript-eslint": "8.71.1",
     "vitest": "5.0.3",
     "@angular/build": "22.2.2"
-  }
+  },
+  "type": "module"
 }

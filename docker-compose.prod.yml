@@ -3,6 +3,11 @@
 
 services:
   keycloak:
+    image: ${COMPOSE_PROJECT_NAME:-folhea}-keycloak:local
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+      target: keycloak-runtime
     command:
       - start
       - --optimized

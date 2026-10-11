@@ -104,6 +104,12 @@ Não adicionar `unsafe-eval` ou `unsafe-inline` à CSP para contornar um build;
 alterações exigem revisão. `HSTS preload` só pode ser ativado depois de
 confirmar HTTPS em todos os subdomínios.
 
+A CSP acima protege páginas e API Folhea. Nas rotas públicas explicitamente
+permitidas do Keycloak, Caddy preserva a CSP do provedor, que controla seu
+próprio tema de login. Não aplique permissões de scripts do IdP à aplicação.
+O upstream BFF deve usar o alias exclusivo `backend-edge`, evitando DNS em
+duas redes; somente o IP edge de Caddy é confiado para forwarding.
+
 Para `/api/*` usar no mínimo:
 
 ```text

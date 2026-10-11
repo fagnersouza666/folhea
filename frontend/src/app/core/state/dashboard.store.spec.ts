@@ -60,7 +60,7 @@ describe('DashboardStore', () => {
   });
 
   function expectSessionsRequest(sessions: ReadingSession[] = []) {
-    const request = httpMock.expectOne((req) => req.url === '/api/v1/sessions' && req.params.has('from') && req.params.has('to'));
+    const request = httpMock.expectOne((req) => req.url === '/api/v1/sessions' && !req.params.has('from') && !req.params.has('to'));
     expect(request.request.params.get('limit')).toBe('100');
     expect(request.request.params.get('offset')).toBe('0');
     request.flush(sessions);
@@ -69,7 +69,7 @@ describe('DashboardStore', () => {
 
   function seedBooks(books: Book[]): void {
     store.loadBooks();
-    httpMock.expectOne('/api/v1/books').flush(books);
+    httpMock.expectOne('/api/v1/books?limit=100&offset=0').flush(books);
   }
 
   function seedSessions(sessions: ReadingSession[]): void {
@@ -90,6 +90,7 @@ describe('DashboardStore', () => {
     });
     httpMock.expectOne('/api/v1/analytics/events').flush(null, { status: 202, statusText: 'Accepted' });
     expect(store.selectableBooks().length).toBe(1);
+    httpMock.expectOne('/api/v1/books?limit=100&offset=0').flush(store.books());
   });
 
   it('allows dashboard retry after a failed load', () => {
@@ -107,13 +108,13 @@ describe('DashboardStore', () => {
       currentBook: null,
       week: { pages: 0, minutes: 0, booksFinished: 0 }
     });
-    httpMock.expectOne('/api/v1/books').flush([]);
+    httpMock.expectOne('/api/v1/books?limit=100&offset=0').flush([]);
     expectSessionsRequest();
     httpMock.match((request) => request.url.startsWith('/api/v1/stats')).forEach((request) => request.flush(statsResponse));
 
     store.reload();
     httpMock.expectOne('/api/v1/dashboard').flush('error', { status: 500, statusText: 'Server Error' });
-    httpMock.expectOne('/api/v1/books').flush([]);
+    httpMock.expectOne('/api/v1/books?limit=100&offset=0').flush([]);
     expectSessionsRequest();
     httpMock.match((request) => request.url.startsWith('/api/v1/stats')).forEach((request) => request.flush(statsResponse));
 
@@ -123,7 +124,7 @@ describe('DashboardStore', () => {
       currentBook: null,
       week: { pages: 1, minutes: 1, booksFinished: 0 }
     });
-    httpMock.expectOne('/api/v1/books').flush([]);
+    httpMock.expectOne('/api/v1/books?limit=100&offset=0').flush([]);
     expectSessionsRequest();
     httpMock.match((request) => request.url.startsWith('/api/v1/stats')).forEach((request) => request.flush(statsResponse));
   });
@@ -156,8 +157,8 @@ describe('DashboardStore', () => {
     seedBooks([readingBook]);
     const previousBooks = structuredClone(store.books());
 
-    store.finishBook(BOOK_ID);
-    expect(store.books()[0]?.status).toBe('FINISHED');
+    store.finishBook(BOOK_ID).subscribe({ error: () => undefined });
+    expect(store.books()[0]?.status).toBe('READING');
 
     flushServerError(httpMock, `/api/v1/books/${BOOK_ID}/finish`);
 
@@ -195,4 +196,115 @@ describe('DashboardStore', () => {
     expect(store.sessions()).toEqual(previousSessions);
     expect(store.error()).toBe('Não foi possível registrar a leitura.');
   });
+  it('keeps authoritative week/streak when only the first historical page is loaded', () => {
+    store.loadDashboard();
+    const official = { currentStreakDays: 150, currentBook: null, week: { pages: 999, minutes: 555, booksFinished: 8 } };
+    httpMock.expectOne('/api/v1/dashboard').flush(official);
+    seedSessions(Array.from({ length: 100 }, (_, i) => ({ ...readingSession, id: `session-${i}`, pages: 1 })));
+    expect(store.dashboard()).toEqual(official);
+    expect(store.sessionsHasMore()).toBe(true);
+    store.loadMoreSessions();
+    const next = httpMock.expectOne('/api/v1/sessions?limit=100&offset=100');
+    next.flush([{ ...readingSession, id: 'older', readingDate: '2020-01-01' }]);
+    expect(store.sessions()).toHaveLength(101);
+    expect(store.sessionsHasMore()).toBe(false);
+    expect(store.dashboard()).toEqual(official);
+  });
+
+  it('ignores obsolete statistics responses after rapidly changing periods', () => {
+    store.loadStats('30');
+    const older = httpMock.expectOne((req) => req.url === '/api/v1/stats');
+    store.loadStats('today');
+    const latest = httpMock.expectOne((req) => req.url === '/api/v1/stats');
+    const stats = { period: { from: store.today(), to: store.today() }, pages: 8, minutes: 4, booksFinished: 0, currentStreakDays: 42 };
+    latest.flush(stats);
+    older.flush({ ...stats, pages: 1000 });
+    expect(store.stats()).toEqual(stats);
+    expect(store.period()).toBe('today');
+  });
+
+  it('never presents an incomplete all-time total after a statistics failure', () => {
+    seedSessions([readingSession]);
+    store.loadStats('all');
+    flushServerError(httpMock, '/api/v1/stats?period=all');
+    expect(store.stats()).toBeNull();
+    expect(store.statsError()).toContain('Não foi possível');
+    store.clearError();
+    expect(store.statsError()).toContain('Não foi possível');
+  });
+
+  it('refreshes metrics only after the session has been persisted', () => {
+    store.addSession({ bookId: BOOK_ID, readingDate: store.today(), pages: 12, minutes: 25 }).subscribe();
+    httpMock.expectNone('/api/v1/dashboard');
+    httpMock.expectNone((req) => req.url === '/api/v1/stats');
+    httpMock.expectOne('/api/v1/sessions').flush(readingSession);
+    httpMock.expectOne('/api/v1/dashboard').flush({ currentStreakDays: 101, currentBook: null, week: { pages: 500, minutes: 200, booksFinished: 2 } });
+    httpMock.expectOne((req) => req.url === '/api/v1/stats').flush({ currentStreakDays: 101, period: { from: store.today(), to: store.today() }, pages: 500, minutes: 200, booksFinished: 2 });
+    expectSessionsRequest([readingSession]);
+    httpMock.expectOne('/api/v1/analytics/events').flush(null, { status: 202, statusText: 'Accepted' });
+    expect(store.stats()?.currentStreakDays).toBe(101);
+    expect(store.dashboard()?.week.pages).toBe(500);
+  });
+
+  it('keeps a direct session detail available while a concurrent first page loads', () => {
+    store.loadSessions();
+    store.loadSession('old');
+    httpMock.expectOne('/api/v1/sessions/old').flush({ ...readingSession, id: 'old' });
+    httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush(readingBook);
+    expectSessionsRequest([]);
+    expect(store.getSession('old')?.bookId).toBe(BOOK_ID);
+    expect(store.getBook(BOOK_ID)?.title).toBe(readingBook.title);
+  });
+
+  it('keeps the latest books and sessions page when older requests arrive late', () => {
+    store.loadBooks();
+    const oldBooks = httpMock.expectOne('/api/v1/books?limit=100&offset=0');
+    store.loadBooks();
+    const newBooks = httpMock.expectOne('/api/v1/books?limit=100&offset=0');
+    newBooks.flush([readingBook]);
+    oldBooks.flush([]);
+    expect(store.books()).toEqual([readingBook]);
+    store.loadSessions();
+    const oldSessions = httpMock.expectOne('/api/v1/sessions?limit=100&offset=0');
+    store.loadSessions();
+    const newSessions = httpMock.expectOne('/api/v1/sessions?limit=100&offset=0');
+    newSessions.flush([readingSession]);
+    oldSessions.flush([]);
+    expect(store.sessions()).toEqual([readingSession]);
+    expect(store.booksLoading()).toBe(false);
+    expect(store.sessionsLoading()).toBe(false);
+  });
+
+  it('loads the current book even when it is outside the first books page', () => {
+    store.loadBooks();
+    store.loadDashboard();
+    httpMock.expectOne('/api/v1/dashboard').flush({ currentStreakDays: 1, currentBook: { id: BOOK_ID, title: readingBook.title }, week: { pages: 1, minutes: 1, booksFinished: 0 } });
+    httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush(readingBook);
+    httpMock.expectOne('/api/v1/books?limit=100&offset=0').flush([{ ...readingBook, id: 'other' }]);
+    expect(store.getBook(BOOK_ID)).toEqual(readingBook);
+    expect(store.selectableBooks().some((book) => book.id === BOOK_ID)).toBe(true);
+    expect(store.currentBook()?.id).toBe(BOOK_ID);
+  });
+
+  it('loads the associated book of a cached session outside the first 100 books', () => {
+    seedBooks(Array.from({ length: 100 }, (_, index) => ({ ...readingBook, id: `other-${index}` })));
+    seedSessions([readingSession]);
+    store.loadSession(readingSession.id);
+    httpMock.expectNone(`/api/v1/sessions/${readingSession.id}`);
+    httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush(readingBook);
+    expect(store.selectableBooks().find((book) => book.id === BOOK_ID)).toEqual(readingBook);
+  });
+
+  it('retries the associated book after a direct session has been cached and its book failed', () => {
+    store.loadSession(readingSession.id);
+    httpMock.expectOne(`/api/v1/sessions/${readingSession.id}`).flush(readingSession);
+    flushServerError(httpMock, `/api/v1/books/${BOOK_ID}`);
+    expect(store.booksError()).toContain('Não foi possível abrir o livro');
+    store.loadSession(readingSession.id);
+    httpMock.expectNone(`/api/v1/sessions/${readingSession.id}`);
+    httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush(readingBook);
+    expect(store.booksError()).toBeNull();
+    expect(store.selectableBooks().find((book) => book.id === BOOK_ID)).toEqual(readingBook);
+  });
+
 });

@@ -1,18 +1,28 @@
 # Public edge for Folhea. API and authentication stay on the private Docker
 # network; only Caddy publishes ports to the host.
 
+{
+	# The explicit HTTP site preserves the configured public HTTPS port.
+	auto_https disable_redirects
+}
+
 {$PUBLIC_DOMAIN} {
 	encode zstd gzip
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; script-src 'self'; style-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
 		-Server
 	}
+
+	# Keycloak owns its login theme's CSP. Do not replace it with Angular's
+	# script policy: the provider renders its own inline theme handlers.
+	# All Folhea pages/API retain the strict same-origin script policy.
+	@application-policy not path /realms/folhea/protocol/openid-connect/auth /realms/folhea/protocol/openid-connect/logout /realms/folhea/login-actions/* /realms/folhea/broker/google/* /resources/*
+	header @application-policy Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests"
 
 	# A small edge health endpoint lets Docker verify Caddy independently of
 	# the backend. Backend readiness is checked on the backend container.
@@ -30,63 +40,61 @@
 	request_body @api {
 		max_size 64KB
 	}
-	reverse_proxy @api {$API_UPSTREAM} {
-		# Caddy is the only trusted edge proxy. Strip client-supplied forwarding
-		# headers before setting the canonical values consumed by Quarkus.
-		header_up -Forwarded
-		header_up -X-Forwarded-For
-		header_up -X-Forwarded-Host
-		header_up -X-Forwarded-Port
-		header_up -X-Forwarded-Proto
-		header_up -X-Forwarded-Ssl
-		header_up -X-Forwarded-Prefix
-		header_up X-Forwarded-For {remote_host}
-		header_up X-Forwarded-Host {host}
-		header_up X-Forwarded-Proto {scheme}
+	handle @api {
+		reverse_proxy {$API_UPSTREAM} {
+			# Caddy is the only trusted edge proxy. Strip client-supplied forwarding
+			# headers, replacing canonical values consumed by Quarkus.
+			# Never delete a header also set here: Caddy applies deletes last.
+			header_up -Forwarded
+			header_up -X-Forwarded-Port
+			header_up -X-Forwarded-Ssl
+			header_up -X-Forwarded-Prefix
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Host {hostport}
+			header_up X-Forwarded-Proto {scheme}
+		}
 	}
 
 	# The BFF owns the OIDC start/callback/logout endpoints. There is no route
 	# to the Keycloak admin console or to its internal realm-management API.
 	@auth path /auth/*
 	header @auth Cache-Control "no-store"
-	reverse_proxy @auth {$API_UPSTREAM} {
-		header_up -Forwarded
-		header_up -X-Forwarded-For
-		header_up -X-Forwarded-Host
-		header_up -X-Forwarded-Port
-		header_up -X-Forwarded-Proto
-		header_up -X-Forwarded-Ssl
-		header_up -X-Forwarded-Prefix
-		header_up X-Forwarded-For {remote_host}
-		header_up X-Forwarded-Host {host}
-		header_up X-Forwarded-Proto {scheme}
+	handle @auth {
+		reverse_proxy {$API_UPSTREAM} {
+			header_up -Forwarded
+			header_up -X-Forwarded-Port
+			header_up -X-Forwarded-Ssl
+			header_up -X-Forwarded-Prefix
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Host {hostport}
+			header_up X-Forwarded-Proto {scheme}
+		}
 	}
 
 	# Keycloak is private by default. The browser only needs the authorization
 	# challenge, login actions, RP-initiated logout and static login resources;
 	# token, userinfo, introspection, certs, admin and realm-management paths
 	# remain unreachable from the public edge.
-	@oidc-public path /realms/folhea/protocol/openid-connect/auth /realms/folhea/protocol/openid-connect/logout /realms/folhea/login-actions/* /resources/*
-	reverse_proxy @oidc-public keycloak:8080 {
-		header_up -Forwarded
-		header_up -X-Forwarded-For
-		header_up -X-Forwarded-Host
-		header_up -X-Forwarded-Port
-		header_up -X-Forwarded-Proto
-		header_up -X-Forwarded-Ssl
-		header_up X-Forwarded-For {remote_host}
-		header_up X-Forwarded-Host {host}
-		header_up X-Forwarded-Proto {scheme}
+	@oidc-public path /realms/folhea/protocol/openid-connect/auth /realms/folhea/protocol/openid-connect/logout /realms/folhea/login-actions/* /realms/folhea/broker/google/* /resources/*
+	handle @oidc-public {
+		reverse_proxy keycloak:8080 {
+			header_up -Forwarded
+			header_up -X-Forwarded-Port
+			header_up -X-Forwarded-Ssl
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Host {hostport}
+			header_up X-Forwarded-Proto {scheme}
+		}
 	}
 
 	root * {$STATIC_ROOT}
 	# The authenticated area is client-rendered. It needs the application shell
 	# for deep links, while keeping the whole area out of search indexes.
-	@private path /app /app/*
+	@private path /app /app/* /entrar /cadastro
 	handle @private {
 		header X-Robots-Tag "noindex, nofollow"
 		header Cache-Control "no-store"
-		rewrite * /index.html
+		rewrite * /index.csr.html
 		file_server
 	}
 
@@ -94,12 +102,33 @@
 	# document before the request path itself: resolving /route to
 	# /route/index.html avoids file_server's directory redirect while an
 	# unknown URL remains a real 404 instead of a soft 404 home page.
-	try_files {path}/index.html {path}
-	file_server
+	# Revalidate HTML and PWA version metadata; fingerprinted bundles are immutable.
+	@versioned path_regexp versioned [.-]([A-Z0-9]{8,}|[a-f0-9]{8,})\.(js|css)$
+	header @versioned Cache-Control "public, max-age=31536000, immutable"
+	@pwa path /ngsw.json /ngsw-worker.js /safety-worker.js /manifest.webmanifest
+	header @pwa Cache-Control "no-cache"
+	# Keep the public rewrite inside the fallback handler. A global try_files
+	# runs before handle and would turn /entrar into /entrar/index.html before
+	# the private matcher can apply its CSR shell and privacy headers.
+	handle {
+		try_files {path}/index.html {path}
+		file_server
+	}
 
 	# Keep the branded 404 document while preserving the error status.
 	handle_errors {
 		rewrite * /404.html
 		file_server
+	}
+}
+
+# Preserve the public HTTPS port on local stacks and retain a plain HTTP health check.
+{$HTTP_SITE_ADDRESS:http://:81} {
+	@health path /healthz
+	handle @health {
+		respond 200
+	}
+	handle {
+		redir {$OIDC_PUBLIC_ORIGIN}{uri} 308
 	}
 }

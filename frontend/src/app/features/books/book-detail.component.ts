@@ -1,6 +1,8 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject } from '@angular/core';
-import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import { FormControl, NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Observable } from 'rxjs';
+import { notFutureDateValidator } from '../reading/reading-session.validator';
 import { DashboardStore } from '../../core/state/dashboard.store';
 
 @Component({
@@ -9,21 +11,22 @@ import { DashboardStore } from '../../core/state/dashboard.store';
   imports: [ReactiveFormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (store.booksLoading() && !book()) {
+    @if (store.booksError(); as error) { <div class="alert alert-error" role="alert">{{ error }} <button type="button" class="dismiss" (click)="retry()">Tentar novamente</button></div> }
+    @if ((store.booksLoading() || store.bookDetailLoading()) && !book()) {
       <div class="loading surface" role="status">Carregando livro…</div>
     } @else if (book(); as currentBook) {
       <div class="detail-page">
         <a routerLink="/app/livros" class="back-link">← Seus livros</a>
         <div class="detail-heading"><div class="book-thumb" aria-hidden="true">{{ currentBook.title[0] }}</div><div><p class="eyebrow">Livro</p><h1>{{ currentBook.title }}</h1><p class="muted">{{ currentBook.status === 'FINISHED' ? 'Finalizado' : 'Lendo agora' }}</p></div></div>
-        <form class="surface form-card" [formGroup]="form" (ngSubmit)="save()" novalidate>
-          <label class="field" for="detail-book-title">Título<input id="detail-book-title" formControlName="title" [attr.aria-invalid]="title.invalid && title.touched" [attr.aria-describedby]="title.invalid && title.touched ? 'detail-book-title-error' : null" />@if (title.invalid && title.touched) { <span id="detail-book-title-error" class="field-error">Dê um título ao seu livro.</span> }</label>
-          <label class="field" for="detail-book-author">Autor <span class="optional">opcional</span><input id="detail-book-author" formControlName="author" /></label>
-          <button class="button button-primary" type="submit">Salvar alterações</button>
+        @if (message()) { <p class="alert alert-success" role="status">{{ message() }}</p> }<form class="surface form-card" [formGroup]="form" (ngSubmit)="save()" novalidate>
+          <div class="field"><label for="detail-book-title">Título</label><input id="detail-book-title" formControlName="title" maxlength="500" [attr.aria-invalid]="title.invalid && title.touched" [attr.aria-describedby]="title.invalid && title.touched ? 'detail-book-title-error' : null" />@if (title.invalid && title.touched) { <span id="detail-book-title-error" class="field-error">Dê um título ao seu livro.</span> }</div>
+          <div class="field"><label for="detail-book-author">Autor <span class="optional">opcional</span></label><input id="detail-book-author" formControlName="author" maxlength="500" /></div>
+          <button class="button button-primary" type="submit" [disabled]="busy()">{{ busy() ? 'Salvando…' : 'Salvar alterações' }}</button>
         </form>
         <section class="actions surface" aria-labelledby="book-actions-title">
           <h2 id="book-actions-title">Ações do livro</h2>
-          @if (currentBook.status === 'READING') { <button class="button button-secondary" type="button" (click)="finish()">Marcar como finalizado</button> } @else { <button class="button button-secondary" type="button" (click)="reopen()">Reabrir livro</button> }
-          <button class="button button-danger" type="button" (click)="remove()">Excluir livro</button>
+          @if (currentBook.status === 'READING') { <div class="field"><label for="finished-date">Data da finalização</label><input id="finished-date" type="date" [max]="store.today()" [formControl]="finishedOn" [attr.aria-invalid]="finishedOn.invalid && finishedOn.touched" />@if (finishedOn.invalid && finishedOn.touched) { <span class="field-error" role="alert">Informe uma data válida até hoje.</span> }</div><button class="button button-secondary" type="button" (click)="finish()" [disabled]="busy()">Marcar como finalizado</button> } @else { <button class="button button-secondary" type="button" (click)="reopen()" [disabled]="busy()">Reabrir livro</button> }
+          <button class="button button-danger" type="button" (click)="remove()" [disabled]="busy()">Excluir livro</button>
         </section>
       </div>
     } @else {
@@ -41,31 +44,52 @@ export class BookDetailComponent {
   readonly store = inject(DashboardStore);
   readonly id = this.route.snapshot.paramMap.get('id');
   readonly book = computed(() => this.store.getBook(this.id));
-  readonly form = this.fb.group({ title: ['', Validators.required], author: [''] });
+  readonly busy = signal(false);
+  readonly message = signal<string | null>(null);
+  readonly finishedOn = new FormControl(this.store.today(), { nonNullable: true, validators: [Validators.required, notFutureDateValidator(() => this.store.today())] });
+  readonly form = this.fb.group({ title: ['', [Validators.required, Validators.maxLength(500)]], author: ['', Validators.maxLength(500)] });
   get title() { return this.form.controls.title; }
 
   constructor() {
+    this.retry();
     effect(() => {
       const current = this.book();
       if (current && this.form.pristine) this.form.setValue({ title: current.title, author: current.author ?? '' });
     });
   }
 
+  retry(): void { if (this.id) this.store.loadBook(this.id); }
+
   save(): void {
+    if (this.busy()) return;
     this.form.markAllAsTouched();
     const title = this.title.value.trim();
     if (!title) { this.title.setErrors({ required: true }); return; }
     if (this.form.invalid || !this.id) return;
-    this.store.updateBook(this.id, { title, author: this.form.controls.author.value.trim() });
+    this.run(this.store.updateBook(this.id, { title, author: this.form.controls.author.value.trim() }), 'Alterações salvas.');
   }
 
-  finish(): void { if (this.id) this.store.finishBook(this.id); }
-  reopen(): void { if (this.id) this.store.reopenBook(this.id); }
+  finish(): void {
+    this.finishedOn.markAsTouched();
+    if (this.id && this.finishedOn.valid) this.run(this.store.finishBook(this.id, this.finishedOn.value), 'Livro finalizado.');
+  }
+  reopen(): void { if (this.id) this.run(this.store.reopenBook(this.id), 'Livro reaberto.'); }
   remove(): void {
-    if (!this.id || !window.confirm('Excluir este livro e suas sessões?')) return;
+    if (this.busy() || !this.id || !window.confirm('Excluir este livro e suas sessões?')) return;
+    this.busy.set(true);
     this.store.deleteBook(this.id).subscribe({
       next: () => void this.router.navigate(['/app/livros']),
-      error: () => undefined
+      error: () => this.busy.set(false)
+    });
+  }
+
+  private run(action: Observable<unknown>, success: string): void {
+    if (this.busy()) return;
+    this.busy.set(true);
+    this.message.set(null);
+    action.subscribe({
+      next: () => { this.busy.set(false); this.message.set(success); this.form.markAsPristine(); },
+      error: () => this.busy.set(false)
     });
   }
 }

@@ -2,10 +2,11 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api-client.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { PwaService } from '../../core/services/pwa.service';
+import { DashboardStore } from '../../core/state/dashboard.store';
 import { SettingsComponent } from './settings.component';
 
 describe('SettingsComponent', () => {
@@ -13,6 +14,7 @@ describe('SettingsComponent', () => {
   let authDeleteAccount: ReturnType<typeof vi.fn>;
   let signOut: ReturnType<typeof vi.fn>;
 
+  afterEach(() => { TestBed.resetTestingModule(); vi.restoreAllMocks(); });
   beforeEach(() => {
     exportMe = vi.fn(() => of({
       user: { id: 'user-1', email: 'reader@example.com', timezone: 'America/Sao_Paulo' },
@@ -37,6 +39,8 @@ describe('SettingsComponent', () => {
       };
     }
 
+    vi.spyOn(HTMLDialogElement.prototype, 'showModal').mockImplementation(function(this: HTMLDialogElement) { this.open = true; });
+    vi.spyOn(HTMLDialogElement.prototype, 'close').mockImplementation(function(this: HTMLDialogElement) { this.open = false; });
     TestBed.configureTestingModule({
       imports: [SettingsComponent],
       providers: [
@@ -45,8 +49,10 @@ describe('SettingsComponent', () => {
         { provide: AuthService, useValue: {
           user: signal({ email: 'reader@example.com', timezone: 'America/Sao_Paulo' }),
           signOut,
+          updateTimezone: vi.fn(async () => undefined),
           deleteAccount: authDeleteAccount
         } },
+        { provide: DashboardStore, useValue: { reload: vi.fn() } },
         { provide: PwaService, useValue: { online: signal(true) } }
       ]
     });
@@ -104,4 +110,29 @@ describe('SettingsComponent', () => {
 
     expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain('Não foi possível exportar');
   });
+  it('preserves the session and keeps the dialog retryable when IdP deletion fails', async () => {
+    authDeleteAccount.mockRejectedValueOnce(new Error('IdP indisponível'));
+    const fixture = TestBed.createComponent(SettingsComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openDeleteDialog();
+    fixture.componentInstance.deleteConfirmed.set(true);
+    await fixture.componentInstance.confirmDelete(new Event('submit'));
+    fixture.detectChanges();
+    expect(signOut).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.deleting()).toBe(false);
+    expect(fixture.nativeElement.querySelector('dialog').open).toBe(true);
+    expect(fixture.nativeElement.querySelector('dialog [role="alert"]').textContent).toContain('Seus dados foram preservados');
+    expect(fixture.nativeElement.querySelector('dialog button[type="submit"]').disabled).toBe(false);
+  });
+
+  it('updates timezone and refreshes metrics after confirmation', async () => {
+    const fixture = TestBed.createComponent(SettingsComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.selectedTimezone.set('Pacific/Auckland');
+    await fixture.componentInstance.saveTimezone(new Event('submit'));
+    expect(TestBed.inject(AuthService).updateTimezone).toHaveBeenCalledWith('Pacific/Auckland');
+    expect(TestBed.inject(DashboardStore).reload).toHaveBeenCalledOnce();
+    expect(fixture.componentInstance.timezoneMessage()).toContain('atualizado');
+  });
+
 });

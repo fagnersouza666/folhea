@@ -1,57 +1,31 @@
 #!/usr/bin/env bash
-
 set -Eeuo pipefail
-IFS=$'\n\t'
-
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$ROOT/infra/keycloak/render-realm.sh"
-WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/folhea-realm-test.XXXXXX")"
-
-cleanup() {
-  rm -rf -- "$WORKDIR"
-}
-trap cleanup EXIT
-
-fail() {
-  printf 'not ok - %s\n' "$*" >&2
-  exit 1
-}
-
-pass() {
-  printf 'ok - %s\n' "$*"
-}
-
-render() {
-  local template=$1 secret=$2
-  local template_path="$WORKDIR/template.json"
-  local output_path="$WORKDIR/out.json"
-  printf '%s' "$template" > "$template_path"
-  FOLHEA_REALM_RENDER_ONLY=1 \
-    KEYCLOAK_REALM_TEMPLATE="$template_path" \
-    KEYCLOAK_REALM_OUTPUT="$output_path" \
-    OIDC_CLIENT_SECRET="$secret" \
-    bash "$SCRIPT"
-  cat "$output_path"
-}
-
-expect_eq() {
-  local actual=$1 expected=$2 label=$3
-  [[ "$actual" == "$expected" ]] || fail "$label: expected $(printf %q "$expected"), got $(printf %q "$actual")"
-  pass "$label"
-}
-
-expect_eq "$(render '{"secret":"${OIDC_CLIENT_SECRET}"}' 'plain-secret')" \
-  '{"secret":"plain-secret"}' \
-  'copies a secret without special characters'
-
-expect_eq "$(render '{"secret":"${OIDC_CLIENT_SECRET}"}' 'abc/def&ghi\jkl')" \
-  '{"secret":"abc/def&ghi\jkl"}' \
-  'keeps slash, ampersand and backslash in the secret'
-
-expect_eq "$(render '{"secret":"${OIDC_CLIENT_SECRET}"}' 'a$(id)&b/c\d')" \
-  '{"secret":"a$(id)&b/c\d"}' \
-  'copies command-like characters without expanding them'
-
-expect_eq "$(render 'no-placeholder' 'abc&def')" \
-  'no-placeholder' \
-  'leaves templates without the placeholder unchanged'
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+node --input-type=module - "$ROOT" <<'JS'
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+const root=process.argv[2];
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'folhea-realm-'));
+try {
+  const secret='a$(id)&b/c\\d"quoted\nnewline\ttab';
+  const env={...process.env,OIDC_CLIENT_SECRET:secret,KEYCLOAK_ADMIN_CLIENT_SECRET:secret,OIDC_PUBLIC_ORIGIN:'https://localhost:9443',KEYCLOAK_REALM_OUTPUT:path.join(dir,'out.json'),FOLHEA_REALM_RENDER_ONLY:'1'};
+  for (const profile of ['dev','prod']) {
+    execFileSync('bash',[path.join(root,'infra/keycloak/render-realm.sh')],{env:{...env,KEYCLOAK_REALM_TEMPLATE:path.join(root,`infra/keycloak/folhea-realm.${profile}.template.json`)}});
+    const realm=JSON.parse(fs.readFileSync(env.KEYCLOAK_REALM_OUTPUT,'utf8'));
+    const bff=realm.clients.find(c=>c.clientId==='folhea-api');
+    const admin=realm.clients.find(c=>c.clientId==='folhea-registration');
+    assert.equal(bff.secret,secret);assert.equal(admin.secret,secret);
+    assert.ok(bff.redirectUris.includes(env.OIDC_PUBLIC_ORIGIN+'/auth/callback'));
+    assert.equal(admin.fullScopeAllowed,false);assert.equal(admin.standardFlowEnabled,false);
+    assert.deepEqual(realm.users[0].clientRoles['realm-management'],['manage-users']);
+    assert.equal(fs.statSync(env.KEYCLOAK_REALM_OUTPUT).mode&0o777,0o600);
+    console.log('ok - '+profile+' realm has valid JSON, literal secrets and scoped registration client');
+  }
+  assert.throws(()=>execFileSync('bash',[path.join(root,'infra/keycloak/render-realm.sh')],{env:{...env,OIDC_CLIENT_SECRET:''},stdio:'pipe'}));
+  assert.throws(()=>execFileSync('bash',[path.join(root,'infra/keycloak/render-realm.sh')],{env:{...env,OIDC_PUBLIC_ORIGIN:'https://example.com/evil'},stdio:'pipe'}));
+  console.log('ok - invalid origin and missing secrets fail without leaking values');
+} finally {fs.rmSync(dir,{recursive:true,force:true});}
+JS

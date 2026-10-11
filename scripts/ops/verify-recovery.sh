@@ -37,7 +37,7 @@ POSTGRES_SERVICE="${POSTGRES_SERVICE:-postgres}"
 BACKEND_SERVICE="${BACKEND_SERVICE:-backend}"
 DB_NAME="${DB_NAME:-folhea}"
 DB_USERNAME="${DB_USERNAME:-folhea}"
-RECOVERY_VERIFY_SQL="${RECOVERY_VERIFY_SQL:-SELECT CASE WHEN to_regclass('public.flyway_schema_history') IS NOT NULL THEN 1 ELSE 0 END;}"
+RECOVERY_VERIFY_SQL="${RECOVERY_VERIFY_SQL:-SELECT CASE WHEN EXISTS (SELECT 1 FROM public.flyway_schema_history WHERE version = '7' AND success) AND to_regclass('public.account_deletion') IS NOT NULL THEN 1 ELSE 0 END;}"
 RECOVERY_EXPECTED_OUTPUT="${RECOVERY_EXPECTED_OUTPUT:-1}"
 BACKEND_HEALTH_URL="${BACKEND_HEALTH_URL:-http://127.0.0.1:8080/q/health/ready}"
 RECOVERY_REPORT_FILE="${RECOVERY_REPORT_FILE:-}"
@@ -140,7 +140,7 @@ if ! query_output="$("${COMPOSE[@]}" exec -T "$POSTGRES_SERVICE" psql \
   --no-align \
   --username "$DB_USERNAME" \
   --dbname "$DB_NAME" \
-  --command "$RECOVERY_VERIFY_SQL" 2>/dev/null)"; then
+  --command "BEGIN READ ONLY; $RECOVERY_VERIFY_SQL COMMIT;" 2>/dev/null)"; then
   ops_die "recovery SQL assertion failed"
 fi
 

@@ -117,18 +117,18 @@ restore_script="$SCRIPT_DIR/restore-postgres.sh"
 verify_script="$SCRIPT_DIR/verify-recovery.sh"
 
 mkdir -p "$BACKUP_DIR"
-printf 'old dump\n' > "$BACKUP_DIR/folhea-20000101T000000Z.dump"
-printf 'old checksum\n' > "$BACKUP_DIR/folhea-20000101T000000Z.dump.sha256"
-touch -d '10 days ago' "$BACKUP_DIR/folhea-20000101T000000Z.dump" "$BACKUP_DIR/folhea-20000101T000000Z.dump.sha256"
+printf 'old dump\n' > "$BACKUP_DIR/folhea-folhea-20000101T000000Z.dump"
+printf 'old checksum\n' > "$BACKUP_DIR/folhea-folhea-20000101T000000Z.dump.sha256"
+touch -d '10 days ago' "$BACKUP_DIR/folhea-folhea-20000101T000000Z.dump" "$BACKUP_DIR/folhea-folhea-20000101T000000Z.dump.sha256"
 
 bash "$backup_script" --retention-days 7
-artifact="$(find "$BACKUP_DIR" -maxdepth 1 -name 'folhea-*.dump' -not -name 'folhea-20000101T000000Z.dump' -print -quit)"
+artifact="$(find "$BACKUP_DIR" -maxdepth 1 -name 'folhea-*.dump' -not -name 'folhea-folhea-20000101T000000Z.dump' -print -quit)"
 assert_file "$artifact"
 assert_file "$artifact.sha256"
 assert_file "$TEST_ROOT/external/$(basename -- "$artifact")"
 assert_file "$TEST_ROOT/external/$(basename -- "$artifact").sha256"
 [[ "$(stat -c '%a' "$artifact")" == 600 ]] || fail 'backup artifact is not private'
-[[ ! -e "$BACKUP_DIR/folhea-20000101T000000Z.dump" ]] || fail 'retention did not remove old dump'
+[[ ! -e "$BACKUP_DIR/folhea-folhea-20000101T000000Z.dump" ]] || fail 'retention did not remove old dump'
 grep -Fq 'pg_dump' "$FAKE_DOCKER_LOG" || fail 'backup did not invoke pg_dump'
 if grep -Fq 'test-only-placeholder' "$FAKE_DOCKER_LOG"; then
   fail 'backup command log contains a password'

@@ -1,0 +1,11 @@
+[Unit]
+Description=Backup diario Folhea (retencao minima 7 dias)
+
+[Timer]
+OnCalendar=*-*-* 02:17:00
+Persistent=true
+RandomizedDelaySec=5m
+Unit=folhea-backup.service
+
+[Install]
+WantedBy=timers.target

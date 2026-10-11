@@ -17,3 +17,7 @@ backups/
 contract-report.txt
 seo-report/
 .cursor/debug-02e8c1.log
+
+# Estado privado e certificados da stack local.
+.local/
+.env-*

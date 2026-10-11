@@ -9,18 +9,22 @@ const reportPath = resolve(process.cwd(), process.argv[2] ?? 'contract-report.tx
 const failures = [];
 
 const operations = [
+  ['POST', '/api/v1/registration', 'RegistrationResource.java', '@Path("/registration")'],
   ['GET', '/api/v1/me', 'UserResource.java', '@Path("/api/v1/me")'],
+  ['PATCH', '/api/v1/me', 'UserResource.java', '@Path("/api/v1/me")'],
   ['GET', '/api/v1/me/export', 'UserResource.java', '@Path("/export")'],
   ['DELETE', '/api/v1/me', 'UserResource.java', '@Path("/api/v1/me")'],
   ['GET', '/api/v1/dashboard', 'StatisticsResource.java', '@Path("/api/v1")'],
   ['GET', '/api/v1/stats', 'StatisticsResource.java', '@Path("/api/v1")'],
   ['GET', '/api/v1/books', 'BookResource.java', '@Path("/api/v1/books")'],
   ['POST', '/api/v1/books', 'BookResource.java', '@Path("/api/v1/books")'],
+  ['GET', '/api/v1/books/{id}', 'BookResource.java', '@Path("/{id}")'],
   ['PATCH', '/api/v1/books/{id}', 'BookResource.java', '@Path("/{id}")'],
   ['DELETE', '/api/v1/books/{id}', 'BookResource.java', '@Path("/{id}")'],
   ['POST', '/api/v1/books/{id}/finish', 'BookResource.java', '@Path("/{id}/finish")'],
   ['DELETE', '/api/v1/books/{id}/finish', 'BookResource.java', '@Path("/{id}/finish")'],
   ['GET', '/api/v1/sessions', 'ReadingSessionResource.java', '@Path("/api/v1/sessions")'],
+  ['GET', '/api/v1/sessions/{id}', 'ReadingSessionResource.java', '@Path("/{id}")'],
   ['POST', '/api/v1/sessions', 'ReadingSessionResource.java', '@Path("/api/v1/sessions")'],
   ['PATCH', '/api/v1/sessions/{id}', 'ReadingSessionResource.java', '@Path("/{id}")'],
   ['DELETE', '/api/v1/sessions/{id}', 'ReadingSessionResource.java', '@Path("/{id}")']
@@ -29,27 +33,22 @@ const operations = [
 const frontendClient = readFileSafe(resolve(repoRoot, 'frontend/src/app/core/api/api-client.service.ts'));
 const backendSources = new Map();
 for (const [, , resource] of operations) {
-  if (!backendSources.has(resource)) backendSources.set(resource, readFileSafe(resolve(repoRoot, 'backend/src/main/java/com/folhea', resource === 'UserResource.java' ? 'user' : resource === 'StatisticsResource.java' ? 'statistics' : resource === 'BookResource.java' ? 'book' : 'reading', resource)));
+  if (!backendSources.has(resource)) backendSources.set(resource, readFileSafe(resolve(repoRoot, 'backend/src/main/java/com/folhea', ['UserResource.java', 'RegistrationResource.java'].includes(resource) ? 'user' : resource === 'StatisticsResource.java' ? 'statistics' : resource === 'BookResource.java' ? 'book' : 'reading', resource)));
 }
 
 function readFileSafe(path) {
   return existsSync(path) ? readFileSync(path, 'utf8') : '';
 }
 
-function clientPathVariants(path) {
-  const normalizedPath = path.replace('/api/v1', '');
-  return [
-    normalizedPath.replaceAll('{id}', '${id}'),
-    normalizedPath.replaceAll('{id}', '${encodeURIComponent(id)}')
-  ];
-}
-
+// Pair HTTP methods with their actual URL argument instead of allowing a GET
+// anywhere in the file to accidentally satisfy a missing POST on another path.
+const clientOperations = new Set([...frontendClient.matchAll(/this\.http\.(get|post|patch|delete)\s*<[^\n]+?>\s*\(\s*`([^`]+)`/g)].map((match) => {
+  const url = match[2].replace('${this.baseUrl}', '/api/v1')
+    .replaceAll('${encodeURIComponent(id)}', '{id}').replaceAll('${id}', '{id}');
+  return `${match[1].toUpperCase()} ${url}`;
+}));
 for (const [method, path, resource, backendMarker] of operations) {
-  const clientNeedle = `this.http.${method.toLowerCase()}<`;
-  const hasClientPath = clientPathVariants(path).some((variant) => frontendClient.includes(variant));
-  if (!hasClientPath || !frontendClient.includes(clientNeedle)) {
-    failures.push(`frontend client is missing ${method} ${path}`);
-  }
+  if (!clientOperations.has(`${method} ${path}`)) failures.push(`frontend client is missing ${method} ${path}`);
   const source = backendSources.get(resource) ?? '';
   if (!source || !source.includes(`@${method}`) || !source.includes(backendMarker)) {
     failures.push(`backend resource is missing ${method} ${path}`);

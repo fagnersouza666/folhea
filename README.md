@@ -1,6 +1,6 @@
 # Folhea
 
-O Folhea é um rastreador de hábito de leitura. O backend é um monolito Java 25 / Quarkus 3.33 LTS com PostgreSQL e Flyway.
+O Folhea é um rastreador de hábito de leitura. O backend é um monolito Java 27 / Quarkus 3.40.1 LTS com PostgreSQL e Flyway.
 
 ## Versão do produto
 
@@ -11,15 +11,14 @@ Frontend (`frontend/package.json`), backend (`backend/pom.xml`) e OpenAPI
 chore, teste ou infra sem mudança de produto não incrementam. Detalhe em
 `.cursor/rules/versionamento.mdc`.
 
-Versão atual: **0.3.3**
+Versão atual: **0.4.0**
 
 ## Backend
 
 Crie um arquivo de ambiente local e suba a stack completa:
 
 ```bash
-cp .env.example .env
-docker compose --env-file .env up -d --build
+./scripts/local-stack.sh up
 ```
 
 Para produção, use o overlay `docker-compose.prod.yml` (Keycloak
@@ -29,7 +28,14 @@ Para produção, use o overlay `docker-compose.prod.yml` (Keycloak
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d --build
 ```
 
-A borda pública fica em `https://localhost:8443` (talvez seja preciso
+O comando cria `.env` com segredos aleatórios somente se ainda não existir e
+preserva usuários/volumes em execuções posteriores. A stack usa o projeto
+`folhea-local`, uma rede própria e portas 9080/9443, sem afetar a infraestrutura
+de desenvolvimento existente em 5433/8180. Crie a conta na tela **Criar conta**
+e entre com e-mail/senha. Para interromper sem apagar dados, execute
+`./scripts/local-stack.sh stop`; para retomar, `./scripts/local-stack.sh start`.
+
+A borda pública fica em `https://localhost:9443` (talvez seja preciso
 confiar uma vez no certificado local do Caddy). Para rodar só o backend
 pelo Maven, suba o PostgreSQL e o Keycloak com
 `docker compose --env-file .env up -d postgres keycloak` e depois execute:
@@ -60,6 +66,11 @@ O perfil `%dev` não define `folhea.clock.fixed-instant`; o relógio da aplicaç
 é o UTC do sistema. Só o perfil `%test` fixa o instante para testes
 determinísticos.
 
+A CA pública local pode ser extraída com `./scripts/local-stack.sh certificate`
+e importada no navegador. Não use as credenciais do `.env.example` como
+segredos reais. Google e recuperação de senha por e-mail exigem OAuth e SMTP
+externos; `./scripts/ops/configure-keycloak.sh diagnose` mostra o que falta.
+
 A raiz da API é `/api/v1`; o OpenAPI fica em `/api/openapi` em dev/test (em
 produção o spec é desligado no Quarkus e bloqueado no Caddy). Configure Redis,
 OIDC e banco por variáveis de ambiente, sem gravar segredos no repositório.
@@ -85,17 +96,18 @@ abaixo são o contrato usado pelo CI; execute-os antes de abrir um pull request.
 
 ### Pré-requisitos
 
-- Node.js 26.11.1 e npm para a toolchain usada no CI e no Docker;
-- JDK 27 e Docker (necessário para Dev Services/Testcontainers);
+O frontend usa Angular 22.2.2 e o builder `@angular/build` 22.2.2. As dependências
+de build são fixadas no lockfile validado; a migração remove a cadeia antiga de
+build, e `proxy-addr` 2.0.8 corrige a versão vulnerável detectada pelo Trivy.
+
+- Node.js26.11.1 estável e npm (engines Angular: `^22.22.3 || ^24.15.0 || >=26.0.0`);
+- Java 27 estável e Docker (necessário para Dev Services/Testcontainers);
 - Docker Compose, quando for necessário executar a stack completa.
 
-O CI e o Docker usam Temurin 27. Ajuste `JAVA_HOME` para o JDK 27 antes de
-`./mvnw`; o `maven.compiler.release` do projeto determina a versão do bytecode.
-Esta preparação da toolchain preserva a versão do produto e os gates existentes.
-
-O frontend usa Angular 22.2.2 e o builder `@angular/build` 22.2.2. As dependências
-de build são fixadas no lockfile; essa preparação remove as versões vulneráveis
-do Angular SSR/router e usa `proxy-addr` 2.0.8, sem antecipar as mudanças de UI.
+Se `java -version` mostrar uma versão menor que27, o Maven usa o JDK errado.
+Exporte `JAVA_HOME` para uma instalação do JDK27 antes de `./mvnw`.
+O Docker e o CI usam Temurin27+35 GA. O PRD fonte mantém a referência Java25
+LTS; o target27 segue a política do projeto de usar a última versão estável.
 
 ### Frontend
 
@@ -110,9 +122,8 @@ O `ng serve` na porta 4200 encaminha `/api` e `/auth` ao Quarkus, como o Caddy
 faz na borda pública, e envia `X-Forwarded-Host: localhost:4200` para o
 callback OIDC voltar à SPA. A tela de entrar é `/entrar`; `/auth/login` inicia o
 fluxo OIDC no BFF e não é rota Angular. O perfil `%dev` fala com o Keycloak em
-`http://localhost:8180` (porta publicada pelo override local). Crie um usuário
-no realm `folhea` pelo console em `http://localhost:8180` (credenciais
-`KEYCLOAK_ADMIN_*` do `.env`).
+`http://localhost:8180` (porta publicada pelo override local). Use o cadastro
+público em `/cadastro`: o BFF provisiona a identidade no realm `folhea` usando o cliente técnico, sem intervenção administrativa.
 
 ```bash
 cd frontend
@@ -145,8 +156,7 @@ os testes que usam Dev Services ou Testcontainers.
 
 ### Fluxos críticos
 
-Com o frontend e o backend disponíveis localmente, instale os navegadores e
-execute os testes Playwright:
+Instale os navegadores e execute os testes Playwright de regressão da UI:
 
 ```bash
 cd frontend
@@ -155,10 +165,13 @@ npx playwright install --with-deps chromium
 npm run e2e:critical
 ```
 
-Os fluxos cobertos são landing, login, cadastro de livro, registro/edição/
-exclusão de leitura, finalização, estatísticas e isolamento básico entre
-usuários. As regras do streak também devem cobrir hoje, ontem, sequência,
-quebra, múltiplas sessões no dia, timezone, edição e exclusão.
+`e2e:critical` usa API, BFF e Web Share simulados. Cobre landing, login,
+cadastro de livro, registro/edição/exclusão de leitura, finalização,
+estatísticas e respostas de isolamento; não comprova autenticação nem banco
+reais. `e2e:integrated` é opt-in e usa a stack HTTPS9443 com credenciais de
+uma conta local de teste. O [aceite com stack real](docs/quality-and-release.md#aceite-com-stack-real)
+cria duas contas pelo cadastro, passa pelo Keycloak/BFF e comprova ownership404,
+CSRF, métricas, exportação, exclusão e logout sem interceptar APIs.
 
 ### Docker
 
@@ -178,12 +191,9 @@ completos, `e2e:critical`, a configuração e os fixtures/specs críticos; Docke
 exige `infra/Dockerfile`, Caddy, Compose, os templates de realm, o validador
 OIDC e os insumos de build do frontend/backend.
 
-Um componente ausente ou ainda parcial tem seu job marcado como `skipped`, e o
-merge-gate aceita esse resultado somente para o componente que foi detectado
-como indisponível. Quando o contrato existe, a execução completa continua
-obrigatória e qualquer falha ou cancelamento deixa o gate vermelho. Assim,
-branches que entregam o monorepo por etapas não falham por diretórios ausentes,
-sem ocultar falhas de componentes disponíveis. Os gates completos são:
+O monorepo v1 exige todos os componentes. Um contrato removido ou parcial
+faz a detecção falhar; uma falha ou cancelamento em qualquer gate bloqueia
+o merge. Os gates completos são:
 
 - frontend lint, build de produção, build SSG e Vitest;
 - backend build e testes;
@@ -208,3 +218,6 @@ pull request, exigir `CI / merge-gate`, exigir branch atualizada e bloquear
 force-push. Não permita bypass para merges normais. O workflow publica logs,
 relatórios de teste, relatório Playwright e artefato SEO por 14 dias; esses
 artefatos são a evidência da aprovação.
+
+Build frontend/CI: Node26.11.1 estável e TypeScript6.0.3, compatíveis com
+Angular22.2.2. O runtime do frontend é estático no Caddy e não contém Node.

@@ -30,6 +30,9 @@ const createStore = (overrides: Record<string, unknown> = {}) => {
     books: booksSignal,
     selectableBooks: () => booksSignal().filter((item) => !item.id.startsWith('local-')),
     booksLoading: signal(false),
+    booksHasMore: signal(false),
+    currentBook: signal(null),
+    getBook: (id: string) => booksSignal().find((item) => item.id === id),
     booksError: signal<string | null>(null),
     sessionsError: signal<string | null>(null),
     today: () => '2026-09-06',
@@ -57,7 +60,7 @@ describe('critical form DOM states', () => {
     const registrationLink = fixture.nativeElement.querySelector('.auth-footnote a') as HTMLAnchorElement;
     expect(submit.type).toBe('button');
     expect(submit.tabIndex).toBeGreaterThanOrEqual(0);
-    expect(fixture.nativeElement.querySelector('.auth-intro')?.textContent).toContain('servidor');
+    expect(fixture.nativeElement.querySelector('.auth-intro')?.textContent).toContain('hábito');
     expect(registrationLink.textContent).toContain('Cadastre-se');
     expect(registrationLink.getAttribute('href')).toBe('/cadastro');
     expect(registrationLink.tabIndex).toBeGreaterThanOrEqual(0);
@@ -100,7 +103,7 @@ describe('critical form DOM states', () => {
     expect(fixture.nativeElement.querySelector('#reading-pages')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('#reading-minutes')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('#reading-empty-error')?.getAttribute('role')).toBe('alert');
-    expect(fixture.nativeElement.querySelector('#reading-book-error')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('#reading-book')).not.toBeNull();
     expect(store.addSession).not.toHaveBeenCalled();
   });
 
@@ -160,6 +163,7 @@ describe('critical form DOM states', () => {
     const store = createStore({
       loading: signal(false),
       dashboard: signal(null),
+      dashboardError: signal('Não foi possível carregar seu resumo.'),
       currentBook: signal(null),
       error: signal('Não foi possível carregar seu resumo.'),
       reload: vi.fn()
@@ -175,6 +179,9 @@ describe('critical form DOM states', () => {
 
     expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain('Não foi possível carregar');
     expect(fixture.nativeElement.querySelector('[role="alert"] button')?.textContent).toContain('Tentar novamente');
+    expect(fixture.nativeElement.querySelector('.streak-card')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.stats-grid')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.unavailable')?.textContent).toContain('indisponível');
   });
 
   it('keeps the skip link and primary navigation keyboard reachable', () => {

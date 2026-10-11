@@ -51,9 +51,19 @@ export class AuthService {
     if (isPlatformBrowser(this.platformId)) window.location.assign('/auth/logout');
   }
 
+  async updateTimezone(timezone: string): Promise<void> {
+    const user = await firstValueFrom(this.api.updateMe(timezone));
+    this.userState.set(user);
+  }
+
   async deleteAccount(): Promise<void> {
     await firstValueFrom(this.api.deleteAccount());
-    this.signOut();
+    // DELETE already removes the identity and revokes the BFF session.
+    this.userState.set(null);
+    this.initializedState.set(true);
+    this.errorState.set(null);
+    this.csrf.clear();
+    if (isPlatformBrowser(this.platformId)) window.location.assign('/');
   }
 
   restore(): Observable<boolean> {

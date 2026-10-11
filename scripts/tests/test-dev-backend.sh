@@ -25,6 +25,7 @@ write_stub_mvnw() {
   cat > "$TEST_ROOT/backend/mvnw" <<'EOF'
 #!/usr/bin/env bash
 printf 'stub mvnw invoked: %s\n' "$*"
+printf 'listener port: %s\n' "$HTTP_PORT"
 exit 0
 EOF
   chmod +x "$TEST_ROOT/backend/mvnw"
@@ -36,6 +37,7 @@ write_env() {
 DB_USERNAME=folhea
 DB_PASSWORD=$password
 DB_JDBC_URL=jdbc:postgresql://localhost:5433/folhea
+HTTP_PORT=9080
 EOF
 }
 
@@ -43,7 +45,7 @@ write_stub_java() {
   cat > "$TEST_ROOT/bin/java" <<'EOF'
 #!/usr/bin/env bash
 if [[ "${1:-}" == "-version" ]]; then
-  printf 'openjdk version "25.0.1"\n'
+  printf 'openjdk version "%s"\n' "${TEST_JAVA_VERSION:-27}"
   exit 0
 fi
 printf 'stub java invoked\n'
@@ -53,7 +55,7 @@ EOF
 }
 
 run_dev_backend() {
-  PATH="$TEST_ROOT/bin:$PATH" FOLHEA_ROOT="$TEST_ROOT" "$SCRIPT" "$@"
+  JAVA_HOME="$TEST_ROOT" PATH="$TEST_ROOT/bin:$PATH" FOLHEA_ROOT="$TEST_ROOT" "$SCRIPT" "$@"
 }
 
 mkdir -p "$TEST_ROOT/backend" "$TEST_ROOT/bin"
@@ -74,10 +76,18 @@ output="$(run_dev_backend 2>&1)" && fail "should fail when DB_PASSWORD is empty"
 pass "fails clearly when DB_PASSWORD is empty"
 
 write_env "local-test-secret"
+output="$(TEST_JAVA_VERSION=25 run_dev_backend 2>&1)" && fail "should reject a JDK older than the compile target"
+[[ "$output" == *"JDK 27 ou superior"* ]] || fail "older JDK should report the required compile target"
+pass "rejects a JDK older than the compile target"
+
 rm -f "$TEST_ROOT/backend/.env"
 output="$(run_dev_backend 2>&1)" || fail "should succeed with valid .env and stub mvnw"
 [[ "$output" == *"stub mvnw invoked: quarkus:dev"* ]] || fail "should exec mvnw quarkus:dev"
 pass "loads .env and execs mvnw quarkus:dev"
+[[ "$output" == *"listener port: 8080"* ]] || fail "host BFF must not bind the Caddy edge port"
+output="$(DEV_HTTP_PORT=8082 run_dev_backend 2>&1)" || fail "explicit development listener should work"
+[[ "$output" == *"listener port: 8082"* ]] || fail "DEV_HTTP_PORT must override the host listener"
+pass "keeps Caddy port separate and honors DEV_HTTP_PORT"
 
 [[ -L "$TEST_ROOT/backend/.env" ]] || fail "should create backend/.env symlink when absent"
 [[ "$(readlink -- "$TEST_ROOT/backend/.env")" == "../.env" ]] || fail "created symlink should point to ../.env"
