@@ -93,6 +93,10 @@ O CI e o Docker usam Temurin 27. Ajuste `JAVA_HOME` para o JDK 27 antes de
 `./mvnw`; o `maven.compiler.release` do projeto determina a versão do bytecode.
 Esta preparação da toolchain preserva a versão do produto e os gates existentes.
 
+O frontend usa Angular 22.2.2 e o builder `@angular/build` 22.2.2. As dependências
+de build são fixadas no lockfile; essa preparação remove as versões vulneráveis
+do Angular SSR/router e usa `proxy-addr` 2.0.8, sem antecipar as mudanças de UI.
+
 ### Frontend
 
 Com o BFF em `http://localhost:8080` (`./scripts/dev-backend.sh`), o hot reload local é:
