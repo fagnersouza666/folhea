@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: '24'
-  JAVA_VERSION: '25'
+  NODE_VERSION: '26.11.1'
+  JAVA_VERSION: '27'
 
 jobs:
   release:

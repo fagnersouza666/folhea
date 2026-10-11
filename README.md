@@ -85,12 +85,13 @@ abaixo são o contrato usado pelo CI; execute-os antes de abrir um pull request.
 
 ### Pré-requisitos
 
-- Node.js 24 ou superior e npm;
-- Java 25 e Docker (necessário para Dev Services/Testcontainers);
+- Node.js 26.11.1 e npm para a toolchain usada no CI e no Docker;
+- JDK 27 e Docker (necessário para Dev Services/Testcontainers);
 - Docker Compose, quando for necessário executar a stack completa.
 
-Se `java -version` mostrar 21, o Maven usa o JDK errado. Exporte o JDK 25
-antes de `./mvnw` (em Debian/Ubuntu/Pop!_OS: `/usr/lib/jvm/java-25-openjdk-amd64`).
+O CI e o Docker usam Temurin 27. Ajuste `JAVA_HOME` para o JDK 27 antes de
+`./mvnw`; o `maven.compiler.release` do projeto determina a versão do bytecode.
+Esta preparação da toolchain preserva a versão do produto e os gates existentes.
 
 ### Frontend
 

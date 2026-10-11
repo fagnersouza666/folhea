@@ -3,7 +3,7 @@
 # Node.js or a build toolchain.
 # Regenerate digests: docker buildx imagetools inspect <image:tag>
 
-FROM node:24-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS frontend-build
+FROM node:26.11.1-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a AS frontend-build
 WORKDIR /workspace/frontend
 
 COPY frontend/package.json frontend/package-lock.json ./
@@ -11,7 +11,7 @@ RUN npm ci --ignore-scripts
 COPY frontend/ ./
 RUN npm run build -- --configuration production
 
-FROM eclipse-temurin:25-jdk@sha256:e787e08ef76f4c16866108cd7f9fcd96a68eef3ac6cc76866897d4d02d5a2262 AS backend-build
+FROM eclipse-temurin:27-jdk@sha256:2771efbbc159b89dc38b82ebe01312fd1b5f226071ff715ca9edd5411a389761 AS backend-build
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
@@ -28,7 +28,7 @@ ENV PUBLIC_DOMAIN=localhost \
 RUN caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 EXPOSE 80 443
 
-FROM eclipse-temurin:25-jre-alpine@sha256:3137541deb3cac6626b5d9a4a2187bc0d6a34312f858bd2c67dd01e732e6b682 AS backend-runtime
+FROM eclipse-temurin:27-jre-alpine@sha256:9d76de111573e77ac415d8344271a2e57dd19bd59c48725fa3bac38c101bd0ba AS backend-runtime
 WORKDIR /deployments
 COPY --from=backend-build /workspace/backend/target/quarkus-app/ /deployments/quarkus-app/
 USER 10001
