@@ -79,7 +79,7 @@ produto não incrementam. A regra está em
 - North Star: dias com leitura registrada por usuário ativo.
 
 O workflow `CD` executa lint, testes, build de produção, SSG, build do
-backend e imagem Docker. Depois do build, dispara o hook de deploy configurado
+backend e três imagens Docker (backend, Caddy com SSG e Keycloak otimizado). Depois do build, dispara o hook de deploy configurado
 em `PRODUCTION_DEPLOY_HOOK` e valida liveness/readiness em
 `PRODUCTION_HEALTH_URL`. Sem esses segredos/variáveis o workflow mantém os
 artefatos e informa a configuração ausente, sem fingir que houve deploy.
@@ -89,3 +89,65 @@ Playwright crítico verde, imagem reproduzível, health checks `UP`, nenhuma
 credencial em logs/artefatos, aprovação da revisão das métricas e eventos, e
 nenhum finding P0 aberto em [`docs/relatorio-seguranca.md`](relatorio-seguranca.md)
 (hoje: Keycloak ≥ 26.7.2 ou reset de senha desligado).
+
+## Entrega do CD e configuração externa
+
+O CD salva as três imagens em `folhea-images.tar.gz` dentro de
+`release-evidence`. O hook recebe JSON com `revision`, `runId` e o nome desse
+artefato; o serviço de deploy deve baixar o artefato do run autenticado,
+carregar as imagens e iniciar o Compose correspondente. Não existe registry
+ou deploy externo implícito. Sem hook, o pipeline registra somente o build.
+Um hook configurado exige `PRODUCTION_HEALTH_URL`; a URL deve ser acessível
+pelo runner por uma via operacional protegida para `/q/health/*`, que não é
+publicada na borda do produto. O CI exige todos os componentes v1, valida
+realm/backup/restore e constrói o target otimizado de Keycloak.
+
+## Aceite com stack real
+
+Depois de `./scripts/local-stack.sh up`, execute:
+
+```bash
+E2E_REAL_URL=https://localhost:9443 node scripts/ci/e2e-real.mjs
+```
+
+Valide também os proxies reais e as superfícies privadas, confiando a CA local
+somente nesse processo de teste:
+
+```bash
+NODE_EXTRA_CA_CERTS="$PWD/.local/caddy-root.crt" EDGE_BASE_URL=https://localhost:9443 node scripts/ci/validate-oidc-surface.mjs
+```
+
+O gate exige `/me` anônimo401, desafio OIDC302 com PKCE/nonce/state e404 para
+Admin, token/JWKS públicos e métricas privadas. Assim um fallback estático não
+pode mascarar falhas de roteamento como páginas404.
+Exige também404 em URL inexistente e `/q`, e shell CSR com `no-store`/`noindex`
+em `/app`, `/entrar` e `/cadastro`. O `e2e-real.mjs` completa a cobertura de
+precedência com POST de cadastro controlado201 e primeiro login BFF real.
+
+O teste usa Playwright instalado em `frontend/`, duas contas novas criadas pelo
+cadastro público, PostgreSQL persistente e Keycloak real. Não intercepta APIs
+nem desativa limites de produção; respeita `Retry-After` quando o roteiro
+atinge o limite de mutações por IP.
+Verifica cadastro pela UI e pela API, login no browser, cookies Secure/HttpOnly/SameSite, CSRF negativo e
+positivo, 404 entre contas, CRUD de leitura e recálculo de métricas, finalização
+idempotente/reabertura, períodos e paginação, PNG 1080x1920 com quatro métricas,
+foto/crop sem upload, fallback de compartilhamento, cache/offline real do SW,
+exportação, exclusão e logout.
+O coletor de eventos também é exercitado com payload permitido202 e propriedade
+privada rejeitada400. As fórmulas de métricasPRD99–100 são verificadas pelo
+gate SQL isolado `scripts/ops/tests/test-product-metrics.sh`.
+Senhas/tokens/cookies não entram na evidência. Por padrão ficam em memória;
+Em caso de falha, screenshots com inputs mascarados ficam em
+`frontend/test-results/real-failure-*.png`; o diagnóstico imprime somente o
+path, omitindo parâmetros OIDC. Não anexe traces ou credenciais aos relatórios.
+`E2E_REAL_CREDENTIAL_FILE` permite conservar a primeira conta em arquivo local
+0600 para o teste opt-in de UI e de restart. Use um caminho gitignored em
+`.local/`, nunca anexe esse arquivo aos relatórios.
+As contas usam e-mails de teste únicos; a segunda é excluída no final e a
+primeira mantém um livro e duas leituras para verificar persistência local.
+Execute somente numa stack de aceite/local. Instale o Chromium antes com
+`cd frontend && npx playwright install chromium`.
+
+Os builds Docker limitam Maven a 1 GiB/4 CPUs e Angular a dois workers/1,5 GiB
+para reduzir concorrência e swap na integração local. Execute os builds e
+gates pesados em sequência quando outras sessões compartilharem o host.

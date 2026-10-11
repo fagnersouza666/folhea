@@ -123,7 +123,7 @@ case "$BACKUP_EXTERNAL_DESTINATION" in
 esac
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-artifact_name="folhea-${stamp}.dump"
+artifact_name="folhea-${DB_NAME}-${stamp}.dump"
 artifact="$BACKUP_DIR/$artifact_name"
 checksum="$artifact.sha256"
 [[ ! -e "$artifact" && ! -e "$checksum" ]] || ops_die "backup already exists for timestamp $stamp"
@@ -197,6 +197,6 @@ while IFS= read -r -d '' old_artifact; do
   [[ "$old_artifact" == "$artifact" ]] && continue
   rm -f -- "$old_artifact" "$old_artifact.sha256"
   pruned=$((pruned + 1))
-done < <(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'folhea-*.dump' -mtime "+$BACKUP_RETENTION_DAYS" -print0)
+done < <(find "$BACKUP_DIR" -maxdepth 1 -type f -name "folhea-${DB_NAME}-*.dump" -mtime "+$BACKUP_RETENTION_DAYS" -print0)
 
 ops_log "PostgreSQL backup completed; retention removed $pruned local artifact(s)"

@@ -9,7 +9,7 @@
   "clientSessionIdleTimeout": 1800,
   "clientSessionMaxLifespan": 28800,
   "registrationAllowed": false,
-  "resetPasswordAllowed": true,
+  "resetPasswordAllowed": false,
   "bruteForceProtected": true,
   "permanentLockout": false,
   "maxFailureWaitSeconds": 900,
@@ -30,17 +30,17 @@
       "serviceAccountsEnabled": false,
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:8080/auth/logged-out##http://localhost:4200/auth/logged-out##https://localhost:8443/auth/logged-out"
+        "post.logout.redirect.uris": "${OIDC_PUBLIC_ORIGIN}/auth/logged-out##http://localhost:8080/auth/logged-out##http://localhost:4200/auth/logged-out"
       },
       "redirectUris": [
+        "${OIDC_PUBLIC_ORIGIN}/auth/callback",
         "http://localhost:8080/auth/callback",
-        "http://localhost:4200/auth/callback",
-        "https://localhost:8443/auth/callback"
+        "http://localhost:4200/auth/callback"
       ],
       "webOrigins": [
+        "${OIDC_PUBLIC_ORIGIN}",
         "http://localhost:8080",
-        "http://localhost:4200",
-        "https://localhost:8443"
+        "http://localhost:4200"
       ],
       "protocolMappers": [
         {
@@ -55,6 +55,64 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "folhea-registration",
+      "name": "Folhea account provisioning",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "${KEYCLOAK_ADMIN_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": [
+        "roles"
+      ]
     }
-  ]
+  ],
+  "users": [
+    {
+      "username": "service-account-folhea-registration",
+      "enabled": true,
+      "serviceAccountClientId": "folhea-registration",
+      "clientRoles": {
+        "realm-management": [
+          "manage-users"
+        ]
+      }
+    }
+  ],
+  "clientScopeMappings": {
+    "realm-management": [
+      {
+        "client": "folhea-registration",
+        "roles": [
+          "manage-users"
+        ]
+      }
+    ]
+  },
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "passwordPolicy": "length(8)",
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "name": "declarative-user-profile",
+        "providerId": "declarative-user-profile",
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"${firstName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"${lastName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}"
+          ]
+        }
+      }
+    ]
+  },
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "pt-BR"
+  ],
+  "defaultLocale": "pt-BR"
 }

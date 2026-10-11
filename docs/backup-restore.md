@@ -103,7 +103,7 @@ apagar dados no ambiente errado.
 
 ```bash
 scripts/ops/restore-postgres.sh \
-  /mnt/offsite/folhea/postgres/folhea-20260906T020000Z.dump \
+  /mnt/offsite/folhea/postgres/folhea-folhea-20260906T020000Z.dump \
   --env-file .env-recovery \
   --target isolated
 scripts/ops/verify-recovery.sh \
@@ -120,8 +120,11 @@ deve registrar a exceção e gerar checksum antes de promover os dados.
 O restore usa `--clean --if-exists --no-owner --no-privileges` e deve ser
 executado com o serviço backend parado ou apontando para outra base enquanto a
 operação acontece. Depois, execute `verify-recovery.sh`; o teste padrão
-confirma que `public.flyway_schema_history` existe e que
-`/q/health/ready` responde dentro do container backend. Para uma instalação
+confirma a migração V007 aplicada com sucesso, a presença da tabela privada
+`public.account_deletion` e que `/q/health/ready` responde dentro do container
+backend. Isso impede aceitar um restore anterior ao contrato de exclusão
+durável. Inclua as intenções pendentes e os tombstones no backup da base do
+Folhea; não restaure somente as tabelas de livros/sessões. Para uma instalação
 com uma verificação específica, informe uma asserção somente leitura:
 
 ```bash
@@ -133,7 +136,9 @@ scripts/ops/verify-recovery.sh \
 Quando o restore for somente de PostgreSQL e não houver backend disponível,
 use `--skip-backend`. A base separada do Keycloak deve ser incluída em um
 procedimento coordenado quando a continuidade de identidade for necessária;
-não copie tabelas internas do Keycloak para a base do Folhea.
+não copie tabelas internas do Keycloak para a base do Folhea. Ao verificar a
+base do Keycloak, passe uma asserção `--sql` própria desse schema; a verificação
+padrão exige as migrações do Folhea.
 
 ## RPO, RTO e evidência
 
@@ -180,3 +185,40 @@ Os testes shell em `scripts/ops/tests/test-backup-restore.sh` usam um Compose e
 um cliente Docker falsos em um diretório temporário; eles cobrem argumentos,
 caminhos, retenção, checksum, confirmação de produção e falhas de healthcheck
 sem iniciar containers ou tocar em dados reais.
+
+## Continuidade de identidade e instâncias isoladas
+
+Os artefatos incluem o nome da base (`folhea-folhea-<timestamp>.dump` e
+`folhea-keycloak-<timestamp>.dump`), permitindo salvar as duas bases no mesmo
+diretório sem colisão. A rotação aplica-se somente à base selecionada.
+Faça ambos os backups diariamente: use `--database keycloak --username keycloak`
+para a identidade. Nomes customizados devem ser passados explicitamente.
+`COMPOSE_PROJECT_NAME` escolhe o projeto de destino e evita atingir a stack
+original quando há mais de uma instalação. Não misture segredos de uma
+instalação com volumes de outra.
+
+Para S3 compatível, `AWS_ENDPOINT_URL` e o perfil AWS vêm do ambiente do
+operador; o script não incorpora chaves. O destino `file://` permite testar
+cópia/restore local, mas somente um mount remoto comprovado satisfaz a cópia
+fora do servidor. Agende o cron diário descrito acima e o restore mensal no
+host operacional; a presença dos scripts não prova que esses jobs estão ativos.
+O verificador envolve a asserção SQL em uma transação `READ ONLY` para rejeitar
+mutações acidentais.
+
+### Backup das duas bases e timer
+
+`scripts/ops/backup-all.sh` usa os nomes/usuários do `.env`, salva Folhea e
+Keycloak no mesmo ciclo e falha se qualquer dump/cópia falhar. Configure o destino
+em `.env` ou no ambiente; a ausência dele impede execução, evitando afirmar
+backup externo sem uma cópia. As bases são snapshots sequenciais, não uma
+transação distribuída: suspenda mutações de conta durante recuperação conjunta.
+
+Os modelos `infra/systemd/folhea-backup.service` e `.timer` executam diariamente
+às 02:17, recuperando execução perdida com `Persistent=true`. Para instalar no
+host operacional, ajuste `/srv/folhea` ao checkout, crie
+`/etc/folhea/backup.env` (0600) com `COMPOSE_ENV_FILE`, `BACKUP_DIR`,
+`BACKUP_EXTERNAL_DESTINATION` e `BACKUP_RETENTION_DAYS>=7`, copie os units para
+`/etc/systemd/system/` e execute `systemctl enable --now folhea-backup.timer`.
+Verifique `systemctl list-timers folhea-backup.timer` e o journal do serviço.
+A stack local não instala serviços do sistema automaticamente; sem destino
+offsite verificado, esse requisito operacional permanece externo.

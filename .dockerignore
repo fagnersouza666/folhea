@@ -8,3 +8,14 @@ frontend/dist
 backend/target
 **/*.dump
 **/*.dump.gz
+
+.local
+.env-*
+frontend/playwright-report
+frontend/test-results
+
+frontend/.angular
+frontend/coverage
+**/.env
+**/.env-*
+.ao

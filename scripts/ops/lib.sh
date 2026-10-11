@@ -78,4 +78,8 @@ ops_init_compose() {
   ops_require_file "$COMPOSE_FILE" "Compose file"
   ops_require_file "$COMPOSE_ENV_FILE" "Compose environment file"
   COMPOSE=("$docker_bin" compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_FILE")
+  if [[ -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
+    ops_validate_name "$COMPOSE_PROJECT_NAME" COMPOSE_PROJECT_NAME
+    COMPOSE+=(--project-name "$COMPOSE_PROJECT_NAME")
+  fi
 }

@@ -17,7 +17,7 @@ const publicRoutes = [
   { path: '/termos', title: 'Termos — Folhea', description: 'Leia os termos de uso do Folhea e as responsabilidades ao utilizar o serviço.', h1: 'Termos de uso.' }
 ];
 
-const privateRoutes = ['/app', '/app/inicio'];
+const privateRoutes = ['/app', '/app/inicio', '/entrar', '/cadastro'];
 const missingRoute = process.env.SEO_MISSING_PATH ?? '/__seo-missing-route__';
 
 function requireFile(path, description) {
@@ -163,7 +163,7 @@ function validateStaticSite() {
     const content = readFileSync(path, 'utf8');
     const relativePath = relative(siteRoot, path);
     const isNotFound = basename(path) === '404.html';
-    const isPrivate = /(^|[/\\])(app|entrar|login|callback)([/\\]|$)/.test(relativePath);
+    const isPrivate = /(^|[/\\])(app|entrar|cadastro|login|callback)([/\\]|$)/.test(relativePath);
     const route = routeFromHtmlPath(relativePath);
     const title = content.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim();
     const description = metaContent(content, 'description');
@@ -199,7 +199,7 @@ function validateStaticSite() {
   if (existsSync(sitemap)) {
     const sitemapContent = readFileSync(sitemap, 'utf8');
     if (!/<urlset[\s>]/i.test(sitemapContent)) failures.push(`invalid sitemap root: ${sitemap}`);
-    if (/\/(?:app|entrar|login|callback)(?:[/<]|$)/i.test(sitemapContent)) failures.push(`private URL found in sitemap: ${sitemap}`);
+    if (/\/(?:app|entrar|cadastro|login|callback)(?:[/<]|$)/i.test(sitemapContent)) failures.push(`private URL found in sitemap: ${sitemap}`);
     validateSitemapUrls(sitemapContent, sitemap);
   }
 }
@@ -315,7 +315,7 @@ async function validateHttp() {
     }],
     ['/sitemap.xml', 'xml', (body) => {
       if (!/<urlset[\s>]/i.test(body)) failures.push('HTTP /sitemap.xml: invalid sitemap root');
-      if (/\/(?:app|entrar|login|callback)(?:[/<]|$)/i.test(body)) failures.push('HTTP /sitemap.xml: private URL found');
+      if (/\/(?:app|entrar|cadastro|login|callback)(?:[/<]|$)/i.test(body)) failures.push('HTTP /sitemap.xml: private URL found');
       validateSitemapUrls(body, 'HTTP /sitemap.xml');
     }]
   ]) {

@@ -1,0 +1,12 @@
+[Unit]
+Description=Backup diario PostgreSQL Folhea e Keycloak
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/folhea
+EnvironmentFile=/etc/folhea/backup.env
+ExecStart=/srv/folhea/scripts/ops/backup-all.sh
+TimeoutStartSec=1h
+UMask=0077

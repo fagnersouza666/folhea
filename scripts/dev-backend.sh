@@ -33,12 +33,12 @@ elif command -v java >/dev/null 2>&1; then
 fi
 
 if [[ -z "$JAVA_BIN" ]]; then
-  die "java não encontrado. Instale o JDK 25 e exporte JAVA_HOME antes de subir o backend."
+  die "java não encontrado. Instale o JDK 27 e exporte JAVA_HOME antes de subir o backend."
 fi
 
 java_major_version="$("$JAVA_BIN" -version 2>&1 | awk -F '[\".-]' '/version/ {print $2; exit}')"
-if [[ -z "$java_major_version" || "$java_major_version" -lt 25 ]]; then
-  die "JDK 25 ou superior é obrigatório (detectado: ${java_major_version:-desconhecido}). Exporte JAVA_HOME para o JDK 25 antes de continuar."
+if [[ -z "$java_major_version" || "$java_major_version" -lt 27 ]]; then
+  die "JDK 27 ou superior é obrigatório (detectado: ${java_major_version:-desconhecido}). Exporte JAVA_HOME para o JDK 27 antes de continuar."
 fi
 
 if [[ -n "${JAVA_HOME:-}" ]]; then
@@ -49,6 +49,10 @@ set -a
 # shellcheck disable=SC1090
 . "$ENV_FILE"
 set +a
+
+# HTTP_PORT belongs to the public Caddy mapping in the shared Compose env.
+# Keep the host BFF listener independent so it does not bind the edge port.
+export HTTP_PORT="${DEV_HTTP_PORT:-8080}"
 
 if [[ -z "${DB_PASSWORD:-}" ]]; then
   die "DB_PASSWORD está vazio após carregar .env. Defina um segredo em .env antes de subir o backend."
@@ -73,11 +77,11 @@ ensure_backend_env_symlink() {
 ensure_backend_env_symlink
 
 if command -v docker >/dev/null 2>&1; then
-  if ! docker ps --format '{{.Names}}' | grep -qx 'folhea-postgres-1'; then
-    warn "container folhea-postgres-1 não está em execução. Suba com: docker compose --env-file .env up -d postgres keycloak"
+  if ! docker ps --format '{{.Names}}' | grep -qx "${COMPOSE_PROJECT_NAME:-folhea}-postgres-1"; then
+    warn "container ${COMPOSE_PROJECT_NAME:-folhea}-postgres-1 não está em execução. Suba com: docker compose --env-file .env up -d postgres keycloak"
   fi
-  if ! docker ps --format '{{.Names}}' | grep -qx 'folhea-keycloak-1'; then
-    warn "container folhea-keycloak-1 não está em execução. Suba com: docker compose --env-file .env up -d postgres keycloak"
+  if ! docker ps --format '{{.Names}}' | grep -qx "${COMPOSE_PROJECT_NAME:-folhea}-keycloak-1"; then
+    warn "container ${COMPOSE_PROJECT_NAME:-folhea}-keycloak-1 não está em execução. Suba com: docker compose --env-file .env up -d postgres keycloak"
   fi
 fi
 
