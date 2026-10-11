@@ -469,6 +469,33 @@ class BackendResourceTest {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
+    void statisticsAggregateTenThousandRowsAndRecalculateAfterCascadeDeletion() {
+        seedLargeHistory();
+        given().when().get("/api/v1/sessions").then().statusCode(200).body("size()", equalTo(100));
+        given().when().get("/api/v1/stats?period=all").then().statusCode(200)
+                .body("pages", equalTo(20_000)).body("minutes", equalTo(30_000))
+                .body("currentStreakDays", equalTo(1));
+        given().when().delete("/api/v1/books/{id}", seededAliceBookId).then().statusCode(204);
+        given().when().get("/api/v1/stats?period=all").then().statusCode(200)
+                .body("pages", equalTo(0)).body("minutes", equalTo(0))
+                .body("currentStreakDays", equalTo(0));
+    }
+
+    @Transactional
+    void seedLargeHistory() {
+        entityManager.createNativeQuery("""
+                INSERT INTO reading_session(id, user_id, book_id, reading_date, pages, minutes, created_at, updated_at)
+                SELECT gen_random_uuid(), :userId, :bookId, :day, 2, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                FROM generate_series(1, 10000)
+                """).setParameter("userId", findUserBySubject(ALICE).id)
+                .setParameter("bookId", seededAliceBookId).setParameter("day", TODAY).executeUpdate();
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
     void numericalAndDateValidationRejectsInvalidInputWithoutChangingMetrics() {
         UUID id = createSession(seededAliceBookId, TODAY, 5, 0);
         for (String pages : new String[]{"1.9", "\"2\"", "-1", "2147483648", "10001", "true"}) {
@@ -518,6 +545,10 @@ class BackendResourceTest {
         tokenStateStore.save(reference, new io.quarkus.oidc.AuthorizationCodeTokens("id", "access", "refresh"), java.time.Duration.ofMinutes(5));
         String ticket = SessionCookiePolicy.newTicket(new SecureRandom());
         String csrf = csrfTokens.getOrIssue(ticket);
+        // Replace the default CSRF fixture rather than append duplicate cookies/headers.
+        RestAssured.requestSpecification = null;
+        RestAssured.requestSpecification = new RequestSpecBuilder()
+                .addHeader("Origin", "http://localhost:8081").build();
         given().cookie("q_session_folhea", reference).cookie(SessionCookiePolicy.NAME, ticket)
                 .header("X-CSRF-Token", csrf).contentType(ContentType.JSON).body("{\"confirm\":true}")
                 .when().delete("/api/v1/me").then().statusCode(204)

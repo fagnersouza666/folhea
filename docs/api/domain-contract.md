@@ -55,6 +55,8 @@ ao menos um positivo. Campos omitidos na criação equivalem a zero; PATCH
 preserva campos omitidos. Máximos por sessão: 10.000 páginas e 1.440 minutos.
 Frações e strings numéricas retornam 400. Regras de progresso também são
 verificadas pela entidade e por constraints PostgreSQL.
+Falhas de desserialização seguem `application/problem+json` em todos os perfis,
+sem reproduzir valores enviados ou detalhes internos do Jackson.
 
 `GET /api/v1/sessions/{id}` retorna a sessão própria no mesmo formato das
 listagens (`id`, `bookId`, `readingDate`, `pages`, `minutes`, `createdAt`,
@@ -93,7 +95,11 @@ e no [histórico oficial Quarkus](https://quarkus.io/releases/).
 
 As extensões Micrometer/Prometheus e OpenTelemetry fazem parte do build.
 `/q/metrics` fornece contagem/latência/status HTTP, CPU/memória/JVM e pool JDBC;
-falhas de persistência incrementam `folhea_database_errors_total`. O proxy deve
+falhas de persistência incrementam `folhea_database_errors_total`. O pool usa
+`quarkus.datasource.metrics.enabled=true` e
+`quarkus.datasource.jdbc.metrics.enabled=true`, conforme a
+[configuração atual de datasource](https://quarkus.io/guides/datasource/).
+O proxy deve
 manter `/q/*` privado. Traces OTLP são opcionais: `OTEL_SDK_DISABLED=false` e
 `OTEL_EXPORTER_OTLP_ENDPOINT` apontam para o collector interno. O padrão
 desabilita o SDK, sem retirar a instrumentação do build. Não instrumentar SQL
