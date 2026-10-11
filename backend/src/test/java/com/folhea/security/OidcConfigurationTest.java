@@ -59,6 +59,15 @@ class OidcConfigurationTest {
     }
 
     @Test
+    void productionAcceptsPrivateProxyHttpWhileBrowserCookiesStaySecure() {
+        assertEquals("enabled", CONFIG.getProperty("%prod.quarkus.http.insecure-requests"));
+        assertEquals("true", CONFIG.getProperty("quarkus.oidc.authentication.cookie-force-secure"));
+        assertEquals("true", CONFIG.getProperty("quarkus.oidc.authentication.force-redirect-https-scheme"));
+        assertEquals("${TRUSTED_PROXIES}", CONFIG.getProperty("%prod.quarkus.http.proxy.trusted-proxies"));
+        assertEquals("false", CONFIG.getProperty("%prod.quarkus.http.proxy.allow-forwarded"));
+    }
+
+    @Test
     void developmentProfileEnablesAuthorizationCodeFlowOverHttp() {
         assertEquals("true", CONFIG.getProperty("%dev.quarkus.oidc.enabled"));
         assertEquals("false", CONFIG.getProperty("%test.quarkus.oidc.enabled"));

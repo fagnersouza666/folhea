@@ -318,3 +318,8 @@ As seções anteriores documentam restrições e objetivos; quando divergem dest
 nomes/fluxos efetivos, este inventário descreve o contrato operacional atual.
 O fluxo de exclusão de conta usa a mesma permissão para remover o subject no
 Keycloak antes de apagar os dados Folhea e revogar a sessão BFF.
+
+A resposta de token do provedor permite metadados adicionais, como `expires_in`,
+`token_type` e `scope`. Apenas `access_token` é consumido e o DTO privado ignora
+os demais campos. Payloads públicos continuam rejeitando campos desconhecidos;
+essa tolerância não se aplica às requisições do frontend.

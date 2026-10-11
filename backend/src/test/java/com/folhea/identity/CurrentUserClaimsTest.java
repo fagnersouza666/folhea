@@ -51,11 +51,22 @@ class CurrentUserClaimsTest {
     }
 
     @Test
-    @TestTransaction
-    void concurrentProvisioningIsAnIdempotentSubjectInsert() {
+    void concurrentProvisioningIsAnIdempotentSubjectInsert() throws Exception {
         String subject = UUID.randomUUID().toString();
-        users.createIfAbsent(subject, subject + "@example.test", "UTC");
-        users.createIfAbsent(subject, subject + "@example.test", "UTC");
-        assertEquals(1, users.count("identitySubject", subject));
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var tasks = java.util.stream.IntStream.range(0, 2).mapToObj(i -> executor.submit(() -> {
+                start.await();
+                io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() ->
+                        users.createIfAbsent(subject, subject + "@example.test", "UTC"));
+                return true;
+            })).toList();
+            start.countDown();
+            for (var task : tasks) assertTrue(task.get(20, java.util.concurrent.TimeUnit.SECONDS));
+            io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+                assertEquals(1, users.count("identitySubject", subject));
+                users.delete("identitySubject", subject);
+            });
+        }
     }
 }

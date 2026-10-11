@@ -106,6 +106,19 @@ class RegistrationResourceTest {
     }
 
     @Test
+    void aliasesStayPublicAndCrossOriginRegistrationIsRejectedWithoutCsrfRequirement() {
+        for (String path : new String[]{REGISTRATION_PATH, "/api/v1/auth/register", "/api/v1/register"}) {
+            given().contentType(ContentType.JSON).body(registrationJson("invalid", REGISTRATION_PASSWORD))
+                    .when().post(path).then().statusCode(400).contentType("application/problem+json");
+        }
+        given().header("Origin", "https://evil.example").contentType(ContentType.JSON)
+                .body(registrationJson("other@example.test", REGISTRATION_PASSWORD))
+                .when().post(REGISTRATION_PATH).then().statusCode(403)
+                .body("type", equalTo("https://folhea.com.br/problems/csrf-origin"));
+        assertEquals(0L, userCount());
+    }
+
+    @Test
     void duplicateEmailIsRejectedAfterNormalization() {
         register(EMAIL, REGISTRATION_PASSWORD);
 

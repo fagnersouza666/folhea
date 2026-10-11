@@ -10,7 +10,8 @@ usa sessão BFF HttpOnly; obter `GET /api/v1/csrf` e enviar `X-CSRF-Token` e
 Cadastro público canônico: `POST /api/v1/registration` com `{email,password}`,
 provisionado exclusivamente no Keycloak. `/api/v1/auth/register` e
 `/api/v1/register` permanecem aliases de compatibilidade, com a mesma validação
-e rate limit. As credenciais não são persistidas pelo Folhea nem retornam no
+e bucket de rate limit por IP. Cadastro público não exige sessão/token CSRF;
+se Origin estiver presente, deve ser uma origem permitida. As credenciais não são persistidas pelo Folhea nem retornam no
 JSON. Após 201, o navegador deve iniciar `/auth/login` para estabelecer a sessão.
 
 `GET /api/v1/me` retorna `{id, email, timezone}`. `PATCH /api/v1/me` aceita
@@ -79,7 +80,14 @@ na próxima consulta, sem cache de domínio.
 
 ## Stack e operação
 
-Backend: Java 25 e Quarkus 3.40.1 LTS, sem alteração isolada da versão do produto.
+Backend: Java 25, Quarkus 3.40.1 LTS e Maven 3.10.0, sem alteração isolada da
+versão do produto. O wrapper usa a versão estável conferida no
+[Maven Central](https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/maven-metadata.xml).
+O TLS público termina no Caddy. Quarkus aceita HTTP somente na rede privada
+do Compose (`insecure-requests=enabled`); ele não redireciona para um listener
+SSL inexistente. Cookies externos continuam Secure/HttpOnly, redirects OIDC
+usam HTTPS e forwarded headers só são aceitos dos proxies configurados em
+`TRUSTED_PROXIES`. O BFF não deve publicar sua porta diretamente.
 A versão estável foi conferida no [Maven Central](https://repo.maven.apache.org/maven2/io/quarkus/platform/quarkus-bom/maven-metadata.xml)
 e no [histórico oficial Quarkus](https://quarkus.io/releases/).
 

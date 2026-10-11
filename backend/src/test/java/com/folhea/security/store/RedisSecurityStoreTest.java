@@ -74,6 +74,16 @@ class RedisSecurityStoreTest {
     }
 
     @Test
+    void deletedSubjectsAreRevokedAcrossRedisStoreInstancesWithoutKeepingTheirIdentity() {
+        String subject = java.util.UUID.randomUUID().toString();
+        assertFalse(tokenStateStore.isSubjectRevoked(subject));
+        tokenStateStore.revokeSubject(subject, Duration.ofMinutes(5));
+        assertTrue(tokenStateStore.isSubjectRevoked(subject));
+        tokenStateStore.revokeSubject(subject, Duration.ZERO);
+        assertFalse(tokenStateStore.isSubjectRevoked(subject));
+    }
+
+    @Test
     void rateLimitStoreEnforcesWindow() {
         var allowed = rateLimitStore.check("ip:127.0.0.1", 2, Duration.ofMinutes(1), java.time.Instant.now());
         assertTrue(allowed.allowed());

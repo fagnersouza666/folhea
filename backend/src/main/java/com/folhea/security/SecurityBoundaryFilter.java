@@ -56,7 +56,7 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
         String method = context.getMethod();
         if (!isMutation(method)) return;
 
-        if (!publicRegistration && !validOrigin(context)) {
+        if ((!publicRegistration || context.getHeaderString("Origin") != null) && !validOrigin(context)) {
             abort(context, 403, "https://folhea.com.br/problems/csrf-origin", "Origem não permitida", "A requisição deve vir da origem canônica.");
             return;
         }

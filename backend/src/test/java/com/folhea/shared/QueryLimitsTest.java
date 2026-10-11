@@ -21,6 +21,7 @@ class QueryLimitsTest {
         assertEquals(0, QueryLimits.sanitizeOffset(null));
         assertEquals(0, QueryLimits.sanitizeOffset(-1));
         assertEquals(25, QueryLimits.sanitizeOffset(25));
+        assertEquals(Integer.MAX_VALUE - 100, QueryLimits.sanitizeOffset(Integer.MAX_VALUE));
     }
 
     @Test

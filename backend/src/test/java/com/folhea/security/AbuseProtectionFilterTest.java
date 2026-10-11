@@ -13,6 +13,7 @@ class AbuseProtectionFilterTest {
         assertTrue(AbuseProtectionFilter.isAuthenticationAttempt("auth/recovery/start"));
         assertTrue(AbuseProtectionFilter.isAuthenticationAttempt("api/v1/auth/register"));
         assertTrue(AbuseProtectionFilter.isAuthenticationAttempt("api/v1/register"));
+        assertTrue(AbuseProtectionFilter.isAuthenticationAttempt("api/v1/registration"));
         assertFalse(AbuseProtectionFilter.isAuthenticationAttempt("api/v1/books"));
     }
 }
