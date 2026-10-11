@@ -330,7 +330,7 @@ progresso, use apenas contagens agregadas, sem selecionar essas referências:
 ```sql
 SELECT local_deleted, completed_at IS NULL AS pending, count(*)
 FROM account_deletion GROUP BY local_deleted, pending;
-SELECT count(*) FROM flyway_schema_history WHERE version = '7' AND success;
+SELECT count(*) FROM flyway_schema_history WHERE version IN ('7', '007') AND success;
 ```
 
 O backup completo inclui essa tabela; `verify-recovery.sh` exige V007 e sua

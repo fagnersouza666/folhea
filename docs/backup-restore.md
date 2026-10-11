@@ -120,7 +120,8 @@ deve registrar a exceção e gerar checksum antes de promover os dados.
 O restore usa `--clean --if-exists --no-owner --no-privileges` e deve ser
 executado com o serviço backend parado ou apontando para outra base enquanto a
 operação acontece. Depois, execute `verify-recovery.sh`; o teste padrão
-confirma a migração V007 aplicada com sucesso, a presença da tabela privada
+confirma a migração V007 aplicada com sucesso (`version` igual a `7` ou `007`,
+formato efetivo do histórico Flyway), a presença da tabela privada
 `public.account_deletion` e que `/q/health/ready` responde dentro do container
 backend. Isso impede aceitar um restore anterior ao contrato de exclusão
 durável. Inclua as intenções pendentes e os tombstones no backup da base do
