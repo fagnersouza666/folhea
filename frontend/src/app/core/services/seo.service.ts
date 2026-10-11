@@ -15,13 +15,13 @@ export class SeoService {
     this.metaProperty('og:title', title);
     this.metaProperty('og:description', description);
     this.metaProperty('og:url', this.absoluteUrl(path));
-    this.metaProperty('og:image', this.absoluteUrl('/folhea-social.svg'));
+    this.metaProperty('og:image', this.absoluteUrl('/folhea-social.png'));
     this.metaProperty('og:image:width', '1200');
     this.metaProperty('og:image:height', '630');
     this.metaName('twitter:card', 'summary_large_image');
     this.metaName('twitter:title', title);
     this.metaName('twitter:description', description);
-    this.metaName('twitter:image', this.absoluteUrl('/folhea-social.svg'));
+    this.metaName('twitter:image', this.absoluteUrl('/folhea-social.png'));
 
     const canonical = this.document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     if (canonicalPath === null) {

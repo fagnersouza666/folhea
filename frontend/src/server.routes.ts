@@ -8,6 +8,7 @@ export const serverRoutes: ServerRoute[] = [
   { path: 'sobre', renderMode: RenderMode.Prerender },
   { path: 'privacidade', renderMode: RenderMode.Prerender },
   { path: 'termos', renderMode: RenderMode.Prerender },
+  { path: 'cadastro', renderMode: RenderMode.Prerender },
   { path: 'entrar', renderMode: RenderMode.Prerender },
   { path: '**', renderMode: RenderMode.Server, status: 404 }
 ];

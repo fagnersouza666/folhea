@@ -6,14 +6,38 @@
       "name": "app",
       "installMode": "prefetch",
       "resources": {
-        "files": ["/favicon.svg", "/index.html", "/*.css", "/*.js", "/*.woff2"]
+        "files": [
+          "/favicon.svg",
+          "/index.html",
+          "/index.csr.html",
+          "/*.css",
+          "/*.js",
+          "/*.woff2"
+        ]
       }
     },
     {
       "name": "public",
       "installMode": "lazy",
       "updateMode": "prefetch",
-      "resources": { "files": ["/assets/**", "/*.svg", "/*.png", "/*.webp", "/*.avif"] }
+      "resources": {
+        "files": [
+          "/assets/**",
+          "/*.svg",
+          "/*.png",
+          "/*.webp",
+          "/*.avif"
+        ]
+      }
     }
+  ],
+  "navigationUrls": [
+    "/**",
+    "!/**/*.*",
+    "!/**/*__*",
+    "!/**/*__*/**",
+    "!/api/**",
+    "!/auth/**",
+    "!/realms/**"
   ]
 }

@@ -16,7 +16,7 @@
   --danger: #b84c4c;
   --radius-card: 1.35rem;
   --shadow-card: 0 14px 40px rgb(23 63 53 / 8%);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
   color: var(--ink);
   background: var(--cream-100);
   font-synthesis: none;
@@ -36,7 +36,7 @@ a { color: inherit; text-decoration: none; }
 .eyebrow { color: var(--forest-800); font-size: .75rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
 .button { display: inline-flex; min-height: 3rem; align-items: center; justify-content: center; gap: .5rem; border: 0; border-radius: .8rem; padding: .75rem 1.15rem; font-weight: 750; transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
 .button:hover { transform: translateY(-1px); }
-.button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--forest-800); outline-offset: 3px; box-shadow: 0 0 0 3px var(--cream-50); }
 .button-primary { color: var(--cream-50); background: var(--forest-900); box-shadow: 0 8px 18px rgb(23 63 53 / 18%); }
 .button-primary:hover { background: var(--forest-800); }
 .button-secondary { color: var(--forest-900); background: var(--forest-100); }
@@ -44,7 +44,7 @@ a { color: inherit; text-decoration: none; }
 .button-danger { color: var(--danger); background: #fbe9e3; }
 .field { display: grid; gap: .42rem; color: var(--forest-950); font-size: .9rem; font-weight: 700; }
 .field input, .field select { width: 100%; border: 1px solid #ccd5cf; border-radius: .75rem; padding: .75rem .85rem; color: var(--ink); background: var(--cream-50); }
-.field input::placeholder { color: #9aa69f; }
+.field input::placeholder { color: var(--muted); }
 .field input[aria-invalid="true"] { border-color: var(--danger); }
 .field-error { color: var(--danger); font-size: .78rem; font-weight: 650; }
 .alert { border-radius: .75rem; padding: .75rem .9rem; font-size: .9rem; }
@@ -87,3 +87,8 @@ a { color: inherit; text-decoration: none; }
   .bottom-nav { position: static; width: min(100% - 4rem, 58rem); margin: 0 auto; border: 0; padding: 1rem 0 2rem; background: transparent; backdrop-filter: none; }
   .bottom-nav .record-link { order: 4; }
 }
+
+button:disabled { cursor: wait; opacity: .65; transform: none; }
+.bottom-nav a { min-height: 2.75rem; min-width: 2.75rem; align-content: center; }
+.row-arrow, .session-edit, .dismiss { min-height: 2.75rem; min-width: 2.75rem; display: inline-flex; align-items: center; justify-content: center; }
+.bottom-nav { padding-bottom: max(.7rem, env(safe-area-inset-bottom)); }

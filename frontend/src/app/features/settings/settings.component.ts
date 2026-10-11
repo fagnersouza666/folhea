@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, inject, signal, ViewChild } from '@angular/core';
+import { DashboardStore } from '../../core/state/dashboard.store';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
@@ -12,7 +13,7 @@ import { PwaService } from '../../core/services/pwa.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="page-heading"><div><p class="eyebrow">Seu espaço</p><h1>Configurações</h1></div><a routerLink="/app/inicio" class="back-link">← Início</a></div>
-    <section class="surface settings-card" aria-labelledby="account-title"><h2 id="account-title">Conta</h2><dl><div><dt>E-mail</dt><dd>{{ auth.user()?.email || 'Conta Folhea' }}</dd></div><div><dt>Fuso horário</dt><dd>{{ auth.user()?.timezone || timezone }}</dd></div></dl></section>
+    <section class="surface settings-card" aria-labelledby="account-title"><h2 id="account-title">Conta</h2><dl><div><dt>E-mail</dt><dd>{{ auth.user()?.email || 'Conta Folhea' }}</dd></div><div><dt>Fuso horário</dt><dd>{{ auth.user()?.timezone || timezone }}</dd></div></dl><form class="timezone-form" (submit)="saveTimezone($event)"><div class="field"><label for="account-timezone">Escolher fuso horário</label><select id="account-timezone" [value]="selectedTimezone()" (change)="selectedTimezone.set($any($event.target).value)">@for (zone of timezones; track zone) { <option [value]="zone">{{ zone }}</option> }</select></div><p class="privacy-copy">O dia de leitura e as estatísticas seguem este fuso. As datas já registradas são preservadas.</p><button class="button button-secondary" type="submit" [disabled]="savingTimezone() || deleting()">{{ savingTimezone() ? 'Salvando…' : 'Salvar fuso horário' }}</button>@if (timezoneMessage()) { <p role="status">{{ timezoneMessage() }}</p> }</form></section>
     <section class="surface settings-card" aria-labelledby="privacy-title">
       <h2 id="privacy-title">Privacidade e dados</h2>
       <p class="privacy-copy">Baixe uma cópia dos seus dados ou exclua permanentemente sua conta e todos os registros associados.</p>
@@ -22,7 +23,7 @@ import { PwaService } from '../../core/services/pwa.service';
         </button>
         <button class="button button-danger" type="button" (click)="openDeleteDialog()" [disabled]="exporting() || deleting()">Excluir minha conta</button>
       </div>
-      @if (privacyError()) { <p class="privacy-error" role="alert">{{ privacyError() }}</p> }
+      @if (privacyError() && !deleteDialogOpen()) { <p class="privacy-error" role="alert">{{ privacyError() }}</p> }
     </section>
     <section class="surface settings-card" aria-labelledby="app-title"><h2 id="app-title">Aplicativo</h2><div class="setting-row"><div><strong>Notificações de atualização</strong><p>O Folhea avisa quando uma versão nova estiver pronta.</p></div><span class="status">Ativo</span></div><div class="setting-row"><div><strong>Conexão</strong><p>{{ pwa.online() ? 'Online — pronto para sincronizar.' : 'Sem conexão — conecte-se para registrar sua leitura.' }}</p></div><span class="status" [class.offline]="!pwa.online()">{{ pwa.online() ? 'Online' : 'Offline' }}</span></div></section>
     <button class="button button-danger signout" type="button" (click)="auth.signOut()" [disabled]="deleting()">Sair da conta</button>
@@ -31,9 +32,9 @@ import { PwaService } from '../../core/services/pwa.service';
       <form method="dialog" class="delete-dialog-form" (submit)="confirmDelete($event)">
         <h2 id="delete-dialog-title">Excluir conta permanentemente?</h2>
         <p id="delete-dialog-description">Esta ação apaga sua conta, livros e sessões de leitura. Não pode ser desfeita.</p>
-        <label class="confirm-label"><input type="checkbox" [checked]="deleteConfirmed()" (change)="deleteConfirmed.set($any($event.target).checked)" /> Entendo que todos os meus dados serão removidos.</label>
-        <div class="dialog-actions">
-          <button class="button" type="button" (click)="closeDeleteDialog()">Cancelar</button>
+        <label class="confirm-label"><input type="checkbox" [checked]="deleteConfirmed()" [disabled]="deleting()" (change)="deleteConfirmed.set($any($event.target).checked)" /> Entendo que todos os meus dados serão removidos.</label>
+        @if (privacyError()) { <p class="privacy-error" role="alert">{{ privacyError() }}</p> }<div class="dialog-actions">
+          <button class="button" type="button" (click)="closeDeleteDialog()" [disabled]="deleting()">Cancelar</button>
           <button class="button button-danger" type="submit" [disabled]="!deleteConfirmed() || deleting()">{{ deleting() ? 'Excluindo…' : 'Excluir conta' }}</button>
         </div>
       </form>
@@ -45,15 +46,34 @@ export class SettingsComponent {
   readonly auth = inject(AuthService);
   readonly pwa = inject(PwaService);
   private readonly api = inject(ApiClient);
+  private readonly store = inject(DashboardStore);
+  readonly savingTimezone = signal(false);
+  readonly timezoneMessage = signal<string | null>(null);
+  readonly selectedTimezone = signal(this.auth.user()?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
+  readonly timezones = [...new Set(['UTC', this.selectedTimezone(), ...Intl.supportedValuesOf('timeZone')])].sort();
+  readonly deleteDialogOpen = signal(false);
   readonly timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   readonly exporting = signal(false);
   readonly deleting = signal(false);
   readonly deleteConfirmed = signal(false);
   readonly privacyError = signal<string | null>(null);
-  private readonly deleteDialog = viewChild<ElementRef<HTMLDialogElement>>('deleteDialog');
+  @ViewChild('deleteDialog', { static: true }) private deleteDialog?: ElementRef<HTMLDialogElement>;
+
+  async saveTimezone(event: Event): Promise<void> {
+    event.preventDefault();
+    if (this.savingTimezone() || this.deleting()) return;
+    this.savingTimezone.set(true);
+    this.timezoneMessage.set(null);
+    try {
+      await this.auth.updateTimezone(this.selectedTimezone());
+      this.store.reload();
+      this.timezoneMessage.set('Fuso horário atualizado.');
+    } catch { this.timezoneMessage.set('Não foi possível salvar o fuso horário. Tente novamente.'); }
+    finally { this.savingTimezone.set(false); }
+  }
 
   async downloadData(): Promise<void> {
-    if (this.exporting()) return;
+    if (this.exporting() || this.deleting()) return;
     this.exporting.set(true);
     this.privacyError.set(null);
     try {
@@ -73,14 +93,17 @@ export class SettingsComponent {
   }
 
   openDeleteDialog(): void {
+    this.deleteDialogOpen.set(true);
     this.deleteConfirmed.set(false);
     this.privacyError.set(null);
-    this.deleteDialog()?.nativeElement.showModal();
+    this.deleteDialog?.nativeElement.showModal();
   }
 
   closeDeleteDialog(event?: Event): void {
     event?.preventDefault();
-    this.deleteDialog()?.nativeElement.close();
+    if (this.deleting()) return;
+    this.deleteDialogOpen.set(false);
+    this.deleteDialog?.nativeElement.close();
   }
 
   async confirmDelete(event: Event): Promise<void> {
@@ -92,7 +115,7 @@ export class SettingsComponent {
       await this.auth.deleteAccount();
     } catch {
       this.deleting.set(false);
-      this.privacyError.set('Não foi possível excluir sua conta. Tente novamente.');
+      this.privacyError.set('Não foi possível excluir sua conta. Seus dados foram preservados. Tente novamente.');
     }
   }
 }

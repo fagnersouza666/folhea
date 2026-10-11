@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, OnDestroy } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, OnDestroy, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DashboardStore } from '../../core/state/dashboard.store';
 import { CardGeneratorService, CardTemplate } from '../../core/services/card-generator.service';
@@ -13,20 +13,20 @@ import { AnalyticsService } from '../../core/analytics/analytics.service';
   template: `
     <div class="page-heading"><div><p class="eyebrow">Pequenas vitórias</p><h1>Seu card</h1></div><a routerLink="/app/progresso" class="back-link">← Progresso</a></div>
     <p class="intro">Transforme seu ritmo de leitura em uma imagem 9:16 para guardar ou compartilhar.</p>
-    @if (error) { <div class="alert alert-error" role="alert">{{ error }}</div> }
+    @if (error()) { <div class="alert alert-error" role="alert">{{ error() }}</div> }@if (store.statsLoading()) { <p role="status">Atualizando as métricas do card…</p> }@if (store.statsError(); as statsError) { <div class="alert alert-error" role="alert">{{ statsError }} <button type="button" class="dismiss" (click)="store.loadStats()">Tentar novamente</button></div> }
     <div class="card-workspace">
-      <section class="preview-panel surface" aria-labelledby="preview-title"><h2 id="preview-title" class="sr-only">Prévia do card</h2><div class="card-preview" [class.dark]="template === 'dark'" [class.photo]="template === 'photo'" [style.backgroundImage]="template === 'photo' && backgroundUrl ? 'url(' + backgroundUrl + ')' : null"><div class="preview-overlay"></div><div class="preview-content"><span class="preview-brand">FOLHEA</span><span class="preview-period">{{ periodLabel }}</span><strong>Minha semana<br />de leitura</strong><div class="preview-metrics"><span><b>{{ metrics().streak }}</b> dias seguidos</span><span><b>{{ metrics().pages }}</b> páginas</span><span><b>{{ formatMinutes(metrics().minutes) }}</b> de leitura</span><span><b>{{ metrics().booksFinished }}</b> {{ metrics().booksFinished === 1 ? 'livro concluído' : 'livros concluídos' }}</span></div><small>Cada página conta.</small></div></div></section>
+      <section class="preview-panel surface" aria-labelledby="preview-title"><h2 id="preview-title" class="sr-only">Prévia do card</h2><div class="card-preview" [class.dark]="template === 'dark'" [class.photo]="template === 'photo'" [style.backgroundPosition]="(cropX * 100) + '% ' + (cropY * 100) + '%'" [style.backgroundImage]="template === 'photo' && backgroundUrl ? 'url(' + backgroundUrl + ')' : null"><div class="preview-overlay" [style.opacity]="overlay"></div><div class="preview-content"><span class="preview-brand">FOLHEA</span><span class="preview-period">{{ periodLabel }}</span><strong>{{ cardTitle }}</strong><div class="preview-metrics"><span><b>{{ metrics().streak }}</b> dias seguidos</span><span><b>{{ metrics().pages }}</b> páginas</span><span><b>{{ formatMinutes(metrics().minutes) }}</b> de leitura</span><span><b>{{ metrics().booksFinished }}</b> {{ metrics().booksFinished === 1 ? 'livro concluído' : 'livros concluídos' }}</span></div><small>Cada página conta.</small></div></div></section>
       <section class="controls" aria-labelledby="controls-title"><h2 id="controls-title">Personalize</h2>
-        <fieldset><legend>Período</legend><div class="choice-grid period-grid">@for (option of periods; track option.id) { <button type="button" [class.selected]="store.period() === option.id" (click)="selectPeriod(option.id)">{{ option.label }}</button> }</div></fieldset>
-        <fieldset><legend>Modelo</legend><div class="choice-grid">@for (option of templates; track option.id) { <button type="button" [class.selected]="template === option.id" (click)="chooseTemplate(option.id)"><span class="template-swatch" [class.dark-swatch]="option.id === 'dark'" [class.photo-swatch]="option.id === 'photo'"></span>{{ option.label }}</button> }</div></fieldset>
-        <label class="upload-field">Foto de fundo <span>opcional</span><input type="file" accept="image/jpeg,image/png,image/webp" (change)="selectBackground($event)" /><small>A foto permanece no seu dispositivo e não é enviada ao Folhea.</small></label>
-        @if (template === 'photo' && backgroundUrl) { <div class="range-fields"><label>Enquadramento horizontal<input type="range" min="0" max="1" step=".01" [value]="cropX" (input)="cropX = numberValue($event)" /></label><label>Enquadramento vertical<input type="range" min="0" max="1" step=".01" [value]="cropY" (input)="cropY = numberValue($event)" /></label><label>Overlay<input type="range" min=".2" max=".85" step=".01" [value]="overlay" (input)="overlay = numberValue($event)" /></label></div> }
-        <div class="action-row"><button class="button button-primary" type="button" [disabled]="busy" (click)="download()">{{ busy ? 'Gerando…' : 'Salvar PNG' }}</button><button class="button button-secondary" type="button" [disabled]="busy" (click)="share()">Compartilhar</button></div>
+        <fieldset><legend>Período</legend><div class="choice-grid period-grid">@for (option of periods; track option.id) { <button type="button" [class.selected]="store.period() === option.id" [attr.aria-pressed]="store.period() === option.id" [disabled]="busy()" (click)="selectPeriod(option.id)">{{ option.label }}</button> }</div></fieldset>
+        <fieldset><legend>Modelo</legend><div class="choice-grid">@for (option of templates; track option.id) { <button type="button" [class.selected]="template === option.id" [attr.aria-pressed]="template === option.id" [disabled]="busy()" (click)="chooseTemplate(option.id)"><span class="template-swatch" [class.dark-swatch]="option.id === 'dark'" [class.photo-swatch]="option.id === 'photo'"></span>{{ option.label }}</button> }</div></fieldset>
+        <div class="upload-field"><label for="card-background">Foto de fundo <span>opcional</span></label><input id="card-background" aria-describedby="card-background-hint" type="file" accept="image/jpeg,image/png,image/webp" [disabled]="busy()" (change)="selectBackground($event)" /><small id="card-background-hint">A foto permanece no seu dispositivo e não é enviada ao Folhea.</small></div>
+        @if (template === 'photo' && backgroundUrl) { <div class="range-fields"><label>Enquadramento horizontal<input type="range" min="0" max="1" step=".01" [value]="cropX" (input)="adjust('cropX', $event)" [disabled]="busy()" /></label><label>Enquadramento vertical<input type="range" min="0" max="1" step=".01" [value]="cropY" (input)="adjust('cropY', $event)" [disabled]="busy()" /></label><label>Overlay<input type="range" min=".65" max=".85" step=".01" [value]="overlay" (input)="adjust('overlay', $event)" [disabled]="busy()" /></label></div> }
+        <div class="action-row"><button class="button button-primary" type="button" [disabled]="busy() || store.statsLoading() || !store.stats()" (click)="download()">{{ busy() ? 'Gerando…' : 'Salvar PNG' }}</button><button class="button button-secondary" type="button" [disabled]="busy() || store.statsLoading() || !store.stats()" (click)="share()">Compartilhar</button></div>
       </section>
     </div>
   `,
   styles: [`
-    :host{display:grid;gap:.8rem}.page-heading{display:flex;align-items:end;justify-content:space-between;gap:1rem}.page-heading h1{margin:.35rem 0 0;color:var(--forest-950);font-family:Georgia,serif;font-size:2.35rem;line-height:1}.back-link{color:var(--forest-800);font-size:.8rem;font-weight:750}.intro{max-width:38rem;margin:0 0 1rem;color:var(--muted);line-height:1.55}.card-workspace{display:grid;gap:1rem}.preview-panel{display:grid;place-items:center;padding:1rem;background:#e9e4da}.card-preview{position:relative;isolation:isolate;width:min(100%,20rem);aspect-ratio:9/16;overflow:hidden;border-radius:1rem;background:var(--cream-100);background-position:center;background-size:cover;box-shadow:0 1rem 2rem rgb(23 63 53 / 18%)}.card-preview.dark{color:var(--cream-50);background:var(--forest-950)}.card-preview.photo{color:var(--cream-50)}.preview-overlay{position:absolute;inset:0;z-index:-1;background:rgb(16 46 41 / .48)}.card-preview:not(.photo) .preview-overlay{display:none}.preview-content{display:grid;align-content:space-between;height:100%;padding:12% 11%}.preview-brand{color:var(--coral);font-size:.7rem;font-weight:850;letter-spacing:.1em}.dark .preview-brand,.photo .preview-brand{color:var(--amber)}.preview-period{color:var(--muted);font-size:.58rem}.dark .preview-period,.photo .preview-period{color:#b7d4c5}.preview-content strong{margin-top:22%;font-family:Georgia,serif;font-size:1.6rem;line-height:1.08}.preview-metrics{display:grid;gap:.7rem;margin-top:auto;margin-bottom:auto}.preview-metrics span{display:grid;gap:.1rem;color:var(--muted);font-size:.58rem}.dark .preview-metrics span,.photo .preview-metrics span{color:#b7d4c5}.preview-metrics b{color:var(--forest-950);font-family:Georgia,serif;font-size:1.15rem}.dark .preview-metrics b,.photo .preview-metrics b{color:var(--cream-50)}.preview-content small{color:var(--muted);font-size:.58rem}.dark .preview-content small,.photo .preview-content small{color:#b7d4c5}.controls{display:grid;gap:1.1rem;padding-bottom:1rem}.controls h2{margin:.4rem 0 0;color:var(--forest-950);font-family:Georgia,serif;font-size:1.35rem}.controls fieldset{display:grid;gap:.55rem;border:0;margin:0;padding:0}.controls legend,.upload-field{color:var(--forest-950);font-size:.8rem;font-weight:800}.choice-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem}.choice-grid button{display:flex;align-items:center;justify-content:center;gap:.4rem;min-height:2.8rem;border:1px solid #cbd8cf;border-radius:.7rem;color:var(--forest-800);background:var(--cream-50);font-size:.75rem;font-weight:750}.choice-grid button.selected{border-color:var(--forest-800);color:var(--cream-50);background:var(--forest-800)}.template-swatch{width:.8rem;height:.8rem;border-radius:50%;background:var(--cream-200)}.dark-swatch{background:var(--forest-950)}.photo-swatch{background:linear-gradient(135deg,var(--coral),var(--forest-800))}.upload-field{display:grid;gap:.45rem}.upload-field span,.upload-field small{color:var(--muted);font-size:.7rem;font-weight:500}.upload-field input{width:100%;border:1px dashed #a9bdb0;border-radius:.7rem;padding:.65rem;background:var(--cream-50);font-size:.75rem}.range-fields{display:grid;gap:.6rem}.range-fields label{display:grid;gap:.3rem;color:var(--muted);font-size:.72rem}.range-fields input{accent-color:var(--forest-800)}.action-row{display:flex;gap:.6rem}.action-row .button{flex:1}.button:disabled{cursor:wait;opacity:.6}@media(min-width:760px){.card-workspace{grid-template-columns:minmax(18rem,22rem) 1fr;align-items:start}.preview-panel{position:sticky;top:1rem}.controls{padding:1rem 0 0 1rem}.card-preview{width:100%}}
+    :host{display:grid;gap:.8rem}.page-heading{display:flex;align-items:end;justify-content:space-between;gap:1rem}.page-heading h1{margin:.35rem 0 0;color:var(--forest-950);font-family:Georgia,serif;font-size:2.35rem;line-height:1}.back-link{color:var(--forest-800);font-size:.8rem;font-weight:750}.intro{max-width:38rem;margin:0 0 1rem;color:var(--muted);line-height:1.55}.card-workspace{display:grid;gap:1rem}.preview-panel{display:grid;place-items:center;padding:1rem;background:#e9e4da}.card-preview{position:relative;isolation:isolate;width:min(100%,20rem);aspect-ratio:9/16;overflow:hidden;border-radius:1rem;background:var(--cream-100);background-position:center;background-size:cover;box-shadow:0 1rem 2rem rgb(23 63 53 / 18%)}.card-preview.dark{color:var(--cream-50);background:var(--forest-950)}.card-preview.photo{color:var(--cream-50)}.preview-overlay{position:absolute;inset:0;z-index:-1;background:rgb(16 46 41)}.card-preview:not(.photo) .preview-overlay{display:none}.preview-content{display:grid;align-content:space-between;height:100%;padding:12% 11%}.preview-brand{color:var(--coral);font-size:.7rem;font-weight:850;letter-spacing:.1em}.dark .preview-brand{color:var(--amber)}.photo .preview-brand{color:var(--cream-50)}.preview-period{color:var(--muted);font-size:.58rem}.dark .preview-period{color:#b7d4c5}.photo .preview-period{color:var(--cream-50)}.preview-content strong{margin-top:22%;font-family:Georgia,serif;font-size:1.6rem;line-height:1.08}.preview-metrics{display:grid;gap:.7rem;margin-top:auto;margin-bottom:auto}.preview-metrics span{display:grid;gap:.1rem;color:var(--muted);font-size:.58rem}.dark .preview-metrics span{color:#b7d4c5}.photo .preview-metrics span{color:var(--cream-50)}.preview-metrics b{color:var(--forest-950);font-family:Georgia,serif;font-size:1.15rem}.dark .preview-metrics b,.photo .preview-metrics b{color:var(--cream-50)}.preview-content small{color:var(--muted);font-size:.58rem}.dark .preview-content small{color:#b7d4c5}.photo .preview-content small{color:var(--cream-50)}.controls{display:grid;gap:1.1rem;padding-bottom:1rem}.controls h2{margin:.4rem 0 0;color:var(--forest-950);font-family:Georgia,serif;font-size:1.35rem}.controls fieldset{display:grid;gap:.55rem;border:0;margin:0;padding:0}.controls legend,.upload-field{color:var(--forest-950);font-size:.8rem;font-weight:800}.choice-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem}.choice-grid button{display:flex;align-items:center;justify-content:center;gap:.4rem;min-height:2.8rem;border:1px solid #cbd8cf;border-radius:.7rem;color:var(--forest-800);background:var(--cream-50);font-size:.75rem;font-weight:750}.choice-grid button.selected{border-color:var(--forest-800);color:var(--cream-50);background:var(--forest-800)}.template-swatch{width:.8rem;height:.8rem;border-radius:50%;background:var(--cream-200)}.dark-swatch{background:var(--forest-950)}.photo-swatch{background:linear-gradient(135deg,var(--coral),var(--forest-800))}.upload-field{display:grid;gap:.45rem}.upload-field span,.upload-field small{color:var(--muted);font-size:.7rem;font-weight:500}.upload-field input{width:100%;border:1px dashed #a9bdb0;border-radius:.7rem;padding:.65rem;background:var(--cream-50);font-size:.75rem}.range-fields{display:grid;gap:.6rem}.range-fields label{display:grid;gap:.3rem;color:var(--muted);font-size:.72rem}.range-fields input{accent-color:var(--forest-800)}.action-row{display:flex;gap:.6rem}.action-row .button{flex:1}.button:disabled{cursor:wait;opacity:.6}@media(min-width:760px){.card-workspace{grid-template-columns:minmax(18rem,22rem) 1fr;align-items:start}.preview-panel{position:sticky;top:1rem}.controls{padding:1rem 0 0 1rem}.card-preview{width:100%}}
   `]
 })
 export class CardsComponent implements OnDestroy {
@@ -35,15 +35,15 @@ export class CardsComponent implements OnDestroy {
   private readonly analytics = inject(AnalyticsService);
   readonly periods: { id: StatsPeriod; label: string }[] = [{ id: 'today', label: 'Hoje' }, { id: '7', label: '7 dias' }, { id: '30', label: '30 dias' }, { id: 'all', label: 'Tudo' }];
   readonly templates: { id: CardTemplate; label: string }[] = [{ id: 'minimal', label: 'Minimal' }, { id: 'photo', label: 'Foto' }, { id: 'dark', label: 'Dark' }];
-  readonly metrics = computed(() => { const stats = this.store.stats(); const dashboard = this.store.dashboard(); return { streak: stats?.currentStreakDays ?? dashboard?.currentStreakDays ?? 0, pages: stats?.pages ?? dashboard?.week.pages ?? 0, minutes: stats?.minutes ?? dashboard?.week.minutes ?? 0, booksFinished: stats?.booksFinished ?? dashboard?.week.booksFinished ?? 0 }; });
+  readonly metrics = computed(() => { const stats = this.store.stats(); return { streak: stats?.currentStreakDays ?? 0, pages: stats?.pages ?? 0, minutes: stats?.minutes ?? 0, booksFinished: stats?.booksFinished ?? 0 }; });
   template: CardTemplate = 'minimal';
   background: File | null = null;
   backgroundUrl: string | null = null;
   cropX = .5;
   cropY = .5;
-  overlay = .48;
-  busy = false;
-  error: string | null = null;
+  overlay = .72;
+  readonly busy = signal(false);
+  readonly error = signal<string | null>(null);
   private blob: Blob | null = null;
   private blobUrl: string | null = null;
   private cardCreatedTracked = false;
@@ -58,7 +58,7 @@ export class CardsComponent implements OnDestroy {
     try {
       this.generator.validateBackground(file);
     } catch (error) {
-      this.error = error instanceof Error ? error.message : 'Escolha uma imagem válida.';
+      this.error.set(error instanceof Error ? error.message : 'Escolha uma imagem válida.');
       input.value = '';
       return;
     }
@@ -68,10 +68,18 @@ export class CardsComponent implements OnDestroy {
     this.template = 'photo';
     this.blob = null;
     this.cardCreatedTracked = false;
-    this.error = null;
+    this.error.set(null);
   }
 
-  numberValue(event: Event): number { return Number((event.target as HTMLInputElement).value); }
+  constructor() {
+    effect(() => { this.metrics(); this.blob = null; this.cardCreatedTracked = false; });
+  }
+  get cardTitle(): string { return this.store.period() === 'today' ? 'Meu dia de leitura' : this.store.period() === '7' ? 'Minha semana de leitura' : this.store.period() === '30' ? 'Meu mês de leitura' : 'Minha jornada de leitura'; }
+  adjust(field: 'cropX' | 'cropY' | 'overlay', event: Event): void {
+    this[field] = Number((event.target as HTMLInputElement).value);
+    this.blob = null;
+    this.cardCreatedTracked = false;
+  }
 
   async download(): Promise<void> {
     const blob = await this.render();
@@ -87,27 +95,29 @@ export class CardsComponent implements OnDestroy {
     const blob = await this.render();
     if (!blob) return;
     const file = new File([blob], 'folhea-card.png', { type: 'image/png' });
-    const canShare = typeof navigator.share === 'function' && (!navigator.canShare || navigator.canShare({ files: [file] }));
+    const canShare = typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
     if (canShare) {
       try { await navigator.share({ title: 'Meu progresso no Folhea', text: 'Cada página conta.', files: [file] }); this.analytics.track('card_shared', { method: 'native' }); return; } catch (error) { if (error instanceof DOMException && error.name === 'AbortError') return; }
     }
     await this.download();
-    this.analytics.track('card_shared', { method: 'download' });
+
   }
 
   ngOnDestroy(): void { if (this.backgroundUrl) URL.revokeObjectURL(this.backgroundUrl); if (this.blobUrl) URL.revokeObjectURL(this.blobUrl); }
 
   private async render(): Promise<Blob | null> {
+    if (this.busy() || this.store.statsLoading() || !this.store.stats()) return null;
+    if (this.template === 'photo' && !this.background) { this.error.set('Escolha uma foto para usar este modelo.'); return null; }
     if (this.blob) return this.blob;
-    this.busy = true;
-    this.error = null;
+    this.busy.set(true);
+    this.error.set(null);
     try {
-      this.blob = await this.generator.render({ ...this.metrics(), period: this.periodLabel }, { template: this.template, background: this.background, cropX: this.cropX, cropY: this.cropY, overlay: this.overlay });
+      this.blob = await this.generator.render({ ...this.metrics(), period: this.periodLabel, title: this.cardTitle }, { template: this.template, background: this.background, cropX: this.cropX, cropY: this.cropY, overlay: this.overlay });
       if (!this.cardCreatedTracked) { this.analytics.track('card_created', { source: 'cards' }); this.cardCreatedTracked = true; }
       return this.blob;
     }
-    catch { this.error = 'Não foi possível gerar o card neste dispositivo.'; return null; }
-    finally { this.busy = false; }
+    catch { this.error.set('Não foi possível gerar o card neste dispositivo.'); return null; }
+    finally { this.busy.set(false); }
   }
 
   private objectUrl(blob: Blob): string { if (this.blobUrl) URL.revokeObjectURL(this.blobUrl); this.blobUrl = URL.createObjectURL(blob); return this.blobUrl; }

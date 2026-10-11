@@ -27,13 +27,13 @@ export type RegistrationState =
           <div class="success-state">
             <p class="eyebrow">Conta criada</p>
             <h1 id="registration-title">Seu próximo capítulo começa aqui.</h1>
-            <p class="auth-intro" role="status">Cadastro concluído. Continue pelo login seguro do Folhea.</p>
+            <p class="auth-intro" role="status">Cadastro concluído. Entre para registrar sua primeira leitura.</p>
             <a routerLink="/entrar" class="button button-primary submit-button">Continuar para entrar <span aria-hidden="true">→</span></a>
           </div>
         } @else {
           <p class="eyebrow">Comece pelo essencial</p>
           <h1 id="registration-title">Crie sua conta.</h1>
-          <p class="auth-intro">Registre seu e-mail e escolha uma senha. Depois, entre com segurança pelo provedor de identidade do Folhea.</p>
+          <p class="auth-intro">Informe seu e-mail e escolha uma senha para começar.</p>
 
           @if (state() === 'submitting') {
             <p class="alert alert-progress" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span> Enviando seu cadastro…</p>
@@ -66,7 +66,7 @@ export type RegistrationState =
   `,
   styles: [`
     :host{display:block;min-height:100vh;background:var(--cream-100)}
-    .registration-page{padding-bottom:3rem}
+    .auth-page{display:grid;justify-items:center;gap:1.5rem;padding:1.5rem 1rem 3rem}.registration-page>.brand{margin-bottom:2rem}
     .registration-page>.brand{align-self:start}
     .auth-card{width:min(100%,30rem);padding:1.5rem}
     .auth-card h1{margin:.65rem 0 .75rem;color:var(--forest-950);font-family:Georgia,serif;font-size:clamp(2.45rem,10vw,3.2rem);line-height:.98;letter-spacing:-.05em}

@@ -9,8 +9,9 @@ export class ApiClient {
   private readonly baseUrl = '/api/v1';
 
   getMe(): Observable<User> { return this.request(this.http.get<User>(`${this.baseUrl}/me`, this.options())); }
+  updateMe(timezone: string): Observable<User> { return this.request(this.http.patch<User>(`${this.baseUrl}/me`, { timezone }, this.options())); }
   register(input: { email: string; password: string }): Observable<RegistrationResponse> {
-    return this.request(this.http.post<RegistrationResponse>(`${this.baseUrl}/auth/register`, input, this.options()));
+    return this.request(this.http.post<RegistrationResponse>(`${this.baseUrl}/registration`, input, this.options()));
   }
   exportMe(): Observable<UserExport> { return this.request(this.http.get<UserExport>(`${this.baseUrl}/me/export`, this.options())); }
   deleteAccount(): Observable<void> { return this.request(this.http.delete<void>(`${this.baseUrl}/me`, { ...this.options(), body: { confirm: true } })); }
@@ -32,6 +33,7 @@ export class ApiClient {
       params: this.listParams(from, to, limit, offset)
     }));
   }
+  getSession(id: string): Observable<ReadingSession> { return this.request(this.http.get<ReadingSession>(`${this.baseUrl}/sessions/${encodeURIComponent(id)}`, this.options())); }
   createSession(input: ReadingDraft): Observable<ReadingSession> { return this.request(this.http.post<ReadingSession>(`${this.baseUrl}/sessions`, input, this.options())); }
   updateSession(id: string, input: ReadingSessionPatch): Observable<ReadingSession> { return this.request(this.http.patch<ReadingSession>(`${this.baseUrl}/sessions/${encodeURIComponent(id)}`, input, this.options())); }
   deleteSession(id: string): Observable<void> { return this.request(this.http.delete<void>(`${this.baseUrl}/sessions/${encodeURIComponent(id)}`, this.options())); }

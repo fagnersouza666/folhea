@@ -12,6 +12,7 @@ export const routes: Routes = [
   { path: 'sobre', component: PublicPageComponent, data: { page: 'sobre' }, title: 'Sobre — Folhea' },
   { path: 'privacidade', component: PublicPageComponent, data: { page: 'privacidade' }, title: 'Privacidade — Folhea' },
   { path: 'termos', component: PublicPageComponent, data: { page: 'termos' }, title: 'Termos — Folhea' },
+  { path: 'cadastro', loadComponent: () => import('./features/auth/registration.component').then((m) => m.RegistrationComponent), title: 'Criar conta — Folhea' },
   { path: 'entrar', loadComponent: () => import('./features/auth/login.component').then((m) => m.LoginComponent), title: 'Entrar — Folhea' },
   { path: 'app', component: AppShellComponent, canActivate: [authGuard], children: [
     { path: '', pathMatch: 'full', redirectTo: 'inicio' },
