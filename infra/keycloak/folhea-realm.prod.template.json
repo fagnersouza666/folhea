@@ -29,7 +29,8 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "attributes": {
-        "pkce.code.challenge.method": "S256"
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "https://folhea.com.br/auth/logged-out"
       },
       "redirectUris": [
         "https://folhea.com.br/auth/callback"

@@ -29,7 +29,8 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "attributes": {
-        "pkce.code.challenge.method": "S256"
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8080/auth/logged-out##http://localhost:4200/auth/logged-out##https://localhost:8443/auth/logged-out"
       },
       "redirectUris": [
         "http://localhost:8080/auth/callback",
