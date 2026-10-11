@@ -28,11 +28,11 @@ public class UserEntity {
     @Column(length = 320)
     public String email;
 
-    /** Normalized login identifier for credentials managed by Folhea itself. */
+    /** Legacy identifier retained for duplicate detection; new credentials belong to Keycloak. */
     @Column(name = "login_identifier", length = 320)
     public String loginIdentifier;
 
-    /** Encoded password hash. A null value denotes an OIDC-only account. */
+    /** Legacy schema column; Keycloak-backed registration never populates it. */
     @Column(name = "password_hash", length = 255)
     public String passwordHash;
 

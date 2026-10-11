@@ -13,6 +13,12 @@ provisionado exclusivamente no Keycloak. `/api/v1/auth/register` e
 e bucket de rate limit por IP. Cadastro público não exige sessão/token CSRF;
 se Origin estiver presente, deve ser uma origem permitida. As credenciais não são persistidas pelo Folhea nem retornam no
 JSON. Após 201, o navegador deve iniciar `/auth/login` para estabelecer a sessão.
+O backend emite `account_created` depois do commit do vínculo local com o
+subject provisionado. Incrementa `folhea_product_events_total{event="account_created"}`
+e registra somente o nome do evento e a categoria `registration`; e-mail,
+identificadores e senha não entram no evento. Cadastros rejeitados (400/409)
+ou indisponíveis (503), inclusive rollback local após provisionamento, não
+incrementam o contador. O frontend não precisa emitir esse evento anônimo.
 
 `GET /api/v1/me` retorna `{id, email, timezone}`. `PATCH /api/v1/me` aceita
 `{"timezone":"America/Sao_Paulo"}` e retorna o mesmo formato. O fuso deve ser
@@ -118,3 +124,8 @@ Quarkus. Ele revoga o estado de tokens e limpa cookies; um observador do evento
 OIDC remove o vínculo CSRF também quando o fluxo não passa pelos filtros REST.
 As operações de store Redis durante autenticação usam `OidcRequestContext`
 para executar fora da thread de eventos.
+O filtro de cookies do callback usa `CurrentIdentityAssociation.getDeferredIdentity()`
+e retorna `Uni<Void>`; a rotação/revogação CSRF com Redis executa em worker.
+Ele mantém cookies Secure/HttpOnly/SameSite=Lax e aguarda a identidade autenticada,
+sem acessar a identidade lazy de forma bloqueante na thread de I/O.
+Veja a [referência oficial de autenticação lazy](https://quarkus.io/guides/security-proactive-authentication/).

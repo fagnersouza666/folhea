@@ -3,6 +3,7 @@ package com.folhea.user;
 import com.folhea.shared.ProblemException;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.jboss.logging.Logger;
 
 import java.text.Normalizer;
@@ -23,6 +24,7 @@ public class RegistrationService {
     @Inject UserRepository users;
     @Inject KeycloakAdminClient keycloak;
     @Inject RegistrationPersistence persistence;
+    @Inject MeterRegistry metrics;
 
     public UserEntity register(RegistrationResource.RegistrationRequest request) {
         if (request == null) throw invalid("Informe e-mail e senha.");
@@ -44,8 +46,9 @@ public class RegistrationService {
             };
         }
 
+        UserEntity user;
         try {
-            return persistence.persist(provisioned.subject(), identifier);
+            user = persistence.persist(provisioned.subject(), identifier);
         } catch (RegistrationPersistence.Conflict exception) {
             compensate(provisioned.subject());
             throw duplicate();
@@ -53,6 +56,12 @@ public class RegistrationService {
             compensate(provisioned.subject());
             throw unavailable();
         }
+        // RegistrationPersistence commits before returning through its CDI
+        // transaction interceptor. Do not count rejected/rolled-back attempts or
+        // put observability inside the provider-compensation catch block.
+        metrics.counter("folhea.product.events", "event", "account_created").increment();
+        LOG.info("product_event=account_created product_properties={source=registration}");
+        return user;
     }
 
     public static String normalizeIdentifier(String value) {
