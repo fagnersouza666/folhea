@@ -236,6 +236,61 @@ test.describe('jornadas pela interface — API e login BFF simulados', () => {
     expect(mockApi.sessions).toHaveLength(1);
   });
 
+  test('leitura salva, falha de resumo, Fechar e Concluir não restauram métricas antigas na Home', async ({ page, mockApi }) => {
+    let unavailable = false;
+    let posts = 0;
+    page.on('request', request => { if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/sessions') posts++; });
+    await page.route('**/api/v1/dashboard', route => unavailable
+      ? route.fulfill({ status: 503, contentType: 'application/problem+json', body: JSON.stringify({ detail: 'Resumo indisponível.' }) })
+      : route.fallback());
+    await signIn(page);
+    await page.getByRole('link', { name: /registrar leitura/i }).click();
+    await page.getByLabel('Páginas').fill('12');
+    await page.getByLabel('Minutos').fill('8');
+    unavailable = true;
+    await page.getByRole('button', { name: /^registrar leitura/i }).click();
+    await expect(page.getByRole('heading', { name: /leitura registrada/i })).toBeVisible();
+    await expect(page.locator('.weekly').getByRole('alert')).toContainText('Seu registro foi salvo');
+    await page.getByRole('button', { name: 'Fechar', exact: true }).click();
+    await page.getByRole('link', { name: 'Concluir', exact: true }).click();
+    await expect(page).toHaveURL(/\/app\/inicio$/);
+    await expect(page.locator('.stats-grid')).toHaveCount(0);
+    await expect(page.locator('.streak-card')).toHaveCount(0);
+    await expect(page.locator('.unavailable')).toContainText('Seu resumo está indisponível');
+    unavailable = false;
+    await page.locator('.unavailable').getByRole('button', { name: 'Tentar novamente' }).click();
+    await expect(page.locator('.stat-card').first().locator('strong')).toHaveText('12');
+    await expect(page.locator('.stat-card').nth(1).locator('strong')).toHaveText('8min');
+    await expect(page.locator('.streak-card strong')).toContainText('1');
+    expect(mockApi.sessions).toHaveLength(1);
+    expect(posts).toBe(1);
+  });
+
+  test('sessão em cache carrega livro fora da primeira página e permite retry do livro', async ({ page, mockApi }) => {
+    const original = mockApi.books[0];
+    mockApi.books = [original, ...Array.from({ length: 100 }, (_, index) => ({ ...original, id: `book-${index}`, title: `Livro ${index}` }))];
+    const older = mockApi.books[100];
+    mockApi.sessions = [{ id: 'cached', userId: 'demo-user', bookId: older.id, readingDate: TODAY, pages: 4, minutes: 3 }];
+    let unavailable = true;
+    await page.route(`**/api/v1/books/${older.id}`, route => unavailable
+      ? route.fulfill({ status: 503, contentType: 'application/problem+json', body: JSON.stringify({ detail: 'Livro indisponível.' }) })
+      : route.fallback());
+    await signIn(page);
+    await page.getByRole('link', { name: 'Ver progresso', exact: false }).click();
+    await expect(page.locator('.session-row')).toHaveCount(1);
+    await page.getByRole('link', { name: /Editar leitura de/ }).click();
+    await expect(page.getByRole('heading', { name: 'Editar leitura' })).toBeVisible();
+    await expect(page.getByRole('alert').filter({ hasText: 'Livro indisponível.' })).toBeVisible();
+    unavailable = false;
+    await page.getByRole('alert').filter({ hasText: 'Livro indisponível.' }).getByRole('button', { name: 'Tentar novamente' }).click();
+    await expect(page.getByLabel('Livro', { exact: true })).toHaveValue(older.id);
+    await expect(page.locator('#edit-book option:checked')).toHaveText(older.title);
+    await page.getByLabel('Páginas', { exact: true }).fill('5');
+    await page.getByRole('button', { name: 'Salvar registro' }).click();
+    await expect(page).toHaveURL(/\/app\/progresso$/);
+    expect(mockApi.sessions[0].pages).toBe(5);
+  });
+
   test('falha de rede mantém o formulário e informa que a leitura não foi salva', async ({ page, mockApi }) => {
     let summaryUnavailable = true;
     await page.route('**/api/v1/dashboard', (route) => summaryUnavailable

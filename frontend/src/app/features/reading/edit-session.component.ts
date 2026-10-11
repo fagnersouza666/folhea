@@ -12,6 +12,9 @@ import { MAX_SESSION_MINUTES, MAX_SESSION_PAGES } from './reading-limits';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (store.sessionsError(); as error) { <div class="alert alert-error" role="alert">{{ error }} <button type="button" class="dismiss" (click)="retry()">Tentar novamente</button></div> }
+    @if (session() && !store.getBook(session()?.bookId)) {
+      @if (store.booksError(); as error) { <div class="alert alert-error" role="alert">{{ error }} <button type="button" class="dismiss" (click)="retry()">Tentar novamente</button></div> }
+    }
     @if ((store.sessionsLoading() || store.sessionDetailLoading()) && !session()) {
       <div class="loading surface" role="status">Carregando sessão…</div>
     } @else if (session(); as currentSession) {

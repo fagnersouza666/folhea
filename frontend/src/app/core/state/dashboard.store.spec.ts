@@ -286,4 +286,25 @@ describe('DashboardStore', () => {
     expect(store.currentBook()?.id).toBe(BOOK_ID);
   });
 
+  it('loads the associated book of a cached session outside the first 100 books', () => {
+    seedBooks(Array.from({ length: 100 }, (_, index) => ({ ...readingBook, id: `other-${index}` })));
+    seedSessions([readingSession]);
+    store.loadSession(readingSession.id);
+    httpMock.expectNone(`/api/v1/sessions/${readingSession.id}`);
+    httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush(readingBook);
+    expect(store.selectableBooks().find((book) => book.id === BOOK_ID)).toEqual(readingBook);
+  });
+
+  it('retries the associated book after a direct session has been cached and its book failed', () => {
+    store.loadSession(readingSession.id);
+    httpMock.expectOne(`/api/v1/sessions/${readingSession.id}`).flush(readingSession);
+    flushServerError(httpMock, `/api/v1/books/${BOOK_ID}`);
+    expect(store.booksError()).toContain('Não foi possível abrir o livro');
+    store.loadSession(readingSession.id);
+    httpMock.expectNone(`/api/v1/sessions/${readingSession.id}`);
+    httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush(readingBook);
+    expect(store.booksError()).toBeNull();
+    expect(store.selectableBooks().find((book) => book.id === BOOK_ID)).toEqual(readingBook);
+  });
+
 });

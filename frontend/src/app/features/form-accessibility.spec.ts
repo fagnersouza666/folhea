@@ -163,6 +163,7 @@ describe('critical form DOM states', () => {
     const store = createStore({
       loading: signal(false),
       dashboard: signal(null),
+      dashboardError: signal('Não foi possível carregar seu resumo.'),
       currentBook: signal(null),
       error: signal('Não foi possível carregar seu resumo.'),
       reload: vi.fn()

@@ -147,7 +147,8 @@ export class DashboardStore {
   }
 
   loadSession(id: string): void {
-    if (this.getSession(id)) return;
+    const cached = this.getSession(id);
+    if (cached) { this.loadBook(cached.bookId); return; }
     this.sessionDetailLoadingState.set(true);
     this.sessionsErrorState.set(null);
     this.api.getSession(id).subscribe({
