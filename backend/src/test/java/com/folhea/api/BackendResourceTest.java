@@ -549,10 +549,10 @@ class BackendResourceTest {
         RestAssured.requestSpecification = null;
         RestAssured.requestSpecification = new RequestSpecBuilder()
                 .addHeader("Origin", "http://localhost:8081").build();
-        given().cookie("q_session_folhea", reference).cookie(SessionCookiePolicy.NAME, ticket)
+        given().cookie("q_session_Default_folhea", reference).cookie(SessionCookiePolicy.NAME, ticket)
                 .header("X-CSRF-Token", csrf).contentType(ContentType.JSON).body("{\"confirm\":true}")
                 .when().delete("/api/v1/me").then().statusCode(204)
-                .cookie("q_session_folhea", equalTo(""));
+                .cookie("q_session_Default_folhea", equalTo(""));
         org.junit.jupiter.api.Assertions.assertTrue(tokenStateStore.find(reference).isEmpty());
         org.junit.jupiter.api.Assertions.assertFalse(csrfTokens.isValid(ticket, csrf));
         given().when().get("/api/v1/me").then().statusCode(401).contentType("application/problem+json");

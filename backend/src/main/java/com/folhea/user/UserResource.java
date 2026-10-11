@@ -8,6 +8,7 @@ import com.folhea.reading.ReadingSessionResource;
 import com.folhea.security.CsrfTokenService;
 import com.folhea.security.SessionCookiePolicy;
 import com.folhea.security.SessionCookieSettings;
+import com.folhea.security.OidcSessionCookieSettings;
 import com.folhea.security.store.TokenStateStore;
 import com.folhea.shared.ProblemException;
 import io.quarkus.security.Authenticated;
@@ -39,7 +40,6 @@ import java.util.UUID;
 import java.time.ZoneId;
 import io.quarkus.security.identity.SecurityIdentity;
 import org.eclipse.microprofile.jwt.JsonWebToken;
-import jakarta.ws.rs.core.NewCookie;
 
 @Path("/api/v1/me")
 @Authenticated
@@ -55,6 +55,7 @@ public class UserResource {
     @Inject ReadingSessionRepository sessions;
     @Inject CsrfTokenService csrfTokens;
     @Inject SessionCookieSettings sessionCookies;
+    @Inject OidcSessionCookieSettings oidcCookies;
     @Inject TokenStateStore tokenStateStore;
     @Inject KeycloakAdminClient keycloak;
     @Inject SecurityIdentity identity;
@@ -107,7 +108,6 @@ public class UserResource {
                     "Envie {\"confirm\": true} para excluir a conta.");
         }
         UserEntity user = currentUser.get();
-        UUID userId = user.id;
         try {
             keycloak.deleteAccount(user.identitySubject);
         } catch (KeycloakAdminClient.ProvisioningException exception) {
@@ -118,20 +118,15 @@ public class UserResource {
         users.delete(user);
         users.flush();
         revokeSession(headers);
-        LOG.infof("Account deleted userId=%s", userId);
-        return Response.noContent().cookie(sessionCookies.clear(), clearOidcCookie()).build();
+        LOG.info("Account deleted");
+        return Response.noContent().cookie(sessionCookies.clear(), oidcCookies.clear()).build();
     }
 
     private void revokeSession(HttpHeaders headers) {
         Cookie sessionCookie = headers.getCookies().get(sessionCookies.name());
         if (sessionCookie != null) csrfTokens.revoke(sessionCookie.getValue());
-        Cookie oidc = headers.getCookies().get("q_session_folhea");
+        Cookie oidc = headers.getCookies().get(oidcCookies.name());
         if (oidc != null && SessionCookiePolicy.isValidTicket(oidc.getValue())) tokenStateStore.remove(oidc.getValue());
-    }
-
-    private NewCookie clearOidcCookie() {
-        return new NewCookie.Builder("q_session_folhea").value("").path("/").maxAge(0)
-                .httpOnly(true).secure(sessionCookies.clear().isSecure()).sameSite(NewCookie.SameSite.LAX).build();
     }
 
     public record MeResponse(UUID id, String email, String timezone) { }

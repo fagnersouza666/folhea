@@ -12,9 +12,21 @@
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
         <quarkus.platform.version>3.40.1</quarkus.platform.version>
         <surefire-plugin.version>3.6.0</surefire-plugin.version>
+        <!-- ASM 9.10.1 reads Java 27 without the affected JDK ClassFile bridge. -->
+        <byte-buddy.version>1.18.14</byte-buddy.version>
     </properties>
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>net.bytebuddy</groupId>
+                <artifactId>byte-buddy</artifactId>
+                <version>${byte-buddy.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.bytebuddy</groupId>
+                <artifactId>byte-buddy-agent</artifactId>
+                <version>${byte-buddy.version}</version>
+            </dependency>
             <dependency>
                 <groupId>${quarkus.platform.group-id}</groupId>
                 <artifactId>${quarkus.platform.artifact-id}</artifactId>

@@ -37,7 +37,7 @@ repetições sem alteração não geram um novo evento de atualização.
 
 `DELETE /me` exige `{"confirm":true}`. Antes de apagar dados, remove a identidade
 do subject no Keycloak e suas sessões (se indisponível, retorna 503 sem apagar). Remove livros
-e sessões por cascade, revoga o estado opaco `q_session_folhea` e o CSRF,
+e sessões por cascade, revoga o estado opaco `q_session_Default_folhea` e o CSRF,
 e expira ambos os cookies. Requer novo cadastro para voltar a usar a aplicação.
 Nenhuma senha é gravada
 pelo fluxo de cadastro Folhea.
@@ -155,3 +155,24 @@ Redirects 302 do mecanismo OIDC nunca criam esse binding por si só.
 O próprio mecanismo usa `AuthenticationRedirectException` após trocar e validar
 o código quando remove parâmetros/restaura a rota; não se deve consultar essa
 identidade novamente na resposta 302. Referência: [fonte Quarkus 3.40.1](https://github.com/quarkusio/quarkus/blob/3.40.1/extensions/oidc/runtime/src/main/java/io/quarkus/oidc/runtime/CodeAuthenticationMechanism.java).
+
+O build fixa Byte Buddy e seu agent na mesma versão estável 1.18.14, que usa
+ASM 9.10.1. O BOM 3.40.1 fornece 1.18.8: em um `clean verify` com Java 27,
+o enhancer Hibernate de `BookEntity` falhou no leitor JDK ClassFile API
+(`BoundLocalVariable.typeSymbol`, descriptor nulo). O ajuste mantém a
+instrumentação ORM habilitada e é validado com build limpo e suíte completa.
+A versão foi conferida nos [metadados Maven Central](https://repo.maven.apache.org/maven2/net/bytebuddy/byte-buddy/maven-metadata.xml)
+e na [release oficial estável](https://github.com/raphw/byte-buddy/releases/tag/byte-buddy-1.18.14).
+
+A exclusão deriva o nome OIDC da configuração `tenant-id` e `cookie-suffix`,
+conforme `OidcUtils.getSessionCookieName`: com `Default` e `folhea`, o nome
+real é `q_session_Default_folhea`. Revoga a referência desse cookie no store
+e expira o mesmo nome/path/domain, além do binding CSRF separado. Os testes
+comparam a política com a implementação Quarkus e exercitam DELETE com o nome
+observado no Keycloak/BFF real. O logout OIDC permanece tratado pelo mecanismo
+Quarkus (remoção da referência/cookie); seu evento revoga também o CSRF no worker.
+Logs de exclusão não incluem o identificador pessoal da conta.
+A [referência oficial ASM](https://asm.ow2.io/versions.html) registra suporte
+Java 27 a partir de 9.10; 9.9.x cobre Java 26. O clean focado com Byte Buddy
+1.18.14 passou pela instrumentação e iniciou PostgreSQL/migrações, revelando a
+regressão esperada do nome OIDC anterior, sem erro de enhancement.

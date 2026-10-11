@@ -95,7 +95,7 @@ class ServerTokenStateManagerTest {
                         ? reference : defaultValue(method.getReturnType()));
         HttpServerRequest request = proxy(HttpServerRequest.class, (proxy, method, arguments) ->
                 "cookieMap".equals(method.getName())
-                        ? Map.of("q_session_folhea", sessionCookie)
+                        ? Map.of("q_session_Default_folhea", sessionCookie)
                         : defaultValue(method.getReturnType()));
         return proxy(RoutingContext.class, (proxy, method, arguments) ->
                 "request".equals(method.getName()) ? request : defaultValue(method.getReturnType()));
