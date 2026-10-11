@@ -140,7 +140,7 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
         if (!"POST".equalsIgnoreCase(context.getMethod())) return false;
         String path = context.getUriInfo().getPath();
         if (path != null && path.startsWith("/")) path = path.substring(1);
-        return "api/v1/auth/register".equals(path) || "api/v1/register".equals(path);
+        return "api/v1/registration".equals(path) || "api/v1/auth/register".equals(path) || "api/v1/register".equals(path);
     }
 
     private static boolean isMutation(String method) {

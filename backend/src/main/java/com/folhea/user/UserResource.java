@@ -19,6 +19,9 @@ import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PATCH;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Cookie;
@@ -33,6 +36,10 @@ import org.jboss.logging.Logger;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.time.ZoneId;
+import io.quarkus.security.identity.SecurityIdentity;
+import org.eclipse.microprofile.jwt.JsonWebToken;
+import jakarta.ws.rs.core.NewCookie;
 
 @Path("/api/v1/me")
 @Authenticated
@@ -49,11 +56,30 @@ public class UserResource {
     @Inject CsrfTokenService csrfTokens;
     @Inject SessionCookieSettings sessionCookies;
     @Inject TokenStateStore tokenStateStore;
+    @Inject KeycloakAdminClient keycloak;
+    @Inject SecurityIdentity identity;
 
     @GET
     @Operation(summary = "Retorna o usuário autenticado")
     public MeResponse me() {
         UserEntity user = currentUser.get();
+        return new MeResponse(user.id, user.email, user.timezone);
+    }
+
+    @PATCH
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Transactional
+    @Operation(summary = "Define o fuso horário da conta")
+    public MeResponse update(@Valid UpdateMeRequest request) {
+        if (request == null || request.timezone() == null
+                || !ZoneId.getAvailableZoneIds().contains(request.timezone())) {
+            throw new ProblemException(400, "https://folhea.com.br/problems/invalid-timezone",
+                    "Fuso horário inválido", "Informe um identificador IANA de fuso horário válido.");
+        }
+        UserEntity user = currentUser.get();
+        user.timezone = request.timezone();
+        user.timezoneConfigured = true;
+        users.flush();
         return new MeResponse(user.id, user.email, user.timezone);
     }
 
@@ -82,21 +108,35 @@ public class UserResource {
         }
         UserEntity user = currentUser.get();
         UUID userId = user.id;
+        try {
+            keycloak.deleteAccount(user.identitySubject);
+        } catch (KeycloakAdminClient.ProvisioningException exception) {
+            throw new ProblemException(503, "https://folhea.com.br/problems/account-deletion-unavailable",
+                    "Exclusão indisponível", "Não foi possível excluir a identidade de acesso. Tente novamente mais tarde.");
+        }
+        tokenStateStore.revokeSubject(user.identitySubject, SessionCookiePolicy.MAX_AGE);
         users.delete(user);
+        users.flush();
         revokeSession(headers);
         LOG.infof("Account deleted userId=%s", userId);
-        return Response.noContent().cookie(sessionCookies.clear()).build();
+        return Response.noContent().cookie(sessionCookies.clear(), clearOidcCookie()).build();
     }
 
     private void revokeSession(HttpHeaders headers) {
         Cookie sessionCookie = headers.getCookies().get(sessionCookies.name());
-        if (sessionCookie == null || !SessionCookiePolicy.isValidTicket(sessionCookie.getValue())) return;
-        String ticket = sessionCookie.getValue();
-        csrfTokens.revoke(ticket);
-        tokenStateStore.remove(ticket);
+        if (sessionCookie != null) csrfTokens.revoke(sessionCookie.getValue());
+        Cookie oidc = headers.getCookies().get("q_session_folhea");
+        if (oidc != null && SessionCookiePolicy.isValidTicket(oidc.getValue())) tokenStateStore.remove(oidc.getValue());
+    }
+
+    private NewCookie clearOidcCookie() {
+        return new NewCookie.Builder("q_session_folhea").value("").path("/").maxAge(0)
+                .httpOnly(true).secure(sessionCookies.clear().isSecure()).sameSite(NewCookie.SameSite.LAX).build();
     }
 
     public record MeResponse(UUID id, String email, String timezone) { }
+
+    public record UpdateMeRequest(@NotBlank @Size(max = 80) String timezone) { }
 
     public record ExportUserResponse(UUID id, String email, String timezone, Instant createdAt, Instant updatedAt) {
         static ExportUserResponse from(UserEntity user) {

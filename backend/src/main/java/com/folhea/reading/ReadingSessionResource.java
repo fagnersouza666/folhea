@@ -69,7 +69,9 @@ public class ReadingSessionResource {
     @Operation(summary = "Registra uma sessão de leitura")
     public Response create(@Valid CreateSessionRequest request) {
         var user = currentUser.get();
+        if (request == null) invalid("Informe os dados da sessão.");
         validateProgress(request.pages(), request.minutes());
+        validateDate(request.readingDate(), time.today(user.timezone));
         ensureBookOwned(user.id, request.bookId());
         ReadingSessionEntity session = new ReadingSessionEntity();
         session.userId = user.id;
@@ -81,16 +83,26 @@ public class ReadingSessionResource {
         return Response.status(Response.Status.CREATED).entity(SessionResponse.from(session)).build();
     }
 
+    @GET @Path("/{id}")
+    @Operation(summary = "Retorna uma sessão do usuário")
+    public SessionResponse get(@PathParam("id") UUID id) {
+        return SessionResponse.from(findOwned(currentUser.get().id, id));
+    }
+
     @PATCH @Path("/{id}") @Transactional
     public SessionResponse update(@PathParam("id") UUID id, @Valid UpdateSessionRequest request) {
         var user = currentUser.get();
         ReadingSessionEntity session = findOwned(user.id, id);
         if (request == null || request.isEmpty()) invalid("Informe ao menos um campo para alterar.");
         if (request.bookId() != null) { ensureBookOwned(user.id, request.bookId()); session.bookId = request.bookId(); }
-        if (request.readingDate() != null) session.readingDate = request.readingDate();
+        if (request.readingDate() != null) {
+            validateDate(request.readingDate(), time.today(user.timezone));
+            session.readingDate = request.readingDate();
+        }
         if (request.pages() != null) session.pages = request.pages();
         if (request.minutes() != null) session.minutes = request.minutes();
         validateProgress(session.pages, session.minutes);
+        sessions.flush();
         return SessionResponse.from(session);
     }
 
@@ -120,6 +132,10 @@ public class ReadingSessionResource {
         if (pageCount > MAX_PAGES || minuteCount > MAX_MINUTES) {
             invalid("Páginas ou minutos excedem o limite permitido para uma sessão.");
         }
+    }
+    private static void validateDate(LocalDate date, LocalDate today) {
+        if (date == null) invalid("Informe a data da leitura.");
+        if (date.isAfter(today)) invalid("A data da leitura não pode estar no futuro no fuso horário da conta.");
     }
     private static void invalid(String detail) { throw new ProblemException(400, "https://folhea.com.br/problems/invalid-reading-session", "Sessão de leitura inválida", detail); }
 

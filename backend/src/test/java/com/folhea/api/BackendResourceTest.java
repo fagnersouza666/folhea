@@ -10,6 +10,8 @@ import com.folhea.user.UserEntity;
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.InjectMock;
+import com.folhea.user.KeycloakAdminClient;
 import io.quarkus.test.security.SecurityAttribute;
 import io.quarkus.test.security.TestSecurity;
 import io.restassured.http.ContentType;
@@ -44,6 +46,7 @@ class BackendResourceTest {
     @Inject EntityManager entityManager;
     @Inject CsrfTokenService csrfTokens;
     @Inject TokenStateStore tokenStateStore;
+    @InjectMock KeycloakAdminClient keycloak;
     private UUID seededAliceBookId;
     private UUID seededBobBookId;
     private UUID seededBobSessionId;
@@ -51,6 +54,11 @@ class BackendResourceTest {
     @BeforeEach
     @Transactional
     void clearDatabase() {
+        // Domain REST tests isolate the external IdP; the real Keycloak/BFF
+        // flow is validated separately by the integration acceptance suite.
+        org.mockito.Mockito.doNothing().when(keycloak).deleteAccount(org.mockito.ArgumentMatchers.anyString());
+        tokenStateStore.revokeSubject(ALICE, java.time.Duration.ZERO);
+        tokenStateStore.revokeSubject(BOB, java.time.Duration.ZERO);
         entityManager.createQuery("delete from ReadingSessionEntity").executeUpdate();
         entityManager.createQuery("delete from BookEntity").executeUpdate();
         entityManager.createQuery("delete from UserEntity").executeUpdate();
@@ -312,7 +320,9 @@ class BackendResourceTest {
     void timezoneBoundaryUsesTheUsersLocalDateForFinishAndStats() {
         UUID bookId = createBook("A hora da estrela");
         createSession(bookId, TODAY.minusDays(1), 7, 11);
-        createSession(bookId, TODAY, 99, 99);
+        given().contentType(ContentType.JSON)
+                .body("{\"bookId\":\"" + bookId + "\",\"readingDate\":\"" + TODAY + "\",\"pages\":99,\"minutes\":99}")
+                .when().post("/api/v1/sessions").then().statusCode(400);
 
         // 02:30Z is still 23:30 on the previous day in São Paulo.
         given().when().get("/api/v1/me").then().statusCode(200)
@@ -433,6 +443,139 @@ class BackendResourceTest {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
+    void streakHasNoFourHundredDayCapAndStatsAggregateBeyondListLimits() {
+        seedLongStreak();
+        for (String period : new String[]{"today", "7", "30", "all"}) {
+            given().when().get("/api/v1/stats?period=" + period).then().statusCode(200)
+                    .body("currentStreakDays", equalTo(450));
+        }
+        given().when().get("/api/v1/stats?period=all").then().statusCode(200)
+                .body("pages", equalTo(470)).body("minutes", equalTo(455))
+                .body("period.from", equalTo(TODAY.minusDays(449).toString()));
+        given().when().get("/api/v1/dashboard").then().statusCode(200)
+                .body("currentStreakDays", equalTo(450))
+                .body("week.pages", equalTo(27)).body("week.minutes", equalTo(12));
+    }
+
+    @Transactional
+    void seedLongStreak() {
+        var alice = findUserBySubject(ALICE);
+        for (int i = 0; i < 450; i++) entityManager.persist(session(alice.id, seededAliceBookId, TODAY.minusDays(i), 1, 1));
+        entityManager.persist(session(alice.id, seededAliceBookId, TODAY, 20, 5));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
+    void numericalAndDateValidationRejectsInvalidInputWithoutChangingMetrics() {
+        UUID id = createSession(seededAliceBookId, TODAY, 5, 0);
+        for (String pages : new String[]{"1.9", "\"2\"", "-1", "2147483648", "10001", "true"}) {
+            given().contentType(ContentType.JSON).body("{\"pages\":" + pages + "}")
+                    .when().patch("/api/v1/sessions/{id}", id)
+                    .then().statusCode(400).contentType("application/problem+json");
+        }
+        for (String body : new String[]{"null", "{}", "{\"pages\":0,\"minutes\":0}",
+                "{\"readingDate\":\"2026-02-30\"}", "{\"readingDate\":\"" + TODAY.plusDays(1) + "\"}"}) {
+            given().contentType(ContentType.JSON).body(body).when().patch("/api/v1/sessions/{id}", id)
+                    .then().statusCode(400).contentType("application/problem+json");
+        }
+        given().contentType(ContentType.JSON).body("null").when().post("/api/v1/sessions")
+                .then().statusCode(400);
+        given().contentType(ContentType.JSON).body("{\"finishedOn\":\"" + TODAY.plusDays(1) + "\"}")
+                .when().post("/api/v1/books/{id}/finish", seededAliceBookId).then().statusCode(400);
+        given().when().get("/api/v1/stats?period=all").then().statusCode(200)
+                .body("pages", equalTo(5)).body("minutes", equalTo(0)).body("booksFinished", equalTo(0));
+        // Each numeric input is optional individually.
+        given().contentType(ContentType.JSON)
+                .body("{\"bookId\":\"" + seededAliceBookId + "\",\"readingDate\":\"" + TODAY + "\",\"minutes\":10}")
+                .when().post("/api/v1/sessions").then().statusCode(201).body("pages", equalTo(0));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
+    void explicitTimezonePreferencePersistsOverIdentityDefaults() {
+        given().contentType(ContentType.JSON).body("{\"timezone\":\"America/Sao_Paulo\"}")
+                .when().patch("/api/v1/me").then().statusCode(200)
+                .body("timezone", equalTo("America/Sao_Paulo"));
+        given().when().get("/api/v1/me").then().statusCode(200).body("timezone", equalTo("America/Sao_Paulo"));
+        given().when().get("/api/v1/stats?period=today").then().statusCode(200)
+                .body("period.to", equalTo(TODAY.minusDays(1).toString()));
+        given().contentType(ContentType.JSON).body("{\"timezone\":\"Invalid/Zone\"}")
+                .when().patch("/api/v1/me").then().statusCode(400);
+        given().contentType(ContentType.JSON).body("{\"timezone\":\"+03:00\"}")
+                .when().patch("/api/v1/me").then().statusCode(400);
+    }
+
+    @Test
+    @TestSecurity(user = ALICE)
+    void deletionRevokesTheOidcReferenceInsteadOfTheIndependentCsrfTicket() {
+        String reference = SessionCookiePolicy.newTicket(new SecureRandom());
+        tokenStateStore.save(reference, new io.quarkus.oidc.AuthorizationCodeTokens("id", "access", "refresh"), java.time.Duration.ofMinutes(5));
+        String ticket = SessionCookiePolicy.newTicket(new SecureRandom());
+        String csrf = csrfTokens.getOrIssue(ticket);
+        given().cookie("q_session_folhea", reference).cookie(SessionCookiePolicy.NAME, ticket)
+                .header("X-CSRF-Token", csrf).contentType(ContentType.JSON).body("{\"confirm\":true}")
+                .when().delete("/api/v1/me").then().statusCode(204)
+                .cookie("q_session_folhea", equalTo(""));
+        org.junit.jupiter.api.Assertions.assertTrue(tokenStateStore.find(reference).isEmpty());
+        org.junit.jupiter.api.Assertions.assertFalse(csrfTokens.isValid(ticket, csrf));
+        given().when().get("/api/v1/me").then().statusCode(401).contentType("application/problem+json");
+        assertNull(findUserBySubject(ALICE));
+        org.mockito.Mockito.verify(keycloak).deleteAccount(ALICE);
+    }
+
+    @Test
+    @TestSecurity(user = ALICE)
+    void providerFailureKeepsTheAccountAndAllowsDeletionRetry() {
+        org.mockito.Mockito.doThrow(new KeycloakAdminClient.ProvisioningException(KeycloakAdminClient.Failure.UNAVAILABLE))
+                .when(keycloak).deleteAccount(ALICE);
+        given().contentType(ContentType.JSON).body("{\"confirm\":true}").when().delete("/api/v1/me")
+                .then().statusCode(503).contentType("application/problem+json")
+                .body("type", equalTo("https://folhea.com.br/problems/account-deletion-unavailable"));
+        given().when().get("/api/v1/me").then().statusCode(200);
+        given().when().get("/api/v1/books").then().statusCode(200).body("size()", equalTo(1));
+        org.mockito.Mockito.doNothing().when(keycloak).deleteAccount(ALICE);
+        given().contentType(ContentType.JSON).body("{\"confirm\":true}").when().delete("/api/v1/me")
+                .then().statusCode(204);
+    }
+
+    @Test
+    @TestSecurity(user = ALICE)
+    void analyticsAcceptsOnlyDeclaredEventsAndCategoricalOrNumericProperties() {
+        given().contentType(ContentType.JSON).body("{\"event\":\"card_shared\",\"properties\":{\"method\":\"native\",\"card_count\":1}}")
+                .when().post("/api/v1/analytics/events").then().statusCode(202);
+        for (String payload : new String[]{
+                "{\"event\":\"unknown\"}",
+                "{\"event\":\"book_created\",\"properties\":{\"title\":\"secret\"}}",
+                "{\"event\":\"book_created\",\"properties\":{\"source\":\"secret-book\"}}",
+                "{\"event\":\"book_created\",\"properties\":{\"pages\":\"private\"}}",
+                "{\"event\":\"book_created\",\"properties\":{\"pages\":1.5}}"}) {
+            given().contentType(ContentType.JSON).body(payload).when().post("/api/v1/analytics/events")
+                    .then().statusCode(400).contentType("application/problem+json");
+        }
+    }
+
+    @Test
+    void technicalMetricsExposeJvmHttpAndPoolWithoutPersonalLabels() {
+        given().when().get("/q/health/ready").then().statusCode(200);
+        given().when().get("/q/metrics").then().statusCode(200)
+                .body(containsString("jvm_memory_used_bytes"))
+                .body(containsString("process_cpu_usage"))
+                .body(containsString("http_server_requests_seconds_count"))
+                .body(containsString("agroal_active_count"))
+                .body(not(containsString("alice@example.test")));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
     void listingsRejectOverlongIntervalsAndPaginateResults() {
         UUID bookId = createBook("Paginação");
         createSession(bookId, TODAY, 1, 1);
@@ -461,6 +604,12 @@ class BackendResourceTest {
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
     void aliceCannotReadMutateOrReferenceBobsBooksAndSessions() {
+        given().when().get("/api/v1/sessions/{id}", seededBobSessionId)
+                .then().statusCode(404).contentType("application/problem+json");
+        given().when().post("/api/v1/books/{id}/finish", seededBobBookId)
+                .then().statusCode(404).contentType("application/problem+json");
+        given().when().delete("/api/v1/books/{id}/finish", seededBobBookId)
+                .then().statusCode(404).contentType("application/problem+json");
         given().when().get("/api/v1/books/{id}", seededBobBookId)
                 .then().statusCode(404).contentType("application/problem+json");
         given().contentType(ContentType.JSON).body("{\"title\":\"Tentativa\"}")
@@ -491,6 +640,8 @@ class BackendResourceTest {
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
     void bobSeesOnlyHisOwnResourcesAndStatistics() {
+        given().when().get("/api/v1/sessions/{id}", seededBobSessionId)
+                .then().statusCode(200).body("id", equalTo(seededBobSessionId.toString()));
         given().when().get("/api/v1/books/{id}", seededAliceBookId)
                 .then().statusCode(404).contentType("application/problem+json");
         given().when().get("/api/v1/books").then().statusCode(200).body("size()", equalTo(1));

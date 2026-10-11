@@ -40,6 +40,9 @@ public class UserEntity {
     @Column(nullable = false, length = 80)
     public String timezone;
 
+    @Column(name = "timezone_configured", nullable = false)
+    public boolean timezoneConfigured;
+
     @Column(name = "created_at", nullable = false)
     public Instant createdAt;
 

@@ -39,14 +39,14 @@ contrato de integração segura.
 ### Endpoint
 
 ```http
-POST /api/v1/auth/register
+POST /api/v1/registration
 Content-Type: application/json
 Accept: application/json
 ```
 
 `POST /api/v1/register` permanece como rota de compatibilidade para clientes
 legados. As duas rotas aceitam exatamente o mesmo payload e produzem a mesma
-resposta; novos clientes devem usar `/api/v1/auth/register`.
+resposta; novos clientes devem usar `/api/v1/registration`.
 
 ### Payload de entrada
 
@@ -296,11 +296,25 @@ Os valores `400`, `409` e `503` acima são as projeções descritas em
 status, header, corpo ou exceção não reconhecida segue o caminho seguro de
 `503`/`provider_error`; nenhuma falha administrativa vira sucesso.
 
-## 7. Compatibilidade com a implementação
+## 7. Implementação atual
 
-Este arquivo define o contrato aprovado para o provisionamento server-side. A
-rota atualmente existente no backend ainda contém o comportamento legado de
-cadastro local; ela não é evidência de que o provisionamento no Keycloak já
-esteja concluído. A implementação de `hq-2e7y.3.2` deve adequar o fluxo a este
-contrato, removendo a persistência local de senha e vinculando o usuário ao
-identificador emitido pelo Keycloak.
+O cadastro canônico é `POST /api/v1/registration`; os aliases
+`/api/v1/auth/register` e `/api/v1/register` mantêm compatibilidade.
+A implementação provisiona no Keycloak antes de persistir `identitySubject` e
+email normalizado no Folhea. Não grava senha nem cria sessão no cadastro.
+Uma falha no vínculo local compensa somente o subject recém-criado.
+
+Configuração efetiva: `KEYCLOAK_ADMIN_BASE_URL`, `KEYCLOAK_ADMIN_REALM`,
+`KEYCLOAK_ADMIN_CLIENT_ID` (default `folhea-registration`),
+`KEYCLOAK_ADMIN_CLIENT_SECRET` e timeouts em milissegundos
+`KEYCLOAK_ADMIN_CONNECT_TIMEOUT`/`KEYCLOAK_ADMIN_READ_TIMEOUT`. O cliente
+confidencial usa `client_secret_post` no back-channel privado para o token
+`client_credentials`; o secret nunca é enviado ao navegador. O client possui
+`realm-management/manage-users`, sem full scope. Keycloak devolve `Location`
+absoluto no protocolo real; o backend extrai apenas o caminho esperado
+`/admin/realms/{realm}/users/{subject}` e não devolve a URL interna.
+
+As seções anteriores documentam restrições e objetivos; quando divergem destes
+nomes/fluxos efetivos, este inventário descreve o contrato operacional atual.
+O fluxo de exclusão de conta usa a mesma permissão para remover o subject no
+Keycloak antes de apagar os dados Folhea e revogar a sessão BFF.

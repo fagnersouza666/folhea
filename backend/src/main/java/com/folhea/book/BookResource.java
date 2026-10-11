@@ -82,6 +82,7 @@ public class BookResource {
         }
         validateTextLength(request.title(), request.author());
         if (request.author() != null) book.author = blankToNull(request.author());
+        books.flush();
         return BookResponse.from(book);
     }
 
@@ -100,8 +101,10 @@ public class BookResource {
                 : (book.status == BookStatus.FINISHED && book.finishedOn != null
                     ? book.finishedOn
                     : time.today(user.timezone));
+        if (date.isAfter(time.today(user.timezone))) invalid("A data de finalização não pode estar no futuro no fuso horário da conta.");
         book.status = BookStatus.FINISHED;
         book.finishedOn = date;
+        books.flush();
         return BookResponse.from(book);
     }
 
@@ -116,6 +119,7 @@ public class BookResource {
         BookEntity book = findOwned(id);
         book.status = BookStatus.READING;
         book.finishedOn = null;
+        books.flush();
         return BookResponse.from(book);
     }
 

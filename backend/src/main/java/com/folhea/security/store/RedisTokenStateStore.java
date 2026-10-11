@@ -70,6 +70,18 @@ public class RedisTokenStateStore implements TokenStateStore {
         return false;
     }
 
+    @Override
+    public void revokeSubject(String subject, Duration ttl) {
+        String key = "folhea:revoked-subject:" + SubjectReference.of(subject);
+        if (ttl.isZero() || ttl.isNegative()) keys.del(key);
+        else values.setex(key, Math.max(1, ttl.toSeconds()), "revoked");
+    }
+
+    @Override
+    public boolean isSubjectRevoked(String subject) {
+        return values.get("folhea:revoked-subject:" + SubjectReference.of(subject)) != null;
+    }
+
     private static String key(String reference) {
         return KEY_PREFIX + reference;
     }

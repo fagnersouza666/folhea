@@ -17,4 +17,8 @@ public interface TokenStateStore {
     int size();
 
     boolean atCapacity(int maxEntries);
+
+    void revokeSubject(String subject, Duration ttl);
+
+    boolean isSubjectRevoked(String subject);
 }

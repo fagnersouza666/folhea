@@ -78,6 +78,20 @@ public class KeycloakAdminClient {
         }
     }
 
+    /** Remove the login identity and its sessions before erasing the local link. */
+    public void deleteAccount(String subject) {
+        Response response;
+        try {
+            response = adminClient.deleteUser(realm, subject, bearer(accessToken()));
+        } catch (ProcessingException | WebApplicationException exception) {
+            throw unavailable();
+        }
+        if (response == null) throw unavailable();
+        try (response) {
+            if (response.getStatus() != 204 && response.getStatus() != 404) throw unavailable();
+        }
+    }
+
     private String accessToken() {
         if (clientId == null || clientId.isBlank() || clientSecret == null || clientSecret.isBlank()) {
             throw unavailable();
@@ -135,7 +149,7 @@ public class KeycloakAdminClient {
     public static final class ProvisioningException extends RuntimeException {
         private final Failure failure;
 
-        private ProvisioningException(Failure failure) {
+        public ProvisioningException(Failure failure) {
             super(failure.name(), null, false, false);
             this.failure = failure;
         }

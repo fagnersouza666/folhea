@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
 /** REST contract coverage for Keycloak-backed account registration. */
 @QuarkusTest
 class RegistrationResourceTest {
-    private static final String REGISTRATION_PATH = "/api/v1/auth/register";
+    private static final String REGISTRATION_PATH = "/api/v1/registration";
     private static final String EMAIL = "ana@example.com";
     private static final String REGISTRATION_PASSWORD = UUID.randomUUID().toString();
 
