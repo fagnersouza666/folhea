@@ -7,12 +7,9 @@ usa sessão BFF HttpOnly; obter `GET /api/v1/csrf` e enviar `X-CSRF-Token` e
 
 ## Conta e datas
 
-Cadastro público canônico: `POST /api/v1/registration` com `{email,password}`,
-provisionado exclusivamente no Keycloak. `/api/v1/auth/register` e
-`/api/v1/register` permanecem aliases de compatibilidade, com a mesma validação
-e bucket de rate limit por IP. Cadastro público não exige sessão/token CSRF;
-se Origin estiver presente, deve ser uma origem permitida. As credenciais não são persistidas pelo Folhea nem retornam no
-JSON. Após 201, o navegador deve iniciar `/auth/login` para estabelecer a sessão.
+Cadastro e login seguem a [AUTH-01](../specs/AUTH-01.md): os dois acontecem na tela do
+Keycloak, por redirect (`/auth/register` e `/auth/login`). O Folhea não recebe senha.
+O vínculo local com o `sub` é criado no `/auth/callback`.
 O backend emite `account_created` depois do commit do vínculo local com o
 subject provisionado. Incrementa `folhea_product_events_total{event="account_created"}`
 e registra somente o nome do evento e a categoria `registration`; e-mail,

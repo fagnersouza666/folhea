@@ -1,6 +1,6 @@
 # Spec SESSAO-01 — Registrar, editar e excluir sessão de leitura
 
-Status: parada para aprovação de Fagner  
+Status: aprovada por Fagner (2026-10-11), incluindo a revisão de progresso por livro  
 Produto: Folhea  
 Recorte: Diretor de Produto, 2026-09-05 (agora = SESSAO-01)  
 Base: PRD-01 §§30–32, 57, 64 + contrato do Arquiteto (2026-09-05)  
@@ -16,10 +16,10 @@ O leitor autenticado registra quanto leu em um dia (páginas e/ou minutos) ligad
 
 ## Fora de escopo
 
-- Progresso, streak, stats, dashboard
 - Card, PWA, SEO
 - Cronômetro ao vivo
-- Mudança em AUTH-01 ou LIVRO-01
+- Mudança em AUTH-01
+- Streak, stats gerais, dashboard e card (continuam no PROG-01 e CARD-01)
 
 ## Premissas (explícitas)
 
@@ -151,7 +151,35 @@ Omitir `pages` ou `minutes` no POST/PATCH: tratar como `0` se o outro campo cump
 4. `PATCH` corrige pages/minutes/data; regra continua valendo.
 5. `DELETE` → some da lista; `GET` desse id (se houver detalhe) ou ausência na lista.
 6. Sem sessão → `401`.
-7. Sem endpoint de stats/streak/card nesta entrega.
+7. Sem streak, stats gerais ou card nesta entrega (o progresso por livro da revisão 2026-10-11 é a exceção).
+
+## Revisão 2026-10-11: progresso por livro
+
+Pedido do Mestre, decidido com Diretor e Arquiteto. A foto e o total de páginas do livro ficam na LIVRO-02. Esta spec não depende da LIVRO-02: sem total de páginas, o progresso funciona sem percentual.
+
+### Calculado na hora, nunca gravado
+
+A partir das sessões do próprio livro (`SUM(pages)` e `COUNT(DISTINCT readingDate)` por `bookId`, usando o índice `reading_session(book_id, reading_date)`):
+
+| Campo na resposta do livro | Cálculo |
+| --- | --- |
+| `pagesRead` | soma de `pages` das sessões do livro |
+| `averagePagesPerReadingDay` | `pagesRead` dividido pelos dias distintos com sessão desse livro, uma casa decimal. Sem sessão, vem `null` |
+| `progressPercent` | só quando o livro tem `totalPages` (LIVRO-02): `pagesRead / totalPages * 100`, inteiro, máximo 100. Sem total, vem `null` |
+
+- Na tela, a média se chama **"páginas por dia de leitura"**, para ninguém confundir com dias corridos.
+- Criar, editar ou excluir sessão muda os números na hora.
+- Ler mais que o total não é erro: o percentual para em 100% e `pagesRead` mostra o número real.
+- Chegar a 100% não finaliza o livro. Finalizar continua sendo `POST /books/{id}/finish`.
+- Sessão só com minutos não muda páginas lidas, média nem percentual.
+
+### Critérios de aceite novos
+
+8. Sessões de 30 e 45 páginas em dois dias diferentes: `pagesRead` 75 e "páginas por dia de leitura" 37,5.
+9. Duas sessões no mesmo dia, de 20 e 30 páginas: `pagesRead` 50 e média 50,0 (conta um dia só).
+10. Excluir a sessão de 45 do caso 8: `pagesRead` 30 e média 30,0.
+11. Livro sem total de páginas: `progressPercent` vem `null` e a tela não mostra percentual.
+12. Com a LIVRO-02 no ar e total de 300: o caso 8 mostra 25%. Passando de 300 páginas, mostra 100% e o livro continua `READING`.
 
 ## Definição de pronto
 
@@ -160,3 +188,15 @@ Spec aprovada por Fagner → Angular + Quarkus (+ constraint PG) contra **esta**
 ## Entrega e para
 
 Analista entrega este `.md` e para. Devs fora até Fagner aprovar. Sem SESSAO-02 sem mudança pedida pelo Diretor.
+
+## Situação no código (repo `folhea`, commit `12fb93f`, 2026-10-11)
+
+| Item | Situação |
+| --- | --- |
+| Critérios 1 a 7 (CRUD de sessão) | implementado: `ReadingSessionResource`, regra pages/minutes na API, no domínio e em constraint do PostgreSQL (V001), `404` para livro ou sessão alheia, PATCH troca de livro |
+| Filtro `?bookId=` | não existe (era opcional). Existe `?from=&to=` |
+| Extras fora da spec | limite de 10.000 páginas e 1.440 minutos por sessão; data futura recusada. Ficam como estão, entram na spec se o Diretor aceitar |
+| Critérios 8 a 12 (progresso por livro) | não implementado |
+
+Falta o aceite no ar dos critérios 1 a 7 e a implementação dos 8 a 12.
+
