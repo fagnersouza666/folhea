@@ -133,8 +133,24 @@ rejeitados. A métrica `folhea_product_events_total{event}` conta eventos aceito
 o log estruturado conserva apenas o evento e propriedades validadas.
 
 Logout normal continua em `/auth/logout`, processado pelo mecanismo OIDC do
-Quarkus. Ele revoga o estado de tokens e limpa cookies; um observador do evento
+Quarkus. A policy `authenticated` com mecanismo `code` ativa o fluxo nesse
+caminho mesmo com `proactive=false`. Ele revoga o estado de tokens e limpa
+o cookie OIDC antes de redirecionar ao end-session público do IdP; um observador do evento
 OIDC remove o vínculo CSRF também quando o fluxo não passa pelos filtros REST.
+O IdP retorna a `/auth/logged-out`, rota pública no backend que exige um único
+`state` idêntico ao cookie HttpOnly `q_post_logout` do tenant/suffix configurado
+(`q_post_logout_Default_folhea` neste runtime). A comparação usa tempo constante.
+State ausente, divergente, duplicado ou sem cookie retorna 403 em
+`application/problem+json`, sem redirect. O cookie de state expira após a
+tentativa. Retorno válido revoga o vínculo CSRF residual, expira seu cookie e
+responde 303 para `/`, com `Cache-Control: no-store` e sem query de state.
+O URI de retorno deve ser permitido no Keycloak e `/auth/*` encaminhado ao BFF.
+O padrão `Clear-Site-Data` é `cache,storage`: o cookie de state precisa sobreviver
+até a verificação; cookies de sessão/binding são removidos individualmente.
+Um override que inclua `cookies` pode apagar o state antes dessa validação.
+O logout anônimo inicia o desafio OIDC; a revogação autenticada completa é
+validada com Keycloak/proxy reais, além da regressão HTTP lazy sem resposta IdP
+simulada. Veja [logout iniciado pelo usuário](https://quarkus.io/version/3.40/guides/security-oidc-code-flow-authentication/#user-initiated-logout).
 As operações de store Redis durante autenticação usam `OidcRequestContext`
 para executar fora da thread de eventos.
 O filtro de cookies do callback usa `CurrentIdentityAssociation.getDeferredIdentity()`

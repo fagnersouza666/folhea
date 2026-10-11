@@ -19,7 +19,7 @@ public class OidcLogoutListener {
         if (context == null) return;
         var cookie = context.request().getCookie(cookies.name());
         if (cookie != null) csrfTokens.revoke(cookie.getValue());
-        // Quarkus removes token state and emits Clear-Site-Data: "cookies";
-        // the asynchronous observer can safely call the blocking Redis store.
+        // Quarkus removes token state; completion expires the binding cookie.
+        // The asynchronous observer safely calls the blocking Redis store.
     }
 }

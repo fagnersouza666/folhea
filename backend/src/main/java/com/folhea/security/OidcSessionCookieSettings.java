@@ -33,7 +33,19 @@ public class OidcSessionCookieSettings {
     }
 
     public NewCookie clear() {
-        return new NewCookie.Builder(name).value("").path(path).domain(domain).maxAge(0)
+        return clear(name);
+    }
+
+    public String postLogoutName() {
+        return "q_post_logout" + name.substring("q_session".length());
+    }
+
+    public NewCookie clearPostLogout() {
+        return clear(postLogoutName());
+    }
+
+    private NewCookie clear(String cookieName) {
+        return new NewCookie.Builder(cookieName).value("").path(path).domain(domain).maxAge(0)
                 .httpOnly(true).secure(sessionCookies.clear().isSecure()).sameSite(NewCookie.SameSite.LAX).build();
     }
 

@@ -47,8 +47,8 @@ class OidcConfigurationTest {
         assertEquals("${OIDC_SESSION_AGE_EXTENSION:30M}",
                 CONFIG.getProperty("quarkus.oidc.authentication.session-age-extension"));
         assertEquals("/auth/logout", CONFIG.getProperty("quarkus.oidc.logout.path"));
-        assertEquals("/", CONFIG.getProperty("quarkus.oidc.logout.post-logout-path"));
-        assertEquals("${OIDC_LOGOUT_CLEAR_SITE_DATA:cookies}",
+        assertEquals("/auth/logged-out", CONFIG.getProperty("quarkus.oidc.logout.post-logout-path"));
+        assertEquals("${OIDC_LOGOUT_CLEAR_SITE_DATA:cache,storage}",
                 CONFIG.getProperty("quarkus.oidc.logout.clear-site-data"));
     }
 
