@@ -69,8 +69,16 @@ listagens (`id`, `bookId`, `readingDate`, `pages`, `minutes`, `createdAt`,
 `updatedAt`). Retorna 404 se não existir ou pertencer a outro usuário.
 
 Listagens de livros/sessões são arrays com `limit` (máximo/default 100) e
-`offset`. Sessões permitem `from`/`to` inclusivos até 366 dias; sem filtro,
-listam os últimos 366 dias. A UI deve paginar para não ocultar registros.
+`offset` (padrão 0). `limit` ausente ou não positivo usa 100; acima de 100 é
+limitado a 100. `offset` negativo usa 0. Sessões permitem `from`/`to` inclusivos
+até 366 dias, ambos obrigatórios quando há filtro. Sem `from`/`to`, a consulta
+percorre todo o histórico próprio paginado, inclusive registros mais antigos
+que 366 dias. Ordenação: `readingDate`, `createdAt` e `id`, todos decrescentes,
+com desempate estável para paginação. A UI deve paginar para não ocultar
+registros e usar `GET /sessions/{id}` para abrir edição após reload ou por
+link de um registro fora da página atual. Estatísticas e streak continuam
+calculados pelo backend sobre os respectivos períodos/histórico global,
+independentemente das páginas carregadas no cliente.
 
 ## Métricas
 

@@ -13,14 +13,20 @@ public class ReadingSessionRepository implements PanacheRepositoryBase<ReadingSe
     }
 
     public List<ReadingSessionEntity> findOwned(UUID userId, LocalDate from, LocalDate to, int limit, int offset) {
-        return find("userId = ?1 and readingDate between ?2 and ?3 order by readingDate desc, createdAt desc", userId, from, to)
+        return find("userId = ?1 and readingDate between ?2 and ?3 order by readingDate desc, createdAt desc, id desc", userId, from, to)
+                .range(offset, offset + limit - 1)
+                .list();
+    }
+
+    public List<ReadingSessionEntity> findOwned(UUID userId, int limit, int offset) {
+        return find("userId = ?1 order by readingDate desc, createdAt desc, id desc", userId)
                 .range(offset, offset + limit - 1)
                 .list();
     }
 
     public ReadingSessionEntity findOwned(UUID userId, UUID id) { return find("id = ?1 and userId = ?2", id, userId).firstResult(); }
 
-    /** Full history for LGPD export; not exposed via the public list API. */
+    /** Unpaginated history for LGPD export; the public list always bounds its page. */
     public List<ReadingSessionEntity> allOwned(UUID userId) {
         return find("userId = ?1 order by readingDate desc, createdAt desc", userId).list();
     }

@@ -469,6 +469,34 @@ class BackendResourceTest {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
+    void unfilteredSessionPagesIncludeTheFullOwnedHistory() {
+        seedLongStreak();
+
+        given().when().get("/api/v1/sessions?limit=500")
+                .then().statusCode(200).body("size()", equalTo(100));
+        given().when().get("/api/v1/sessions?offset=400")
+                .then().statusCode(200)
+                .body("size()", equalTo(51))
+                .body("[0].readingDate", equalTo(TODAY.minusDays(399).toString()))
+                .body("[50].readingDate", equalTo(TODAY.minusDays(449).toString()))
+                .body("bookId", org.hamcrest.Matchers.everyItem(equalTo(seededAliceBookId.toString())));
+        String oldestId = given().when().get("/api/v1/sessions?limit=1&offset=450")
+                .then().statusCode(200).body("size()", equalTo(1))
+                .extract().path("[0].id");
+        given().when().get("/api/v1/sessions/{id}", oldestId)
+                .then().statusCode(200)
+                .body("readingDate", equalTo(TODAY.minusDays(449).toString()));
+        given().when().get("/api/v1/sessions?offset=451")
+                .then().statusCode(200).body("size()", equalTo(0));
+        given().when().get("/api/v1/stats?period=today")
+                .then().statusCode(200).body("currentStreakDays", equalTo(450));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {
+            @SecurityAttribute(key = "email", value = "alice@example.test"),
+            @SecurityAttribute(key = "zoneinfo", value = "UTC")
+    })
     void statisticsAggregateTenThousandRowsAndRecalculateAfterCascadeDeletion() {
         seedLargeHistory();
         given().when().get("/api/v1/sessions").then().statusCode(200).body("size()", equalTo(100));

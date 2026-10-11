@@ -54,14 +54,15 @@ public class ReadingSessionResource {
                                       @QueryParam("offset") Integer offset) {
         var user = currentUser.get();
         if ((from == null) != (to == null)) invalid("O período informado é inválido.");
-        LocalDate today = time.today(user.timezone);
-        LocalDate effectiveTo = to == null ? today : to;
-        LocalDate effectiveFrom = from == null ? QueryLimits.defaultRangeStart(today) : from;
-        if (effectiveFrom.isAfter(effectiveTo)) invalid("O período informado é inválido.");
-        QueryLimits.ensureMaxDateRange(effectiveFrom, effectiveTo);
         int pageLimit = QueryLimits.clampLimit(limit);
         int pageOffset = QueryLimits.sanitizeOffset(offset);
-        return sessions.findOwned(user.id, effectiveFrom, effectiveTo, pageLimit, pageOffset)
+        if (from == null) {
+            return sessions.findOwned(user.id, pageLimit, pageOffset)
+                    .stream().map(SessionResponse::from).toList();
+        }
+        if (from.isAfter(to)) invalid("O período informado é inválido.");
+        QueryLimits.ensureMaxDateRange(from, to);
+        return sessions.findOwned(user.id, from, to, pageLimit, pageOffset)
                 .stream().map(SessionResponse::from).toList();
     }
 
