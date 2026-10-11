@@ -227,7 +227,7 @@ operação indisponível, sem tentativa com credencial alternativa.
 | Token ausente/inválido, timeout, autenticação administrativa negada, falha do provedor ou Location inválido | `503 registration-unavailable`, sem corpo interno. |
 | Vínculo local falhou após criação | Compensação pelo subject recém-criado; sem sucesso parcial. |
 | Exclusão `204` ou identidade já ausente (`404`) | Prosseguir com remoção local e revogação da sessão. |
-| Falha administrativa na exclusão | `503 account-deletion-unavailable`, dados/sessão locais preservados para nova tentativa. |
+| Falha administrativa na exclusão | `503 account-deletion-unavailable`, dados/sessão locais preservados imediatamente; intenção confirmada persistida e retomada em background, sem exigir novo login. |
 
 O contrato público de erros do cadastro está em
 [contrato-erros-cadastro.md](../contrato-erros-cadastro.md). O ciclo completo da

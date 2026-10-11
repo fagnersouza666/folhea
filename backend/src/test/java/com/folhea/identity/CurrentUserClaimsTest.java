@@ -1,6 +1,7 @@
 package com.folhea.identity;
 
 import com.folhea.user.UserRepository;
+import com.folhea.user.AccountDeletionPersistence;
 import com.folhea.security.store.TokenStateStore;
 import io.quarkus.oidc.IdTokenCredential;
 import io.quarkus.oidc.runtime.OidcJwtCallerPrincipal;
@@ -20,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class CurrentUserClaimsTest {
     @Inject UserRepository users;
     @Inject TokenStateStore tokenStateStore;
+    @Inject AccountDeletionPersistence deletions;
 
     @Test
     @TestTransaction
@@ -34,6 +36,7 @@ class CurrentUserClaimsTest {
         CurrentUser current = new CurrentUser();
         current.users = users;
         current.tokenStateStore = tokenStateStore;
+        current.deletions = deletions;
         current.securityIdentity = QuarkusSecurityIdentity.builder().setPrincipal(principal).build();
 
         var first = current.get();

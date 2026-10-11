@@ -6,9 +6,9 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
 /** Session revocation keys never retain the user's subject, email or token. */
-final class SubjectReference {
+public final class SubjectReference {
     private SubjectReference() { }
-    static String of(String subject) {
+    public static String of(String subject) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(subject.getBytes(StandardCharsets.UTF_8)));

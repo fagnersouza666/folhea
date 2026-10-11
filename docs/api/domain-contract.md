@@ -36,7 +36,7 @@ As respostas de edição/finalização incluem `updatedAt` após flush da entida
 repetições sem alteração não geram um novo evento de atualização.
 
 `DELETE /me` exige `{"confirm":true}`. Antes de apagar dados, remove a identidade
-do subject no Keycloak e suas sessões (se indisponível, retorna 503 sem apagar). Remove livros
+do subject no Keycloak e suas sessões (se indisponível, retorna 503 sem apagar naquele momento). Remove livros
 e sessões por cascade, revoga o estado opaco `q_session_Default_folhea` e o CSRF,
 e expira ambos os cookies. Requer novo cadastro para voltar a usar a aplicação.
 Nenhuma senha é gravada
@@ -46,6 +46,29 @@ TTL no store de segurança), impedindo um JWT ainda válido de reprovisionar a
 conta silenciosamente. Após remoção no Keycloak, um novo cadastro tem outro
 subject. As validações de domínio que usam identidade retornam 401 para a
 sessão revogada.
+
+A confirmação é registrada primeiro na fila privada PostgreSQL `account_deletion`
+(V007), em uma transação já confirmada antes de chamar o IdP. A remoção local e
+o marcador persistente do subject são confirmados juntos em outra transação.
+Se o IdP já apagou a identidade, mas flush/commit local falha, a intenção permanece
+pendente; DELETE 404 no IdP é sucesso na retomada. O worker interno reprocessa
+até 25 intenções por execução, a cada 60 segundos, também depois de um restart,
+sem exigir sessão ou novo login. Não há limite que descarte uma intenção após
+falhas; indisponibilidade do banco/IdP mantém a solicitação para nova tentativa.
+Um 503 preserva dados/sessão imediatamente e permite repetir a confirmação na
+UI, mas a solicitação já confirmada pode concluir em background quando o serviço
+se recuperar. Intenções repetidas do mesmo subject não duplicam a operação.
+
+A limpeza de referências OIDC/CSRF no Redis só ocorre depois do commit local.
+Falhas nessa limpeza não desfazem a exclusão nem mudam seu 204: os cookies são
+expirados e o worker retenta a limpeza. O marcador PostgreSQL impede reprovisionar
+o subject mesmo se a revogação Redis estiver ausente. Depois da limpeza, a fila
+remove subject, ID local e referências de cookies; conserva apenas ID interno,
+hash SHA-256, estado e horários por oito horas, antes de remover o marcador.
+Essa fila não aparece em exportações/respostas e seus campos privados não entram
+em logs. A transação e o agendamento usam as extensões do mesmo BOM Quarkus,
+conforme [fronteiras de transação](https://quarkus.io/version/3.40/guides/transaction/)
+e [scheduler](https://quarkus.io/guides/scheduler-reference/).
 
 ## Livros e sessões
 

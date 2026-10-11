@@ -7,10 +7,14 @@ import com.folhea.security.CsrfTokenService;
 import com.folhea.security.SessionCookiePolicy;
 import com.folhea.security.store.TokenStateStore;
 import com.folhea.user.UserEntity;
+import com.folhea.user.AccountDeletionPersistence;
+import com.folhea.user.AccountDeletionRecovery;
+import com.folhea.security.store.SubjectReference;
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.mockito.InjectSpy;
 import com.folhea.user.KeycloakAdminClient;
 import io.quarkus.test.security.SecurityAttribute;
 import io.quarkus.test.security.TestSecurity;
@@ -44,12 +48,16 @@ class BackendResourceTest {
     private static final LocalDate TODAY = LocalDate.of(2026, 9, 6);
 
     @Inject EntityManager entityManager;
-    @Inject CsrfTokenService csrfTokens;
+    @InjectSpy CsrfTokenService csrfTokens;
     @Inject TokenStateStore tokenStateStore;
     @InjectMock KeycloakAdminClient keycloak;
+    @Inject AccountDeletionPersistence deletions;
+    @Inject AccountDeletionRecovery recovery;
+    @Inject javax.sql.DataSource dataSource;
     private UUID seededAliceBookId;
     private UUID seededBobBookId;
     private UUID seededBobSessionId;
+    private String seededSessionTicket;
 
     @BeforeEach
     @Transactional
@@ -57,8 +65,10 @@ class BackendResourceTest {
         // Domain REST tests isolate the external IdP; the real Keycloak/BFF
         // flow is validated separately by the integration acceptance suite.
         org.mockito.Mockito.doNothing().when(keycloak).deleteAccount(org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.doCallRealMethod().when(csrfTokens).revoke(org.mockito.ArgumentMatchers.anyString());
         tokenStateStore.revokeSubject(ALICE, java.time.Duration.ZERO);
         tokenStateStore.revokeSubject(BOB, java.time.Duration.ZERO);
+        entityManager.createQuery("delete from AccountDeletionIntent").executeUpdate();
         entityManager.createQuery("delete from ReadingSessionEntity").executeUpdate();
         entityManager.createQuery("delete from BookEntity").executeUpdate();
         entityManager.createQuery("delete from UserEntity").executeUpdate();
@@ -87,6 +97,7 @@ class BackendResourceTest {
         seededBobSessionId = bobSession.id;
 
         String ticket = SessionCookiePolicy.newTicket(new SecureRandom());
+        seededSessionTicket = ticket;
         String csrf = csrfTokens.getOrIssue(ticket);
         RestAssured.requestSpecification = new RequestSpecBuilder()
                 .addHeader("Origin", "http://localhost:8081")
@@ -601,6 +612,138 @@ class BackendResourceTest {
         org.mockito.Mockito.doNothing().when(keycloak).deleteAccount(ALICE);
         given().contentType(ContentType.JSON).body("{\"confirm\":true}").when().delete("/api/v1/me")
                 .then().statusCode(204);
+    }
+
+    @Test
+    @TestSecurity(user = ALICE)
+    void csrfCleanupFailureCannotRollBackAnAccountAlreadyDeletedInTheProvider() throws Exception {
+        String ticket = seededSessionTicket;
+        String csrf = csrfTokens.getOrIssue(ticket);
+        org.mockito.Mockito.doThrow(new IllegalStateException("test-only csrf outage"))
+                .when(csrfTokens).revoke(org.mockito.ArgumentMatchers.anyString());
+        given().contentType(ContentType.JSON).body("{\"confirm\":true}")
+                .when().delete("/api/v1/me").then().statusCode(204)
+                .cookie(SessionCookiePolicy.NAME, equalTo(""))
+                .cookie("q_session_Default_folhea", equalTo(""));
+        assertNull(findUserBySubject(ALICE));
+        assertEquals(0, countBooksForSubject(ALICE));
+        assertEquals(0, countSessionsForSubject(ALICE));
+        assertNotNull(findUserBySubject(BOB));
+        assertEquals(1, pendingDeletionCount());
+        org.junit.jupiter.api.Assertions.assertTrue(csrfTokens.isValid(ticket, csrf));
+        // PostgreSQL must reject reprovisioning even without the Redis tombstone.
+        tokenStateStore.revokeSubject(ALICE, java.time.Duration.ZERO);
+        given().when().get("/api/v1/me").then().statusCode(401);
+        assertNull(findUserBySubject(ALICE));
+        org.mockito.Mockito.doCallRealMethod().when(csrfTokens).revoke(org.mockito.ArgumentMatchers.anyString());
+        makeDeletionDue();
+        recovery.retryPending();
+        assertEquals(0, pendingDeletionCount());
+        org.junit.jupiter.api.Assertions.assertFalse(csrfTokens.isValid(ticket, csrf));
+        assertCompactedMarker();
+    }
+
+    @Test
+    @TestSecurity(user = ALICE)
+    void localFlushFailureRetainsTheIntentAndRecoveryCompletesWithoutLogin() throws Exception {
+        verifyLocalDeletionRecovery(false);
+    }
+
+    @Test
+    @TestSecurity(user = ALICE)
+    void localCommitFailureRetainsTheIntentAndRecoveryCompletesWithoutLogin() throws Exception {
+        verifyLocalDeletionRecovery(true);
+    }
+
+    @Test
+    void recoveryCompletesAnIntentPersistedBeforeACrashWithoutAnyAuthenticatedRequest() throws Exception {
+        deletions.request(findUserBySubject(ALICE), null, null);
+        assertEquals(1, pendingDeletionCount());
+        // Only persisted state is supplied to the production recovery path.
+        recovery.retryPending();
+        assertNull(findUserBySubject(ALICE));
+        assertEquals(0, countBooksForSubject(ALICE));
+        assertNotNull(findUserBySubject(BOB));
+        assertEquals(0, pendingDeletionCount());
+        assertCompactedMarker();
+    }
+
+    private void verifyLocalDeletionRecovery(boolean deferred) throws Exception {
+        org.mockito.Mockito.doAnswer(call -> {
+            // Independent JDBC connection proves the intent committed before IdP DELETE.
+            assertEquals(1, pendingDeletionCount());
+            return null;
+        }).when(keycloak).deleteAccount(ALICE);
+        try (var connection = dataSource.getConnection(); var sql = connection.createStatement()) {
+            sql.execute("""
+                    CREATE FUNCTION test_fail_account_delete() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+                    BEGIN
+                        IF OLD.identity_subject = 'alice-subject' THEN
+                            RAISE EXCEPTION 'test-only delete failure' USING ERRCODE = '23514';
+                        END IF;
+                        RETURN OLD;
+                    END $$
+                    """);
+            sql.execute(deferred
+                    ? "CREATE CONSTRAINT TRIGGER test_fail_account_delete AFTER DELETE ON folhea_user DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION test_fail_account_delete()"
+                    : "CREATE TRIGGER test_fail_account_delete BEFORE DELETE ON folhea_user FOR EACH ROW EXECUTE FUNCTION test_fail_account_delete()");
+        }
+        try {
+            given().contentType(ContentType.JSON).body("{\"confirm\":true}").when().delete("/api/v1/me")
+                    .then().statusCode(503).contentType("application/problem+json");
+            assertNotNull(findUserBySubject(ALICE));
+            assertEquals(1, countBooksForSubject(ALICE));
+            assertEquals(1, pendingDeletionCount());
+            org.junit.jupiter.api.Assertions.assertFalse(tokenStateStore.isSubjectRevoked(ALICE));
+        } finally {
+            try (var connection = dataSource.getConnection(); var sql = connection.createStatement()) {
+                sql.execute("DROP TRIGGER test_fail_account_delete ON folhea_user");
+                sql.execute("DROP FUNCTION test_fail_account_delete()");
+            }
+        }
+        // Model the provider's already-absent identity; DELETE 404 is idempotent success.
+        org.mockito.Mockito.doNothing().when(keycloak).deleteAccount(ALICE);
+        makeDeletionDue();
+        recovery.retryPending();
+        assertNull(findUserBySubject(ALICE));
+        assertEquals(0, countBooksForSubject(ALICE));
+        assertEquals(0, countSessionsForSubject(ALICE));
+        assertNotNull(findUserBySubject(BOB));
+        assertEquals(0, pendingDeletionCount());
+        assertCompactedMarker();
+        org.mockito.Mockito.when(keycloak.provision(org.mockito.ArgumentMatchers.eq("alice@example.test"),
+                org.mockito.ArgumentMatchers.anyString())).thenReturn(new KeycloakAdminClient.ProvisionedUser("alice-new-subject"));
+        given().contentType(ContentType.JSON).body("{\"email\":\"alice@example.test\",\"password\":\"test-only-password\"}")
+                .when().post("/api/v1/registration").then().statusCode(201);
+    }
+
+    private long pendingDeletionCount() throws Exception {
+        try (var connection = dataSource.getConnection(); var sql = connection.createStatement();
+             var rows = sql.executeQuery("SELECT count(*) FROM account_deletion WHERE completed_at IS NULL")) {
+            rows.next();
+            return rows.getLong(1);
+        }
+    }
+
+    private void makeDeletionDue() throws Exception {
+        try (var connection = dataSource.getConnection(); var sql = connection.createStatement()) {
+            sql.executeUpdate("UPDATE account_deletion SET next_attempt_at = CURRENT_TIMESTAMP WHERE completed_at IS NULL");
+        }
+    }
+
+    private void assertCompactedMarker() throws Exception {
+        try (var connection = dataSource.getConnection(); var sql = connection.prepareStatement("""
+                SELECT local_deleted, completed_at, user_id, identity_subject, csrf_ticket, oidc_reference
+                FROM account_deletion WHERE subject_hash = ?
+                """)) {
+            sql.setString(1, SubjectReference.of(ALICE));
+            try (var rows = sql.executeQuery()) {
+                org.junit.jupiter.api.Assertions.assertTrue(rows.next());
+                org.junit.jupiter.api.Assertions.assertTrue(rows.getBoolean(1));
+                assertNotNull(rows.getObject(2));
+                for (int column = 3; column <= 6; column++) assertNull(rows.getObject(column));
+            }
+        }
     }
 
     @Test

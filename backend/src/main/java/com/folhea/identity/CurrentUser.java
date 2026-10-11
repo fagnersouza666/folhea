@@ -3,6 +3,7 @@ package com.folhea.identity;
 import com.folhea.shared.ProblemException;
 import com.folhea.user.UserEntity;
 import com.folhea.user.UserRepository;
+import com.folhea.user.AccountDeletionPersistence;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -18,6 +19,7 @@ public class CurrentUser {
     @Inject SecurityIdentity securityIdentity;
     @Inject UserRepository users;
     @Inject TokenStateStore tokenStateStore;
+    @Inject AccountDeletionPersistence deletions;
 
     @Transactional
     public UserEntity get() {
@@ -33,7 +35,7 @@ public class CurrentUser {
         if (subject == null || subject.isBlank()) {
             throw new ProblemException(401, "https://folhea.com.br/problems/unauthorized", "Não autenticado", "A identidade autenticada não possui subject.");
         }
-        if (tokenStateStore.isSubjectRevoked(subject)) {
+        if (deletions.isDeleted(subject) || tokenStateStore.isSubjectRevoked(subject)) {
             throw new ProblemException(401, "https://folhea.com.br/problems/unauthorized", "Não autenticado", "A sessão foi encerrada.");
         }
         String email = claim("email");
@@ -44,6 +46,11 @@ public class CurrentUser {
             // transaction rollback-only, even after clearing the persistence context.
             users.createIfAbsent(subject, email, validTimezone(identityTimezone()));
             user = users.findByIdentitySubject(subject);
+            if (deletions.isDeleted(subject)) {
+                // A deletion may commit between the first marker check and INSERT.
+                // Roll back any concurrent reprovisioning instead of retaining it.
+                throw new ProblemException(401, "https://folhea.com.br/problems/unauthorized", "Não autenticado", "A sessão foi encerrada.");
+            }
         } else {
             // Claims are the source of truth for identity metadata. Do not replace
             // existing values with null when a provider omits an optional claim.
