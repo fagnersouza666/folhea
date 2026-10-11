@@ -1,15 +1,21 @@
 package com.folhea.security;
 
+import com.folhea.security.store.TokenStateStore;
+import io.quarkus.oidc.AuthorizationCodeTokens;
+import io.quarkus.oidc.OidcTenantConfig;
+import io.quarkus.oidc.TokenStateManager;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.URI;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.Map;
 
 import static io.restassured.RestAssured.given;
@@ -23,6 +29,9 @@ class OidcLogoutHttpTest {
     private static final String POST_LOGOUT_COOKIE = "q_post_logout_Default_folhea";
     @Inject CsrfTokenService csrf;
     @Inject SessionCookieSettings bindingCookies;
+    @Inject OidcSessionCookieSettings oidcCookies;
+    @Inject TokenStateManager tokenStateManager;
+    @Inject TokenStateStore tokenStateStore;
 
     public static class LazyOidc implements QuarkusTestProfile {
         @Override
@@ -52,6 +61,53 @@ class OidcLogoutHttpTest {
         assertEquals("oidc.example.test", location.getHost());
         assertEquals("/realms/folhea/protocol/openid-connect/auth", location.getPath());
         assertTrue(response.getCookies().keySet().stream().anyMatch(name -> name.startsWith("q_auth_")));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "missing, application/json", "missing, */*",
+            "revoked, application/json", "revoked, */*",
+            "malformed, application/json", "malformed, */*"
+    })
+    void firstApiRequestWithInvalidOidcStateReturnsProblemWithoutRedirect(String scenario, String accept) {
+        String reference = invalidReference(scenario);
+        var response = given().accept(accept).redirects().follow(false)
+                .cookie(oidcCookies.name(), reference).get("/api/v1/me");
+        assertEquals(401, response.statusCode());
+        assertTrue(response.contentType().startsWith("application/problem+json"));
+        assertEquals(401, response.jsonPath().getInt("status"));
+        assertNull(response.header("Location"));
+        assertEquals("no-store", response.header("Cache-Control"));
+        assertEquals(0L, response.getDetailedCookie(oidcCookies.name()).getMaxAge());
+        assertFalse(response.getCookies().keySet().stream().anyMatch(name -> name.startsWith("q_auth_")));
+        assertFalse(response.body().asString().contains(reference));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/auth/login", "/auth/logout"})
+    void invalidOidcStateStillChallengesAtBrowserEntry(String path) {
+        var response = given().accept("text/html").redirects().follow(false)
+                .cookie(oidcCookies.name(), invalidReference("missing")).get(path);
+        assertEquals(302, response.statusCode());
+        assertEquals("/realms/folhea/protocol/openid-connect/auth", URI.create(response.header("Location")).getPath());
+        assertEquals(0L, response.getDetailedCookie(oidcCookies.name()).getMaxAge());
+        assertTrue(response.getCookies().keySet().stream().anyMatch(name -> name.startsWith("q_auth_")));
+    }
+
+    private String invalidReference(String scenario) {
+        if ("malformed".equals(scenario)) return "invalid-reference";
+        if ("missing".equals(scenario)) return SessionCookiePolicy.newTicket(new SecureRandom());
+        // Seed and revoke through the production manager backed by real Redis.
+        // No JWT or IdP response is needed: reauthentication must fail before
+        // reading credentials once the opaque reference has been removed.
+        var tenant = OidcTenantConfig.builder().build();
+        String reference = tokenStateManager.createTokenState(null, tenant,
+                new AuthorizationCodeTokens("test-only-id-token", "test-only-access-token", "test-only-refresh-token"), null)
+                .await().atMost(Duration.ofSeconds(5));
+        assertTrue(tokenStateStore.find(reference).isPresent());
+        tokenStateManager.deleteTokens(null, tenant, reference, null).await().atMost(Duration.ofSeconds(5));
+        assertTrue(tokenStateStore.find(reference).isEmpty());
+        return reference;
     }
 
     @Test

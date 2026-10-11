@@ -151,6 +151,15 @@ Um override que inclua `cookies` pode apagar o state antes dessa validação.
 O logout anônimo inicia o desafio OIDC; a revogação autenticada completa é
 validada com Keycloak/proxy reais, além da regressão HTTP lazy sem resposta IdP
 simulada. Veja [logout iniciado pelo usuário](https://quarkus.io/version/3.40/guides/security-oidc-code-flow-authentication/#user-initiated-logout).
+O primeiro acesso REST a `/api/*` com uma referência OIDC inexistente, revogada
+ou malformada retorna 401 em `application/problem+json`, sem `Location` e com
+`Cache-Control: no-store`. O mecanismo OIDC expira o cookie inválido antes de
+mapear a falha; a API não inicia outro fluxo de login nem emite cookie de state.
+O mapper de `AuthenticationFailedException` mantém o desafio do autenticador
+nas rotas do navegador, incluindo `/auth/login` e `/auth/logout`, para preservar
+state, nonce e PKCE. A regressão executa HTTP com OIDC habilitado e Redis real,
+sem simular respostas do IdP; a revogação autenticada após end-session é também
+verificada no aceite com Keycloak e proxy reais.
 As operações de store Redis durante autenticação usam `OidcRequestContext`
 para executar fora da thread de eventos.
 O filtro de cookies do callback usa `CurrentIdentityAssociation.getDeferredIdentity()`
