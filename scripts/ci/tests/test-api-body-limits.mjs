@@ -7,7 +7,7 @@ import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -25,8 +25,6 @@ async function unusedPort() {
   const server = createServer(); await listen(server); const port = server.address().port;
   await new Promise((ok) => server.close(ok)); return port;
 }
-let child;
-let startupError = "";
 try {
   await listen(upstream);
   const port = await unusedPort();
@@ -35,21 +33,25 @@ try {
   const source = await readFile(join(root, 'infra/Caddyfile'), 'utf8');
   // Disable the test container's administrative listener on the host network.
   await writeFile(join(scratch, 'Caddyfile'), source.replace('{\n', '{\n\tadmin off\n'), { mode: 0o600 });
-  child = spawn('docker', ['run', '--rm', '--name', name, '--label', `ao.session=${process.env.AO_SESSION_ID ?? 'manual'}`,
+  // Pull/create is bounded and completes before readiness starts. A detached
+  // CLI cannot start late after cleanup and leave an awaited run process alive.
+  const launched = spawnSync('docker', ['run', '--detach', '--rm', '--name', name, '--label', `ao.session=${process.env.AO_SESSION_ID ?? 'manual'}`,
     '--network', 'host', '--volume', `${join(scratch, 'Caddyfile')}:/etc/caddy/Caddyfile:ro`,
     '--env', `PUBLIC_DOMAIN=${base}`, '--env', `OIDC_PUBLIC_ORIGIN=${base}`, '--env', `HTTP_SITE_ADDRESS=http://127.0.0.1:${httpPort}`,
     '--env', `API_UPSTREAM=http://127.0.0.1:${upstream.address().port}`, '--env', 'STATIC_ROOT=/srv', image],
-  { stdio: ['ignore', 'ignore', 'pipe'] });
-  child.stderr.on('data', (part) => { startupError = (startupError + part.toString()).slice(-4000); });
-  child.once('error', () => {});
+  { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000 });
+  assert.equal(launched.status, 0, `Caddy creation failed: ${launched.error?.message ?? launched.stderr}`);
   let ready = false;
-  for (let i = 0; i < 60; i++) {
+  const readyDeadline = Date.now() + 60000;
+  while (Date.now() < readyDeadline) {
     try { ready = (await fetch(`${base}/api/v1/body-limit-readiness`, { signal: AbortSignal.timeout(500) })).status === 200; } catch {}
     if (ready) break;
-    if (child.exitCode !== null) throw new Error('Caddy test container exited before readiness');
     await delay(100);
   }
-  assert.ok(ready, `Caddy must become ready: ${startupError}`);
+  if (!ready) {
+    const logs = spawnSync('docker', ['logs', '--tail', '30', name], { encoding: 'utf8', timeout: 10000 });
+    assert.fail(`Caddy must become ready: ${(logs.stdout + logs.stderr).slice(-4000)}`);
+  }
   const cases = [
     ['POST', '/api/v1/books', 'multipart/form-data; boundary=fixture', 128 * 1024, 200],
     ['PATCH', '/api/v1/books/fixture-id', 'multipart/form-data; boundary=fixture', 128 * 1024, 200],
@@ -76,8 +78,7 @@ try {
   }
   console.log(`ok - ${cases.length} actual Caddy body limits/private-header cases`);
 } finally {
-  spawnSync('docker', ['rm', '--force', name], { stdio: 'ignore' });
-  if (child) await new Promise((ok) => { if (child.exitCode !== null) ok(); else child.once('exit', ok); });
+  spawnSync('docker', ['rm', '--force', name], { stdio: 'ignore', timeout: 10000 });
   upstream.closeAllConnections();
   await new Promise((ok) => upstream.close(ok));
   await rm(scratch, { recursive: true, force: true });
