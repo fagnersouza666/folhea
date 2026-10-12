@@ -9,8 +9,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { Book, BookStats } from '../../core/models/models';
 
 const stats: BookStats = {
-  pagesRead: 2999, totalPages: 3000, percent: 99.96, averagePagesPerDay: 99.97,
-  firstDate: '2026-08-01', referenceDate: '2026-08-30', elapsedDays: 30
+  pagesRead: 2999, totalPages: 3000, percent: 99.96, firstDate: '2026-08-01', referenceDate: '2026-08-30'
 };
 const book: Book & { pagesRead: number; averagePagesPerReadingDay: number | null; progressPercent: number | null } = { id: 'book-1', title: 'Um livro', author: 'Autora', edition: '2ª edição', totalPages: 3000, status: 'READING', cover: null, stats, pagesRead: 2999, averagePagesPerReadingDay: 1499.5, progressPercent: 99 };
 
@@ -57,12 +56,12 @@ describe('private bookshelf official progress', () => {
     expect(fixture.nativeElement.querySelector('.pages-read')).toBeNull();
     const retry = fixture.nativeElement.querySelector('.book-progress button') as HTMLButtonElement;
     expect(retry?.textContent).toContain('Tentar novamente'); retry.click();
-    http.expectOne('/api/v1/books/book-1').flush({ ...book, pagesRead: 3000, progressPercent: 100, averagePagesPerReadingDay: 1500, stats: { ...stats, pagesRead: 3000, percent: 100, averagePagesPerDay: 100 } });
+    http.expectOne('/api/v1/books/book-1').flush({ ...book, pagesRead: 3000, progressPercent: 100, averagePagesPerReadingDay: 1500, stats: { ...stats, pagesRead: 3000, percent: 100 } });
     fixture.detectChanges(); expect(fixture.nativeElement.querySelector('.percent')?.textContent).toContain('100%');
     http.expectNone(request => request.method === 'POST');
   });
   it('does not invent a zero average for a book with no pages recorded', () => {
-    const fixture = render({ ...book, pagesRead: 0, progressPercent: 0, averagePagesPerReadingDay: null, stats: { ...stats, pagesRead: 0, percent: 0, averagePagesPerDay: 0, firstDate: null, elapsedDays: 0 } });
+    const fixture = render({ ...book, pagesRead: 0, progressPercent: 0, averagePagesPerReadingDay: null, stats: { ...stats, pagesRead: 0, percent: 0, firstDate: null } });
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('.pages-read')?.textContent).toContain('0');
     expect(root.querySelector('.daily-average strong')).toBeNull();
@@ -70,7 +69,7 @@ describe('private bookshelf official progress', () => {
     expect(root.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('0');
   });
   it('shows the official one-decimal average independently of elapsed calendar days', () => {
-    const fixture = render({ ...book, totalPages: 300, pagesRead: 75, progressPercent: 25, averagePagesPerReadingDay: 37.5, stats: { ...stats, pagesRead: 75, totalPages: 300, percent: 25, averagePagesPerDay: 2.5 } });
+    const fixture = render({ ...book, totalPages: 300, pagesRead: 75, progressPercent: 25, averagePagesPerReadingDay: 37.5, stats: { ...stats, pagesRead: 75, totalPages: 300, percent: 25 } });
     expect(fixture.nativeElement.querySelector('.daily-average')?.textContent).toContain('37,5');
     expect(fixture.nativeElement.querySelector('.percent')?.textContent).toContain('25%');
   });

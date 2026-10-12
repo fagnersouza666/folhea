@@ -10,7 +10,7 @@ Versão anterior: o histórico do git deste arquivo (login e cadastro por `POST`
 
 1. Login e cadastro deixam de ser `POST` com JSON. Os dois são feitos na tela do Keycloak, por redirect. A senha nunca passa pelo Folhea.
 2. Saem os três paths de cadastro (`/api/v1/registration`, `/api/v1/auth/register`, `/api/v1/register`).
-3. A coluna `password_hash` sai do banco do Folhea.
+3. As colunas `password_hash` e `login_identifier` saem do banco do Folhea pela V009.
 4. Exportar dados e excluir conta passam a fazer parte desta spec, abertos a todos.
 
 ## Problema
@@ -79,7 +79,7 @@ Shape de `/me`:
 
 ## Banco
 
-- Migração nova V008: `DROP COLUMN password_hash` em `folhea_user`, e `login_identifier` se não tiver uso. O campo sai do `UserEntity`.
+- A V009 remove `password_hash` e `login_identifier` de `folhea_user`; ambas também saem do `UserEntity`. A V008 ficou reservada aos metadados e fotos dos livros.
 - A V004 não é editada, porque o Flyway confere o checksum.
 
 ## Sessão e cookies
@@ -118,7 +118,7 @@ E-mail repetido, senha fraca e senha errada são tratados na tela do Keycloak, n
 1. **Cadastro:** "Criar conta" abre a tela do Keycloak. Depois de cadastrar, o leitor volta ao Folhea logado e `GET /api/v1/me` dá `200` com o e-mail usado.
 2. **Login:** conta existente entra pela tela do Keycloak e volta logada.
 3. **Logout:** depois do logout, `/api/v1/me` dá `401`.
-4. **Sem senha no Folhea:** nenhuma requisição ao Folhea leva senha. `POST /api/v1/registration`, `/api/v1/auth/register` e `/api/v1/register` dão `404` ou `405`. A coluna `password_hash` não existe mais no banco.
+4. **Sem senha no Folhea:** nenhuma requisição ao Folhea leva senha. `POST /api/v1/registration`, `/api/v1/auth/register` e `/api/v1/register` dão `404` ou `405`. As colunas `password_hash` e `login_identifier` não existem mais no banco.
 5. **Sem token no Angular:** storage e network sem access ou refresh token do Folhea.
 6. **CSRF:** mutação sem `X-CSRF-Token` dá `403`; com o header certo, segue.
 7. **Exportar:** "Baixar meus dados" entrega um arquivo com os livros e as sessões do leitor, e nada de outro usuário.
@@ -133,7 +133,7 @@ E-mail repetido, senha fraca e senha errada são tratados na tela do Keycloak, n
 | `/me`, CSRF, cookies | feito |
 | Exportar e excluir conta | feito (V007) |
 | Cadastro pela tela do Keycloak | não feito: hoje são três `POST` que recebem a senha |
-| V008 sem `password_hash` | não feito |
+| V009 sem `password_hash` e `login_identifier` | não feito nesse commit de referência |
 | Conta de serviço usada só no excluir conta, com login recente | não feito: hoje também é usada no cadastro |
 
 ## Entrega e para

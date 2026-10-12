@@ -14,7 +14,7 @@ import { CoverPickerComponent } from './cover-picker.component';
 const saved: Book & { hasPhoto: boolean } = {
   id: 'owned-photo', title: 'Exemplar privado', author: 'Autora', edition: '2ª', totalPages: 300,
   status: 'READING', hasPhoto: true, cover: null,
-  stats: { pagesRead: 75, totalPages: 300, percent: 25, averagePagesPerDay: 5, firstDate: '2026-09-01', referenceDate: '2026-09-15', elapsedDays: 15 }
+  stats: { pagesRead: 75, totalPages: 300, percent: 25, firstDate: '2026-09-01', referenceDate: '2026-09-15' }
 };
 
 describe('LIVRO-02 private photo presentation', () => {

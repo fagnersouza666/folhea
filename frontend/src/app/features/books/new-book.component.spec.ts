@@ -72,7 +72,7 @@ describe('new book metadata validation', () => {
     root.querySelector('form')!.dispatchEvent(new Event('submit'));
     const request = http.expectOne('/api/v1/books');
     expect(request.request.body).toEqual({ title: 'Um livro', author: 'Uma autora', edition: '2ª edição', totalPages: 300 });
-    const book = { id: 'new-book', ...request.request.body, status: 'READING', cover: null, stats: { pagesRead: 0, totalPages: 300, percent: 0, averagePagesPerDay: 0, firstDate: null, referenceDate: '2026-09-06', elapsedDays: 0 } };
+    const book = { id: 'new-book', ...request.request.body, status: 'READING', cover: null, stats: { pagesRead: 0, totalPages: 300, percent: 0, firstDate: null, referenceDate: '2026-09-06' } };
     request.flush(book);
     http.expectOne('/api/v1/books?limit=100&offset=0').flush([book]);
     await fixture.whenStable();

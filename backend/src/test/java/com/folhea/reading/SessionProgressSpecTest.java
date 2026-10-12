@@ -352,6 +352,11 @@ class SessionProgressSpecTest {
 
     private void progress(UUID id, long pages, Double average, Integer percent) {
         Map<String, Object> book = getBook(id).jsonPath().getMap("");
+        assertFalse(book.containsKey("averagePagesPerDay"));
+        assertFalse(book.containsKey("elapsedDays"));
+        Map<?, ?> stats = assertInstanceOf(Map.class, book.get("stats"));
+        assertFalse(stats.containsKey("averagePagesPerDay"));
+        assertFalse(stats.containsKey("elapsedDays"));
         assertTrue(book.containsKey("pagesRead"), "Missing SESSAO-01 top-level pagesRead");
         assertTrue(book.containsKey("averagePagesPerReadingDay"), "Missing reading-day average");
         assertTrue(book.containsKey("progressPercent"), "Missing integer progressPercent");
