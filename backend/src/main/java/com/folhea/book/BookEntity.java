@@ -29,6 +29,11 @@ public class BookEntity {
     @Column(nullable = false, length = 500) public String title;
     @Size(max = 500)
     @Column(length = 500) public String author;
+    @Size(max = 200)
+    @Column(length = 200) public String edition;
+    @jakarta.validation.constraints.Min(1)
+    @jakarta.validation.constraints.Max(1000000)
+    @Column(name = "total_pages") public Integer totalPages;
     @NotNull
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 32) public BookStatus status;
     @Column(name = "finished_on") public LocalDate finishedOn;
@@ -52,6 +57,9 @@ public class BookEntity {
         if (title == null || title.isBlank()) throw new IllegalArgumentException("Book title cannot be blank");
         if (title.length() > 500 || (author != null && author.length() > 500)) {
             throw new IllegalArgumentException("Book text fields exceed their maximum length");
+        }
+        if ((edition != null && edition.length() > 200) || (totalPages != null && (totalPages < 1 || totalPages > 1000000))) {
+            throw new IllegalArgumentException("Invalid book metadata");
         }
         if (status == BookStatus.FINISHED && finishedOn == null) {
             throw new IllegalArgumentException("A finished book must have a finished date");

@@ -44,19 +44,34 @@ public class BookResource {
     @Inject BookRepository books;
     @Inject TimeProvider time;
     @Inject ObjectMapper objectMapper;
+    @Inject BookReadService reads;
+    @Inject BookCoverService covers;
 
     @GET
     @Operation(summary = "Lista os livros do usuário autenticado")
     public List<BookResponse> list(@QueryParam("limit") Integer limit, @QueryParam("offset") Integer offset) {
         int pageLimit = QueryLimits.clampLimit(limit);
         int pageOffset = QueryLimits.sanitizeOffset(offset);
-        return books.findOwned(currentUser.get().id, pageLimit, pageOffset).stream().map(BookResponse::from).toList();
+        var user = currentUser.get();
+        return reads.responses(books.findOwned(user.id, pageLimit, pageOffset), user);
     }
 
     @POST
     @Transactional
     @Operation(summary = "Cadastra um livro")
+    @Consumes(MediaType.APPLICATION_JSON)
     public Response create(@Valid CreateBookRequest request) {
+        return createBook(request, null);
+    }
+
+    @POST @Transactional @Consumes(MediaType.MULTIPART_FORM_DATA)
+    public Response createMultipart(org.jboss.resteasy.reactive.server.multipart.MultipartFormDataInput input) throws java.io.IOException {
+        CreateBookRequest request = covers.metadata(input, CreateBookRequest.class);
+        if (request == null || request.totalPages() == null) invalid("Informe o total de páginas do livro.");
+        return createBook(request, covers.cover(input, true));
+    }
+
+    private Response createBook(CreateBookRequest request, BookCoverService.Normalized image) {
         if (request == null || request.title() == null || request.title().isBlank()) invalid("Informe o título do livro.");
         validateTextLength(request.title(), request.author());
         var user = currentUser.get();
@@ -64,26 +79,44 @@ public class BookResource {
         book.userId = user.id;
         book.title = request.title().trim();
         book.author = blankToNull(request.author());
+        validateMetadata(request.edition(), request.totalPages());
+        book.edition = blankToNull(request.edition());
+        book.totalPages = request.totalPages();
         book.status = BookStatus.READING;
-        books.persist(book);
-        return Response.status(Response.Status.CREATED).entity(BookResponse.from(book)).build();
+        books.persistAndFlush(book);
+        covers.save(book.id, image);
+        return Response.status(Response.Status.CREATED).entity(reads.response(book, user)).build();
     }
 
     @GET @Path("/{id}")
-    public BookResponse get(@PathParam("id") UUID id) { return BookResponse.from(findOwned(id)); }
+    public BookResponse get(@PathParam("id") UUID id) { return reads.response(findOwned(id), currentUser.get()); }
 
-    @PATCH @Path("/{id}") @Transactional
+    @PATCH @Path("/{id}") @Transactional @Consumes(MediaType.APPLICATION_JSON)
     public BookResponse update(@PathParam("id") UUID id, @Valid UpdateBookRequest request) {
+        return updateBook(findOwned(id), request, null);
+    }
+
+    @PATCH @Path("/{id}") @Transactional @Consumes(MediaType.MULTIPART_FORM_DATA)
+    public BookResponse updateMultipart(@PathParam("id") UUID id, org.jboss.resteasy.reactive.server.multipart.MultipartFormDataInput input) throws java.io.IOException {
         BookEntity book = findOwned(id);
-        if (request == null || (request.title() == null && request.author() == null)) invalid("Informe ao menos um campo para alterar.");
+        UpdateBookRequest request = covers.metadata(input, UpdateBookRequest.class);
+        return updateBook(book, request, covers.cover(input, false));
+    }
+
+    private BookResponse updateBook(BookEntity book, UpdateBookRequest request, BookCoverService.Normalized image) {
+        if (request == null || (request.title() == null && request.author() == null && request.edition() == null && request.totalPages() == null && image == null)) invalid("Informe ao menos um campo para alterar.");
         if (request.title() != null) {
             if (request.title().isBlank()) invalid("O título não pode ficar vazio.");
             book.title = request.title().trim();
         }
         validateTextLength(request.title(), request.author());
         if (request.author() != null) book.author = blankToNull(request.author());
+        validateMetadata(request.edition(), request.totalPages());
+        if (request.edition() != null) book.edition = blankToNull(request.edition());
+        if (request.totalPages() != null) book.totalPages = request.totalPages();
+        covers.save(book.id, image);
         books.flush();
-        return BookResponse.from(book);
+        return reads.response(book, currentUser.get());
     }
 
     @DELETE @Path("/{id}") @Transactional
@@ -105,7 +138,7 @@ public class BookResource {
         book.status = BookStatus.FINISHED;
         book.finishedOn = date;
         books.flush();
-        return BookResponse.from(book);
+        return reads.response(book, currentUser.get());
     }
 
     private FinishRequest parseFinishRequest(String requestBody) throws JsonProcessingException {
@@ -120,7 +153,27 @@ public class BookResource {
         book.status = BookStatus.READING;
         book.finishedOn = null;
         books.flush();
-        return BookResponse.from(book);
+        return reads.response(book, currentUser.get());
+    }
+
+    @GET @Path("/{id}/cover") @Produces({"image/jpeg", "image/png"})
+    public Response cover(@PathParam("id") UUID id) {
+        BookEntity book = findOwned(id);
+        BookCoverEntity image = covers.get(book.id);
+        if (image == null) throw new ProblemException(404, "https://folhea.com.br/problems/cover-not-found", "Capa não encontrada", "Não há uma capa para este livro.");
+        return Response.ok(image.data, image.mediaType).header("Cache-Control", "no-store")
+                .header("X-Content-Type-Options", "nosniff").build();
+    }
+
+    @DELETE @Path("/{id}/cover") @Transactional
+    public Response deleteCover(@PathParam("id") UUID id) {
+        covers.delete(findOwned(id).id);
+        return Response.noContent().header("Cache-Control", "no-store").build();
+    }
+
+    private static void validateMetadata(String edition, Integer totalPages) {
+        if (edition != null && edition.length() > 200) invalid("A edição pode ter no máximo 200 caracteres.");
+        if (totalPages != null && (totalPages < 1 || totalPages > 1000000)) invalid("O total de páginas deve ser inteiro entre 1 e 1000000.");
     }
 
     private BookEntity findOwned(UUID id) {
@@ -143,18 +196,30 @@ public class BookResource {
             @Size(max = 500, message = "O título pode ter no máximo 500 caracteres.")
             String title,
             @Size(max = 500, message = "O autor pode ter no máximo 500 caracteres.")
-            String author) { }
+            String author,
+            @Size(max = 200) String edition,
+            @jakarta.validation.constraints.Min(1) @jakarta.validation.constraints.Max(1000000) Integer totalPages) {
+        public CreateBookRequest(String title, String author) { this(title, author, null, null); }
+    }
 
     public record UpdateBookRequest(
             @Size(max = 500, message = "O título pode ter no máximo 500 caracteres.")
             String title,
             @Size(max = 500, message = "O autor pode ter no máximo 500 caracteres.")
-            String author) { }
+            String author,
+            @Size(max = 200) String edition,
+            @jakarta.validation.constraints.Min(1) @jakarta.validation.constraints.Max(1000000) Integer totalPages) {
+        public UpdateBookRequest(String title, String author) { this(title, author, null, null); }
+    }
 
     public record FinishRequest(LocalDate finishedOn) { }
 
     public record BookResponse(UUID id, String title, String author, BookStatus status,
-                               LocalDate finishedOn, Instant createdAt, Instant updatedAt) {
+                               LocalDate finishedOn, Instant createdAt, Instant updatedAt, String edition, Integer totalPages,
+                               BookCoverEntity.Metadata cover, BookStats stats) {
+        public BookResponse(UUID id, String title, String author, BookStatus status, LocalDate finishedOn, Instant createdAt, Instant updatedAt) {
+            this(id, title, author, status, finishedOn, createdAt, updatedAt, null, null, null, null);
+        }
         /** Backwards-compatible constructor for callers that only need the public book fields. */
         public BookResponse(UUID id, String title, String author, BookStatus status, LocalDate finishedOn) {
             this(id, title, author, status, finishedOn, null, null);
@@ -162,7 +227,7 @@ public class BookResource {
 
         public static BookResponse from(BookEntity book) {
             return new BookResponse(book.id, book.title, book.author, book.status,
-                    book.finishedOn, book.createdAt, book.updatedAt);
+                    book.finishedOn, book.createdAt, book.updatedAt, book.edition, book.totalPages, null, null);
         }
     }
 }

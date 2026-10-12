@@ -63,7 +63,8 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
         MediaType mediaType = context.getMediaType();
         boolean json = mediaType != null && MediaType.APPLICATION_JSON_TYPE.isCompatible(mediaType);
         boolean bodyless = !context.hasEntity() && context.getLength() <= 0;
-        if (!json && !bodyless && !isEmptyFinishForm(context, mediaType)) {
+        boolean bookMultipart = isBookMultipart(context, mediaType);
+        if (!json && !bodyless && !bookMultipart && !isEmptyFinishForm(context, mediaType)) {
             abort(context, 415, "https://folhea.com.br/problems/unsupported-content-type", "Tipo de conteúdo não suportado", "Mutações autenticadas aceitam somente application/json.");
             return;
         }
@@ -71,7 +72,14 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
             abort(context, 403, "https://folhea.com.br/problems/csrf-invalid", "Token CSRF inválido", "O token CSRF está ausente, expirado ou não pertence à sessão.");
             return;
         }
-        limitBody(context);
+        if (!bookMultipart) limitBody(context);
+    }
+
+    private static boolean isBookMultipart(ContainerRequestContext context, MediaType type) {
+        if (type == null || !MediaType.MULTIPART_FORM_DATA_TYPE.isCompatible(type)) return false;
+        String path = context.getUriInfo().getPath().replaceFirst("^/", "");
+        return ("POST".equals(context.getMethod()) && path.equals("api/v1/books"))
+                || ("PATCH".equals(context.getMethod()) && path.matches("api/v1/books/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"));
     }
 
     private boolean validOrigin(ContainerRequestContext context) {
