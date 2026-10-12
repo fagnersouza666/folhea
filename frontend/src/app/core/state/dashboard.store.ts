@@ -4,7 +4,7 @@ import { Observable, catchError, tap, throwError } from 'rxjs';
 import { ApiClient } from '../api/api-client.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { AuthService } from '../auth/auth.service';
-import { Book, BookCreate, BookPatch, BookStats, Dashboard, ReadingDraft, ReadingSession, ReadingSessionPatch, Stats, StatsPeriod } from '../models/models';
+import { Book, BookCreate, BookPatch, BookProgress, Dashboard, ReadingDraft, ReadingSession, ReadingSessionPatch, Stats, StatsPeriod } from '../models/models';
 import { calendarDate, startOfPeriod } from './reading-statistics';
 
 @Injectable({ providedIn: 'root' })
@@ -21,8 +21,10 @@ export class DashboardStore {
   private readonly sessionDetails = signal<ReadingSession[]>([]);
   private readonly bookDetailLoadingState = signal(false);
   private readonly sessionDetailLoadingState = signal(false);
+  private readonly sessionDetailRequests = new Map<string, number>();
+  private pendingSessionDetailId: string | null = null;
   private readonly statsState = signal<Stats | null>(null);
-  private readonly bookStatsState = signal<Record<string, { data: BookStats | null; loading: boolean; error: string | null }>>({});
+  private readonly bookStatsState = signal<Record<string, { data: BookProgress | null; loading: boolean; error: string | null }>>({});
   private readonly bookStatsRequests = new Map<string, number>();
   private bookStatsRevision = 0;
   private readonly periodState = signal<StatsPeriod>('7');
@@ -167,7 +169,7 @@ export class DashboardStore {
     });
   }
 
-  bookStats(id: string): BookStats | null { return this.bookStatsState()[id]?.data ?? null; }
+  bookStats(id: string): BookProgress | null { return this.bookStatsState()[id]?.data ?? null; }
   bookStatsLoading(id: string): boolean { return this.bookStatsState()[id]?.loading ?? false; }
   bookStatsError(id: string): string | null { return this.bookStatsState()[id]?.error ?? null; }
 
@@ -207,22 +209,48 @@ export class DashboardStore {
   }
 
   private acceptBookStats(book: Book): void {
-    this.setBookStatsState(book.id, book.stats ?? null, false, book.stats ? null : 'Não foi possível carregar o progresso do livro.');
+    const { pagesRead, averagePagesPerReadingDay, progressPercent } = book;
+    const valid = typeof pagesRead === 'number' && Number.isInteger(pagesRead) && pagesRead >= 0
+      && (averagePagesPerReadingDay === null || (typeof averagePagesPerReadingDay === 'number' && Number.isFinite(averagePagesPerReadingDay) && averagePagesPerReadingDay >= 0))
+      && (progressPercent === null || (typeof progressPercent === 'number' && Number.isInteger(progressPercent) && progressPercent >= 0 && progressPercent <= 100));
+    const data: BookProgress | null = valid
+      ? { pagesRead, totalPages: book.totalPages ?? null, averagePagesPerReadingDay: averagePagesPerReadingDay!, progressPercent: progressPercent! }
+      : null;
+    this.setBookStatsState(book.id, data, false, data ? null : 'Não foi possível carregar o progresso do livro.');
   }
 
-  private setBookStatsState(id: string, data: BookStats | null, loading: boolean, error: string | null): void {
+  private setBookStatsState(id: string, data: BookProgress | null, loading: boolean, error: string | null): void {
     this.bookStatsState.update(states => ({ ...states, [id]: { data, loading, error } }));
   }
 
   loadSession(id: string): void {
     const cached = this.getSession(id);
     if (cached) { this.loadBook(cached.bookId); return; }
+    const request = this.nextSessionDetailRequest(id);
+    this.pendingSessionDetailId = id;
     this.sessionDetailLoadingState.set(true);
     this.sessionsErrorState.set(null);
     this.api.getSession(id).subscribe({
-      next: (session) => { this.sessionDetails.update((sessions) => this.mergeById(sessions, [session])); this.sessionDetailLoadingState.set(false); this.loadBook(session.bookId); },
-      error: (error: unknown) => { this.sessionDetailLoadingState.set(false); this.sessionsErrorState.set(this.errorMessage(error, 'Não foi possível abrir a sessão.')); }
+      next: (session) => {
+        if (request !== this.sessionDetailRequests.get(id)) return;
+        this.sessionDetails.update((sessions) => this.mergeById(sessions, [session]));
+        this.completeSessionDetail(id); this.loadBook(session.bookId);
+      },
+      error: (error: unknown) => {
+        if (request !== this.sessionDetailRequests.get(id)) return;
+        this.completeSessionDetail(id); this.sessionsErrorState.set(this.errorMessage(error, 'Não foi possível abrir a sessão.'));
+      }
     });
+  }
+
+  private nextSessionDetailRequest(id: string): number {
+    const request = (this.sessionDetailRequests.get(id) ?? 0) + 1;
+    this.sessionDetailRequests.set(id, request); return request;
+  }
+
+  private completeSessionDetail(id: string): void {
+    if (this.pendingSessionDetailId !== id) return;
+    this.pendingSessionDetailId = null; this.sessionDetailLoadingState.set(false);
   }
 
   selectPeriod(period: StatsPeriod): void { this.periodState.set(period); this.loadStats(period); }
@@ -414,8 +442,9 @@ export class DashboardStore {
     this.sessionsState.update((sessions) => sessions.map((session) => session.id === id ? { ...session, ...patch } : session));
     return this.api.updateSession(id, patch).pipe(
       tap((session) => {
+        this.nextSessionDetailRequest(id); this.completeSessionDetail(id);
         this.sessionsState.update((sessions) => this.mergeById(sessions, [session]));
-        this.sessionDetails.update((sessions) => sessions.filter((item) => item.id !== id));
+        this.sessionDetails.update((sessions) => this.mergeById(sessions, [session]));
         this.refreshBookMetrics(originalBookId, session.bookId);
         this.refreshMetrics();
         this.loadSessions();
@@ -435,6 +464,7 @@ export class DashboardStore {
     this.sessionsState.update((sessions) => sessions.filter((session) => session.id !== id));
     return this.api.deleteSession(id).pipe(
       tap(() => {
+        this.nextSessionDetailRequest(id); this.completeSessionDetail(id);
         this.refreshBookMetrics(originalBookId);
         this.refreshMetrics();
         this.sessionDetails.update((sessions) => sessions.filter((item) => item.id !== id));
