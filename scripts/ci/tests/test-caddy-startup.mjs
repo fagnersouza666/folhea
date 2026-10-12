@@ -26,8 +26,8 @@ try {
   const result = await new Promise((ok, fail) => { child.once('error', fail); child.once('exit', (code, signal) => ok({ code, signal })); });
   assert.equal(timedOut, false, 'Late docker creation must not deadlock cleanup');
   assert.equal(result.code, 0, output);
-  assert.match(output, /ok - 14 actual Caddy/);
-  console.log('ok - delayed Docker startup completes all14 cases and cleanup within20s');
+  assert.match(output, /ok - 28 actual Caddy body limits and 10 private photo cache\/status cases/);
+  console.log('ok - delayed Docker startup completes 28 body and 10 cache cases and cleanup within20s');
 } finally {
   clearTimeout(deadline);
   if (child?.pid) spawnSync(docker, ['rm', '--force', `folhea-edge-body-${child.pid}`], { stdio: 'ignore', timeout: 10000 });
