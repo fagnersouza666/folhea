@@ -120,7 +120,7 @@ try {
     await page.getByRole('button', { name: 'Reabrir livro' }).click(); await expect(page.getByRole('button', { name: 'Marcar como finalizado' })).toBeVisible(); await stats(a, id, 12, .4, 4, 3);
     pass('Editar/excluir leitura recalcula UI/API; conclusão congela referência e reabrir retorna média corrente');
     } else { a = await account('primary'); b = await account('secondary'); page=a.page; id=a.stored.bookId; noise=coverFixturePng(); assert.ok(id); await page.goto(`/app/livros/${id}`); await stats(a,id,12,.4,4,3); }
-    
+
     let covered, storedBytes;
     if(mode !== 'finish') {
     const oldVersion = (await (await api(a, 'GET', `/api/v1/books/${id}`)).json()).cover.version;
