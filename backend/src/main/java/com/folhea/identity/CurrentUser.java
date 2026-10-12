@@ -41,11 +41,14 @@ public class CurrentUser {
         String email = claim("email");
         UserEntity user = users.findByIdentitySubject(subject);
         if (user == null) {
-            // PostgreSQL serializes concurrent first requests on the subject's
-            // unique key. Catching a constraint failure would leave the enclosing
+            // PostgreSQL serializes concurrent first requests on both unique keys. Catching a constraint failure would leave the enclosing
             // transaction rollback-only, even after clearing the persistence context.
             users.createIfAbsent(subject, email, validTimezone(identityTimezone()));
             user = users.findByIdentitySubject(subject);
+            if (user == null) {
+                // An email collision cannot authorize or rebind another subject.
+                throw new ProblemException(401, "https://folhea.com.br/problems/unauthorized", "Não autenticado", "Não foi possível vincular a identidade autenticada.");
+            }
             if (deletions.isDeleted(subject)) {
                 // A deletion may commit between the first marker check and INSERT.
                 // Roll back any concurrent reprovisioning instead of retaining it.
