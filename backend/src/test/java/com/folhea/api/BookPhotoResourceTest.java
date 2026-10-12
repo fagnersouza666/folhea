@@ -68,6 +68,48 @@ class BookPhotoResourceTest {
     @AfterEach void clearHttpSpecification() { RestAssured.requestSpecification = null; }
 
     @Test @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = OWNER, attributes = @SecurityAttribute(key = "email", value = "photo-owner@example.test"))
+    void multipartTitleAndPhotoWithoutTotalCreatesABookWithoutPercent() throws Exception {
+        var created = given().multiPart("book", "{\"title\":\"Foto sem total\"}", "application/json")
+                .multiPart("cover", "cover.jpg", PhotoFixtures.jpeg(2,3,false,.8f), "image/jpeg")
+                .post("/api/v1/books").then().statusCode(201)
+                .body("totalPages", nullValue()).body("progressPercent", nullValue())
+                .body("stats.percent", nullValue()).body("hasPhoto", equalTo(true)).extract().response();
+        String id = created.path("id");
+        given().get("/api/v1/books/{id}", id).then().statusCode(200)
+                .body("totalPages", nullValue()).body("progressPercent", nullValue());
+        given().get("/api/v1/books/{id}/photo", id).then().statusCode(200).contentType("image/jpeg");
+    }
+
+    @Test @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = OWNER, attributes = @SecurityAttribute(key = "email", value = "photo-owner@example.test"))
+    void multipartStillRejectsInvalidTotalsWithoutCreatingBooks() throws Exception {
+        byte[] image = PhotoFixtures.jpeg(2,3,false,.8f);
+        for (String total : new String[]{"0", "-1", "2147483648", "1.5", "\"300\""}) {
+            given().multiPart("book", "{\"title\":\"Total inválido\",\"totalPages\":" + total + "}", "application/json")
+                    .multiPart("cover", "cover.jpg", image, "image/jpeg")
+                    .post("/api/v1/books").then().statusCode(400).contentType("application/problem+json");
+        }
+        given().get("/api/v1/books").then().statusCode(200).body("size()", equalTo(1));
+    }
+
+    @Test @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = OWNER, attributes = @SecurityAttribute(key = "email", value = "photo-owner@example.test"))
+    void allBookResponsesAndExportOmitRetiredCalendarAverageFields() throws Exception {
+        var created = given().contentType(ContentType.JSON).body("{\"title\":\"Média oficial\"}")
+                .post("/api/v1/books").then().statusCode(201)
+                .body("averagePagesPerReadingDay", nullValue()).extract().response();
+        assertNoRetiredFields(created);
+        String path = "/api/v1/books/" + created.path("id");
+        assertNoRetiredFields(given().get(path).then().statusCode(200).extract().response());
+        assertNoRetiredFields(given().get("/api/v1/books").then().statusCode(200).extract().response());
+        assertNoRetiredFields(given().contentType(ContentType.JSON).body("{\"title\":\"Média única\"}")
+                .patch(path).then().statusCode(200).extract().response());
+        assertNoRetiredFields(given().contentType(ContentType.JSON).body("{}")
+                .post(path + "/finish").then().statusCode(200).extract().response());
+        assertNoRetiredFields(given().contentType(ContentType.JSON)
+                .delete(path + "/finish").then().statusCode(200).extract().response());
+        assertNoRetiredFields(given().get("/api/v1/me/export").then().statusCode(200).extract().response());
+    }
+
+    @Test @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = OWNER, attributes = @SecurityAttribute(key = "email", value = "photo-owner@example.test"))
     void optionalTotalCanBeSetOmittedAndExplicitlyClearedWithoutChangingOtherMetadata() {
         given().contentType(ContentType.JSON).body("{\"title\":\"Sem total\",\"author\":\"Autora\",\"edition\":\"2ª\"}")
                 .post("/api/v1/books").then().statusCode(201).body("totalPages", nullValue()).body("hasPhoto", equalTo(false));
@@ -223,6 +265,11 @@ class BookPhotoResourceTest {
         assertNotNull(image); try { assertTrue(Math.max(image.getWidth(),image.getHeight()) <= 1600); } finally { image.flush(); }
     }
     private static String sha(byte[] bytes) throws Exception { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
+    private static void assertNoRetiredFields(io.restassured.response.Response response) throws Exception {
+        var json = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response.asByteArray());
+        assertTrue(json.findValues("averagePagesPerDay").isEmpty(), "Retired calendar average must not be serialized");
+        assertTrue(json.findValues("elapsedDays").isEmpty(), "Retired elapsed days must not be serialized");
+    }
     private String bookPath() { return "/api/v1/books/"+ownedId; }
     private String photoPath() { return bookPath()+"/photo"; }
     private static UserEntity user(String subject) { UserEntity user=new UserEntity();user.identitySubject=subject;user.email=subject+"@example.test";user.timezone="UTC";return user; }

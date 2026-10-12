@@ -986,8 +986,7 @@ class BackendResourceTest {
         given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
                 .body("stats.pagesRead", equalTo(470))
                 .body("stats.firstDate", equalTo(TODAY.minusDays(449).toString()))
-                .body("stats.elapsedDays", equalTo(450))
-                .body("stats.averagePagesPerDay", equalTo(1.04f))
+                .body("averagePagesPerReadingDay", equalTo(1f))
                 .body("stats.percent", org.hamcrest.Matchers.nullValue())
                 .body("totalPages", org.hamcrest.Matchers.nullValue());
         given().when().get("/api/v1/books?limit=1").then().statusCode(200)
@@ -1009,7 +1008,7 @@ class BackendResourceTest {
         given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
                 .body("edition", org.hamcrest.Matchers.nullValue()).body("cover", org.hamcrest.Matchers.nullValue())
                 .body("stats.pagesRead", equalTo(0)).body("stats.firstDate", org.hamcrest.Matchers.nullValue())
-                .body("stats.averagePagesPerDay", equalTo(0f)).body("stats.elapsedDays", equalTo(0));
+                .body("averagePagesPerReadingDay", org.hamcrest.Matchers.nullValue());
         given().contentType(ContentType.JSON).body("{\"edition\":\"  2ª edição  \",\"totalPages\":300000}")
                 .when().patch("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
                 .body("edition", equalTo("2ª edição")).body("totalPages", equalTo(300000));
@@ -1035,25 +1034,25 @@ class BackendResourceTest {
 
     @Test
     @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
-    void calendarAverageIncludesIdleDaysAndFreezesAtFinishedOnWithoutDroppingLegacyDates() {
+    void readingDayAverageIgnoresIdleDaysAndFinishedOnWithoutDroppingLegacyDates() {
         UUID session = createSession(seededAliceBookId, TODAY.minusDays(4), 30, 0);
         given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
-                .body("stats.averagePagesPerDay", equalTo(6f)).body("stats.elapsedDays", equalTo(5));
+                .body("averagePagesPerReadingDay", equalTo(30f));
         given().contentType(ContentType.JSON).body("{\"finishedOn\":\""+TODAY.minusDays(2)+"\"}")
                 .when().post("/api/v1/books/{id}/finish", seededAliceBookId).then().statusCode(200)
                 .body("stats.referenceDate", equalTo(TODAY.minusDays(2).toString()))
-                .body("stats.averagePagesPerDay", equalTo(10f)).body("stats.elapsedDays", equalTo(3));
+                .body("averagePagesPerReadingDay", equalTo(30f));
         given().contentType(ContentType.JSON).body("{\"pages\":15}")
                 .when().patch("/api/v1/sessions/{id}", session).then().statusCode(200);
         given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
-                .body("stats.averagePagesPerDay", equalTo(5f)).body("stats.pagesRead", equalTo(15));
+                .body("averagePagesPerReadingDay", equalTo(15f)).body("stats.pagesRead", equalTo(15));
         given().contentType(ContentType.JSON).body("{\"finishedOn\":\""+TODAY.minusDays(10)+"\"}")
                 .when().post("/api/v1/books/{id}/finish", seededAliceBookId).then().statusCode(200)
-                .body("stats.elapsedDays", equalTo(1)).body("stats.averagePagesPerDay", equalTo(15f));
+                .body("averagePagesPerReadingDay", equalTo(15f));
         given().when().delete("/api/v1/sessions/{id}", session).then().statusCode(204);
         given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
                 .body("stats.pagesRead", equalTo(0)).body("stats.firstDate", org.hamcrest.Matchers.nullValue())
-                .body("stats.averagePagesPerDay", equalTo(0f));
+                .body("averagePagesPerReadingDay", org.hamcrest.Matchers.nullValue());
     }
 
     @Test
@@ -1187,15 +1186,15 @@ class BackendResourceTest {
 
     @Test
     @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
-    void averageUsesAccountTimezoneCalendarRatherThanServerTimezone() {
+    void accountTimezoneReferenceDoesNotAlterTheReadingDayAverage() {
         createSession(seededAliceBookId,TODAY.minusDays(3),12,0);
         given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
-                .body("stats.elapsedDays",equalTo(4)).body("stats.averagePagesPerDay",equalTo(3f));
+                .body("averagePagesPerReadingDay",equalTo(12f));
         given().contentType(ContentType.JSON).body("{\"timezone\":\"America/Sao_Paulo\"}")
                 .when().patch("/api/v1/me").then().statusCode(200);
         given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
                 .body("stats.referenceDate",equalTo(TODAY.minusDays(1).toString()))
-                .body("stats.elapsedDays",equalTo(3)).body("stats.averagePagesPerDay",equalTo(4f));
+                .body("averagePagesPerReadingDay",equalTo(12f));
     }
 
     @Test
@@ -1245,12 +1244,12 @@ class BackendResourceTest {
 
     @Test
     @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
-    void minutesOnlyReadingSetsTheCalendarStartWithoutInventingPages() {
+    void minutesOnlyReadingPreservesTheFirstDateWithoutInventingAnAverage() {
         createSession(seededAliceBookId,TODAY.minusDays(10),0,5);
         given().get("/api/v1/books/{id}",seededAliceBookId).then().statusCode(200)
                 .body("stats.firstDate",equalTo(TODAY.minusDays(10).toString()))
-                .body("stats.elapsedDays",equalTo(11)).body("stats.pagesRead",equalTo(0))
-                .body("stats.averagePagesPerDay",equalTo(0f));
+                .body("stats.pagesRead",equalTo(0))
+                .body("averagePagesPerReadingDay",org.hamcrest.Matchers.nullValue());
     }
 
     @Test

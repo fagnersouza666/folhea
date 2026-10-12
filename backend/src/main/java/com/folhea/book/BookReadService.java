@@ -53,7 +53,7 @@ public class BookReadService {
             Integer progress = book.totalPages == null ? null
                     : BigDecimal.valueOf(Math.min(pages, book.totalPages)).multiply(BigDecimal.valueOf(100))
                         .divide(BigDecimal.valueOf(book.totalPages), 0, RoundingMode.DOWN).intValueExact();
-            // Retain the previous calendar statistics for API compatibility; the UI uses the official fields.
+            // The compatibility metadata has no second average; reading-day average is top-level only.
             BookStats stats = BookStats.calculate(book, pages,
                     row == null ? null : (LocalDate) row[2], today);
             return new BookResource.BookResponse(book.id, book.title, book.author, book.status, book.finishedOn,

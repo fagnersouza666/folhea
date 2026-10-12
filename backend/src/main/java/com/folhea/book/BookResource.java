@@ -70,7 +70,6 @@ public class BookResource {
     @POST @Transactional @Consumes(MediaType.MULTIPART_FORM_DATA)
     public Response createMultipart(org.jboss.resteasy.reactive.server.multipart.MultipartFormDataInput input) throws java.io.IOException {
         CreateBookRequest request = covers.metadata(input, CreateBookRequest.class);
-        if (request == null || request.totalPages() == null) invalid("Informe o total de páginas do livro.");
         return createBook(request, covers.cover(input, true));
     }
 

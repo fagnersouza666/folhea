@@ -124,8 +124,8 @@ preservados; esta mudança não exige migração. Criar/editar/excluir uma sess�
 e transferi-la para outro livro repercutem na próxima consulta dos dois livros.
 
 A UI usa somente esses campos oficiais, com loading/erro/retry sem restaurar
-valores antigos. O `stats` legado de dias corridos continua compatível na API,
-mas não serve de fallback para as métricas SESSAO-01. Estatísticas globais,
+valores antigos. O `stats` de compatibilidade não contém uma segunda média
+nem dias corridos; `averagePagesPerReadingDay` é a única média por livro. Estatísticas globais,
 streak e cards mantêm seus contratos. Exportação conserva apenas metadados
 persistidos, sem estes campos calculados nem `stats`/hoje.
 
@@ -142,7 +142,9 @@ A UI usa JSON para metadados e RAW /photo separado, conforme LIVRO-02 abaixo.
 Clientes anteriores continuam aceitos: com foto, POST `/api/v1/books`
 e PATCH `/api/v1/books/{id}` usam multipart/form-data: parte `book` contém JSON
 (application/json, até8192bytes) e `cover` contém JPEG/PNG. POST multipart
-exige título/total e cover; autor/edição continuam opcionais. PATCH aceita
+exige título e cover; total, autor e edição são opcionais. Sem total,
+`totalPages`, `progressPercent` e `stats.percent` são nulos. Totais informados
+continuam obrigatoriamente inteiros positivos de 32 bits. PATCH aceita
 `book={}` para somente substituir a capa. A validação da imagem acontece antes
 de persistir; livro/metadados/capa são confirmados na mesma transação. Falhas
 não deixam livro parcial nesse contrato legado. No fluxo RAW novo, falha de
@@ -159,22 +161,25 @@ GET `/books/{id}/cover` é alias autenticado com no-store; DELETE é compatível
 e idempotente. A UI nova usa /photo; nada vira URL pública. V010 migra bytes
 para book_photo e esvazia book_cover, preservando rollback e recuperação V007.
 
-Por compatibilidade com clientes anteriores, o campo legado
-`stats={pagesRead,totalPages,percent,averagePagesPerDay,firstDate,referenceDate,
-elapsedDays}` é calculado no backend por usuário+livro, com SUM(pages) e MIN(data)
-de TODO histórico próprio. A listagem agrega em lote os livros de sua página,
-sem limitar sessões a100/366dias e sem N+1. A UI atual usa os campos top-level
-descritos em SESSAO-01. Sem sessões: pagesRead/avg/days=0,
-firstDate=null. Sem total, percent=null. Percentual truncado em duas casas
-(DOWN), limitado a100:299999/300000=99.99 e100 somente se soma>=total.
-Releituras conservam a soma bruta; reduzir o total não apaga leituras nem finaliza.
+O campo de compatibilidade `stats={pagesRead,totalPages,percent,firstDate,referenceDate}`
+é calculado no backend por usuário+livro, com SUM(pages) e MIN(data) de TODO
+histórico próprio. A listagem agrega em lote os livros de sua página, sem limitar
+sessões a 100 registros/366 dias e sem N+1. Sem sessões: pagesRead=0 e firstDate=null. Sem
+total, percent=null. Percentual truncado em duas casas (DOWN), limitado a 100:
+299999/300000=99.99 e 100 somente se soma>=total. Releituras conservam a soma bruta;
+reduzir o total não apaga leituras nem finaliza.
 
-Média=pagesRead/max(1,diasEntre(firstDate,referenceDate)+1), com dias corridos
-inclusivos (inclusive sem leitura) e duas casas HALF_UP. ReferenceDate é hoje
-no fuso da conta para READING, ou finishedOn para FINISHED. Datas legadas
-inconsistentes não descartam sessões: finalização antes da primeira data usa
-denominador 1. A média de concluídos permanece estável com o passar dos dias;
-CRUD de leitura, metadados, finalização/reabertura repercutem na próxima consulta.
+`averagePagesPerDay` e `elapsedDays` foram removidos do contrato e da
+serialização. A única média é o campo top-level `averagePagesPerReadingDay`:
+SUM(pages)/COUNT(DISTINCT readingDate com pages>0), uma casa HALF_UP. Dias sem
+páginas, inclusive sessões somente com minutos, não entram no denominador.
+75 páginas em duas datas distintas resultam em `37.5`. Sem datas com páginas,
+a média é nula. CRUD e transferência de sessões recalculam as métricas dos
+livros envolvidos; finishedOn e o avanço do relógio não mudam o denominador.
+
+`firstDate` conserva a primeira data de qualquer sessão própria. `referenceDate`
+é hoje no fuso da conta para READING ou finishedOn para FINISHED; ambos são
+metadados de compatibilidade e não participam do cálculo da média oficial.
 
 Exportação conserva JSON `{user,books,sessions}` e acrescenta `covers` com
 `{bookId,mediaType,byteSize,width,height,version,dataBase64}`. Os livros exportados
