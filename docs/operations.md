@@ -488,6 +488,10 @@ path e status de cache com respostas sintéticas de upstream. Ele comprova o
 proxy, não autenticação, autorização, formato de imagem ou migração. Essas
 provas exigem a stack real e o Flyway/JVM para executar V010; aplicar arquivos
 `.sql` pelo psql não executa uma migração Java.
+O scanner de contratos exige GET/PUT/DELETE de `/photo`: o GET aceita a URL
+declarativa usada pelo `<img>`, e cada método é associado à sua rota backend.
+As regressões negativas do scanner preservam as verificações AUTH anteriores;
+esse gate estático não substitui a prova de sessão, propriedade e ETag no stage.
 O SQL padrão compartilhado está em `scripts/ops/verify-recovery.sql` e é
 avaliado pelo teste `BookPhotoMigrationTest` após o Flyway real. As regressões
 shell V009 continuam explícitas e o fixture somente SQL deve falhar no guard

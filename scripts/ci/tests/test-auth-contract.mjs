@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Exercise the CLI against actual source, then change one contract in a
+// Exercise the CLI against actual AUTH/photo source, then change one contract in a
 // private fixture. No provider, runtime response, password or database is used.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const files = [
@@ -82,12 +82,30 @@ const cases = [
     'matching CSRF cookie'],
   ['missing server CSRF binding', 'backend/src/main/java/com/folhea/security/SecurityBoundaryFilter.java',
     source => source.replace('csrfTokens.isValid(ticket, token)', 'true'),
-    'cookie/header equality and server binding']
+    'cookie/header equality and server binding'],
+  ['wrong declarative photo URL', 'frontend/src/app/core/api/api-client.service.ts',
+    source => source.replace(/(bookPhotoUrl\([^)]*\)[\s\S]*?\/books\/\$\{encodeURIComponent\(id\)\})\/photo/, '$1/obsolete-photo'),
+    'missing GET /api/v1/books/{id}/photo'],
+  ['wrong photo upload method', 'frontend/src/app/core/api/api-client.service.ts',
+    source => source.replace(/(uploadBookPhoto[\s\S]*?this\.http\.)put/, '$1post'),
+    'missing PUT /api/v1/books/{id}/photo'],
+  ['wrong photo removal method', 'frontend/src/app/core/api/api-client.service.ts',
+    source => source.replace(/(deleteBookPhoto[\s\S]*?this\.http\.)delete/, '$1post'),
+    'missing DELETE /api/v1/books/{id}/photo'],
+  ['missing backend photo GET', 'backend/src/main/java/com/folhea/book/BookResource.java',
+    source => source.replace('@GET @Path("/{id}/photo")', '@POST @Path("/{id}/photo")'),
+    'backend resource is missing GET /api/v1/books/{id}/photo'],
+  ['missing backend photo PUT', 'backend/src/main/java/com/folhea/book/BookResource.java',
+    source => source.replace('@PUT @Path("/{id}/photo")', '@PATCH @Path("/{id}/photo")'),
+    'backend resource is missing PUT /api/v1/books/{id}/photo'],
+  ['missing backend photo DELETE', 'backend/src/main/java/com/folhea/book/BookResource.java',
+    source => source.replace('@DELETE @Path("/{id}/photo")', '@PATCH @Path("/{id}/photo")'),
+    'backend resource is missing DELETE /api/v1/books/{id}/photo']
 ];
 try {
   const baseline = run(fixture());
   assert.equal(baseline.status, 0, baseline.stdout + baseline.stderr);
-  console.log('ok - actual AUTH source passes the static API/browser/CSRF contract');
+  console.log('ok - actual AUTH/photo source passes the static API/browser/CSRF contract');
   for (const [label, file, transform, error] of cases) {
     const dir = fixture();
     change(dir, file, transform);
