@@ -211,6 +211,15 @@ host operacional; a presença dos scripts não prova que esses jobs estão ativo
 O verificador envolve a asserção SQL em uma transação `READ ONLY` para rejeitar
 mutações acidentais.
 
+O guard atual de `verify-recovery.sh` usa `scripts/ops/verify-recovery.sql`: exige
+V007/V008/V009 e V010 com sucesso, aceitando os formatos numéricos com/sem zeros.
+V010 precisa ter tipo `JDBC` e armazenamento `book_photo.bytes` do tipo `bytea`;
+as colunas delegadas de credenciais continuam proibidas. V010 Java converte as
+capas antigas pela aplicação/Flyway, e não pode ser reproduzida aplicando apenas
+`.sql` por psql. Um dump pós-migração já inclui as fotos normalizadas: o restore
+preserva esses bytes, sem refazer a conversão. `book_cover` pode existir vazio
+por compatibilidade; o guard não o exige como armazenamento permanente.
+
 ### Backup das duas bases e timer
 
 `scripts/ops/backup-all.sh` usa os nomes/usuários do `.env`, salva Folhea e
