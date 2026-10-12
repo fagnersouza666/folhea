@@ -14,8 +14,12 @@ dados ativos imediatamente; cópias históricas expiram conforme a rotação de
 backup. Restores de teste devem usar ambientes isolados e descartar o volume após
 a verificação.
 
-Exportação self-service: `GET /api/v1/me/export` (JSON com usuário, livros e
-sessões).
+Exportação self-service: `GET /api/v1/me/export` (JSON com usuário, livros,
+sessões e capas privadas). As capas ficam em `book_cover` como bytes PostgreSQL;
+o dump custom-format inclui esses bytes, sem bucket ou volume adicional.
+Inclua a tabela no restore e compare tamanho/hash da imagem além dos metadados.
+A exclusão do livro ou da conta também remove a capa pela chave estrangeira;
+backups históricos continuam sujeitos à retenção descrita acima.
 
 ## Contrato dos scripts
 
@@ -120,9 +124,9 @@ deve registrar a exceção e gerar checksum antes de promover os dados.
 O restore usa `--clean --if-exists --no-owner --no-privileges` e deve ser
 executado com o serviço backend parado ou apontando para outra base enquanto a
 operação acontece. Depois, execute `verify-recovery.sh`; o teste padrão
-confirma a migração V007 aplicada com sucesso (`version` igual a `7` ou `007`,
-formato efetivo do histórico Flyway), a presença da tabela privada
-`public.account_deletion` e que `/q/health/ready` responde dentro do container
+confirma as migrações V007 e V008 aplicadas com sucesso (`version` igual a
+`7`/`007` e `8`/`008`, formatos do histórico Flyway), a presença das tabelas
+privadas `public.account_deletion` e `public.book_cover` e que `/q/health/ready` responde dentro do container
 backend. Isso impede aceitar um restore anterior ao contrato de exclusão
 durável. Inclua as intenções pendentes e os tombstones no backup da base do
 Folhea; não restaure somente as tabelas de livros/sessões. Para uma instalação

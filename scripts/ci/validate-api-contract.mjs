@@ -19,6 +19,8 @@ const operations = [
   ['GET', '/api/v1/books', 'BookResource.java', '@Path("/api/v1/books")'],
   ['POST', '/api/v1/books', 'BookResource.java', '@Path("/api/v1/books")'],
   ['GET', '/api/v1/books/{id}', 'BookResource.java', '@Path("/{id}")'],
+  ['GET', '/api/v1/books/{id}/cover', 'BookResource.java', '@Path("/{id}/cover")'],
+  ['DELETE', '/api/v1/books/{id}/cover', 'BookResource.java', '@Path("/{id}/cover")'],
   ['PATCH', '/api/v1/books/{id}', 'BookResource.java', '@Path("/{id}")'],
   ['DELETE', '/api/v1/books/{id}', 'BookResource.java', '@Path("/{id}")'],
   ['POST', '/api/v1/books/{id}/finish', 'BookResource.java', '@Path("/{id}/finish")'],
@@ -47,6 +49,15 @@ const clientOperations = new Set([...frontendClient.matchAll(/this\.http\.(get|p
     .replaceAll('${encodeURIComponent(id)}', '{id}').replaceAll('${id}', '{id}');
   return `${match[1].toUpperCase()} ${url}`;
 }));
+// Cover GET is deliberately a browser <img src> request: no HttpClient Blob
+// call is needed. Accept only the dedicated same-origin URL builder, stripping
+// its version query; do not let an unrelated GET satisfy another endpoint.
+const coverUrl = frontendClient.match(/bookCoverUrl\([^)]*\)[\s\S]*?\breturn\s*`([^`]+)`/)?.[1];
+if (coverUrl) {
+  const path = coverUrl.split('?')[0].replace('${this.baseUrl}', '/api/v1')
+    .replaceAll('${encodeURIComponent(id)}', '{id}').replaceAll('${id}', '{id}');
+  if (path === '/api/v1/books/{id}/cover') clientOperations.add(`GET ${path}`);
+}
 for (const [method, path, resource, backendMarker] of operations) {
   if (!clientOperations.has(`${method} ${path}`)) failures.push(`frontend client is missing ${method} ${path}`);
   const source = backendSources.get(resource) ?? '';

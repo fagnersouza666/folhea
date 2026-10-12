@@ -396,3 +396,33 @@ o `HTTP_PORT` reservado ao Caddy. Se a stack original já ocupa5433/8180,
 use a stack completa isolada em9443; não ative o override nessas portas.
 Um ambiente separado de hot reload precisa configurar portas/origens e
 credenciais da própria instância antes de conectar o Maven ao banco.
+
+## Capas privadas de livros
+
+As capas usam `book_cover` (`bytea`) no PostgreSQL existente. Não exigem S3,
+volume de imagens, URL pública nem serviço externo. GET da capa verifica o
+proprietário pelo livro e retorna `Cache-Control: no-store`/`nosniff`; capas não
+entram no cache offline do service worker, cujas exclusões abrangem `/api/**`.
+A prévia usa a política `img-src` já restrita à própria origem, `data:` e `blob:`.
+
+O Caddy permite envelope **3MiB** apenas para `multipart/form-data` em
+`POST /api/v1/books` e `PATCH /api/v1/books/{id}`. Outras rotas, métodos e
+requisições JSON preservam o limite de **64KB** da borda. O backend mantém as
+validações independentes: parte JSON até 8KiB; capa JPEG/PNG até 2MiB; lados até
+4096 e total até 4.194.304 pixels, também limitando a imagem recodificada. Os
+bytes da imagem ficam fora de respostas/listas de livros. Cadastro e edição
+multipart são atômicos: falha de capa não deixa cadastro parcial.
+
+O gate `node scripts/ci/tests/test-api-body-limits.mjs` usa Caddy real e um
+upstream que conta somente bytes sintéticos para conferir esses limites e
+headers. Ele não comprova autenticação ou dados da aplicação. O aceite com
+Keycloak/PG real deve enviar uma imagem válida maior que 64KiB pela UI,
+comparar o SHA da imagem persistida entre GET privado, exportação e restore,
+e verificar CSRF, isolamento de duas contas e exclusão em cascata.
+
+Para testar outra stack na mesma máquina, use outro projeto Compose, volumes,
+rede, portas, segredos e CA. Prefira a origem `https://127.0.0.1:9444` quando a
+stack habitual usa `https://localhost:9443`: cookies host-only e PWA não são
+isolados por porta. Guarde env e credenciais de teste fora do git com modo
+0600. Use o launcher com `FOLHEA_ENV_FILE=/caminho/privado/staging.env`; não
+reutilize a identidade, o perfil do navegador ou os volumes de usuários reais.

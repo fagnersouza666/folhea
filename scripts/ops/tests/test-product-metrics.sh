@@ -59,22 +59,50 @@ docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
 if verify_recovery > "$scratch/verify.log" 2>&1; then
   echo 'not ok - recovery accepted a failed real Flyway V007' >&2; exit 1
 fi
-# Flyway in the actual Quarkus runtime stores V001..V007 as 001..007.
+# A restore of the previous schema cannot pass the bookshelf recovery guard.
 docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
   -c "UPDATE flyway_schema_history SET success = true WHERE version = '007';"
-verify_recovery
-docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
-  -c "UPDATE flyway_schema_history SET version = '7' WHERE version = '007';"
-verify_recovery
-docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
-  -c 'ALTER TABLE account_deletion RENAME TO hidden_account_deletion;'
 if verify_recovery > "$scratch/verify.log" 2>&1; then
-  echo 'not ok - recovery accepted missing durable deletion state' >&2; exit 1
+  echo 'not ok - recovery accepted successful V007 without V008 and private covers' >&2; exit 1
+fi
+# Flyway in the actual Quarkus runtime stores V001..V008 as 001..008.
+docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
+  -c "INSERT INTO flyway_schema_history VALUES ('8', false);"
+if verify_recovery > "$scratch/verify.log" 2>&1; then
+  echo 'not ok - recovery accepted failed V008' >&2; exit 1
 fi
 docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
-  -c 'ALTER TABLE hidden_account_deletion RENAME TO account_deletion;'
+  -c "UPDATE flyway_schema_history SET version = '008' WHERE version = '8';"
+if verify_recovery > "$scratch/verify.log" 2>&1; then
+  echo 'not ok - recovery accepted failed real Flyway V008' >&2; exit 1
+fi
+docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
+  -c "UPDATE flyway_schema_history SET success = true WHERE version = '008';"
+# book_cover comes from the actual migrations above, never a stand-in table.
 verify_recovery
-echo 'ok - real PostgreSQL recovery accepts successful Flyway 7/007, rejects 6/006/failed versions and missing durable deletion table'
+docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
+  -c "UPDATE flyway_schema_history SET version = '8' WHERE version = '008'; UPDATE flyway_schema_history SET version = '7' WHERE version = '007';"
+verify_recovery
+for table in account_deletion book_cover; do
+  docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
+    -c "ALTER TABLE $table RENAME TO hidden_$table;"
+  if verify_recovery > "$scratch/verify.log" 2>&1; then
+    echo "not ok - recovery accepted missing $table" >&2; exit 1
+  fi
+  docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
+    -c "ALTER TABLE hidden_$table RENAME TO $table;"
+  verify_recovery
+done
+# Presence of the table and a successful V008 must not mask failed V007 state.
+docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
+  -c "UPDATE flyway_schema_history SET success = false WHERE version = '7';"
+if verify_recovery > "$scratch/verify.log" 2>&1; then
+  echo 'not ok - V008 masked failed V007 durable deletion state' >&2; exit 1
+fi
+docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
+  -c "UPDATE flyway_schema_history SET success = true WHERE version = '7';"
+verify_recovery
+echo 'ok - PostgreSQL recovery requires successful Flyway 7/007 and 8/008, private covers and durable deletion state'
 docker exec -i "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus <<'SQL'
 INSERT INTO folhea_user(id,identity_subject,email,timezone,created_at,updated_at)
 SELECT ('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,'fixture-'||n,

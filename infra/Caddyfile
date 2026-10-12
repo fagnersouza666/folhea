@@ -37,7 +37,23 @@
 	# API responses are private and must never be cached by a browser or proxy.
 	@api path /api/*
 	header @api Cache-Control "no-store"
-	request_body @api {
+	# Only atomic book creation/update accepts a multipart image envelope.
+	# The backend independently limits each cover to 2MiB and JSON part to 8KiB.
+	@book-multipart {
+		header_regexp Content-Type `(?i)^multipart/form-data([[:space:]]*;.*)?$`
+		expression `(method('POST') && path('/api/v1/books')) || (method('PATCH') && path_regexp('book_update', '^/api/v1/books/[^/]+$'))`
+	}
+	request_body @book-multipart {
+		max_size 3145728
+	}
+	@small-api-body {
+		path /api/*
+		not {
+			header_regexp Content-Type `(?i)^multipart/form-data([[:space:]]*;.*)?$`
+			expression `(method('POST') && path('/api/v1/books')) || (method('PATCH') && path_regexp('book_update_small', '^/api/v1/books/[^/]+$'))`
+		}
+	}
+	request_body @small-api-body {
 		max_size 64KB
 	}
 	handle @api {
