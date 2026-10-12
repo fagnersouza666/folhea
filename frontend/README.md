@@ -51,6 +51,7 @@ Essa suíte não intercepta requisições. Apenas sua configuração opt-in acei
 
 Campos possuem rótulos associados por `for`/`id`, separados das dicas e opções; isso mantém o nome acessível estável para teclado, leitores de tela e testes.
 Os números das etapas na home usam verde sobre fundos claros e âmbar sobre o fundo verde, preservando contraste de texto normal de pelo menos 4,5:1.
+Botões de exclusão usam texto `#7e3030` sobre `#fbe9e3`, como os alertas de erro, com contraste aproximado de 7,59:1 para texto normal.
 O foco por teclado usa anel verde com faixa clara, para ser distinguível em superfícies claras e escuras. Sobre o fundo creme principal, o anel tem contraste de 7,67:1, acima dos 3:1 exigidos para o indicador de estado pela [WCAG 1.4.11](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html).
 
 ## SEO, PWA e dependências

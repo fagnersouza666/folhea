@@ -41,7 +41,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .button-primary:hover { background: var(--forest-800); }
 .button-secondary { color: var(--forest-900); background: var(--forest-100); }
 .button-quiet { color: var(--forest-800); background: transparent; }
-.button-danger { color: var(--danger); background: #fbe9e3; }
+.button-danger { color: #7e3030; background: #fbe9e3; }
 .field { display: grid; gap: .42rem; color: var(--forest-950); font-size: .9rem; font-weight: 700; }
 .field input, .field select { width: 100%; border: 1px solid #ccd5cf; border-radius: .75rem; padding: .75rem .85rem; color: var(--ink); background: var(--cream-50); }
 .field input::placeholder { color: var(--muted); }
