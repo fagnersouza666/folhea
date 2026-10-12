@@ -573,9 +573,13 @@ requisições HTTP/IdP, forja cookies, grava traces ou screenshots.
 
 Extraia previamente a CA pública do Caddy dessa stack para `E2E_REAL_CA_FILE`.
 O script valida a conexão TLS contra essa CA e fixa o SPKI do certificado de
-servidor verificado apenas no Chromium temporário. Isso permite a instalação do
-worker de produção sem ignorar certificados globalmente e sem mudar trust/perfil
-do usuário. O contexto não usa `ignoreHTTPSErrors` como substituto dessa prova.
+servidor verificado apenas no Chromium temporário. Também acrescenta a mesma CA
+às CAs padrão **somente da thread Node do helper**, preservando as existentes,
+para as chamadas `context.request` do Playwright. Usa
+[`tls.setDefaultCACertificates`](https://nodejs.org/api/tls.html#tlssetdefaultcacertificatescerts),
+disponível no Node26 do projeto; não instala certificados no sistema/perfil do
+usuário. Assim, API e worker mantêm verificação TLS sem `ignoreHTTPSErrors` ou
+`NODE_TLS_REJECT_UNAUTHORIZED=0`.
 No overlay privado, configure `default_sni 127.0.0.3` no bloco global do Caddy:
 clientes TLS que acessam um IP não enviam SNI. Preserve a CA e os volumes dessa
 stack; não altere origem/CA/cookies das outras instalações. A validação TLS do

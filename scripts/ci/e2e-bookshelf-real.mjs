@@ -3,7 +3,7 @@
 // No HTTP/provider responses, session cookies or authentication are fabricated.
 import assert from 'node:assert/strict';
 import { randomBytes, createHash, X509Certificate } from 'node:crypto';
-import { connect } from 'node:tls';
+import { connect, getCACertificates, setDefaultCACertificates } from 'node:tls';
 import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync, mkdirSync, statSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -52,6 +52,9 @@ async function runAcceptance() {
       } catch (error) { reject(error); } finally { socket.end(); }
     });
   });
+  // Playwright API requests run in this Node thread, separately from Chromium.
+  // Preserve its existing CAs and add only the verified stage CA for this process.
+  setDefaultCACertificates([...getCACertificates('default'), readFileSync(caFile, 'utf8')]);
   // Chromium workers need trust at browser launch, not ignoreHTTPSErrors on a
   // page context. Pin only the stage leaf already verified above; no user trust changes.
   const browser = await chromium.launch({ headless: true, args: [`--ignore-certificate-errors-spki-list=${leafSpki}`] });
