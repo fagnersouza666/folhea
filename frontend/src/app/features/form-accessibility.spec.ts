@@ -1,7 +1,8 @@
+import { provideHttpClient } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
 import { LoginComponent } from './auth/login.component';
 import { NewBookComponent } from './books/new-book.component';
 import { ReadingComponent } from './reading/reading.component';
@@ -34,6 +35,11 @@ const createStore = (overrides: Record<string, unknown> = {}) => {
     currentBook: signal(null),
     getBook: (id: string) => booksSignal().find((item) => item.id === id),
     booksError: signal<string | null>(null),
+    bookStats: () => null,
+    bookStatsLoading: () => false,
+    bookStatsError: () => null,
+    loadBookStats: vi.fn(),
+    loadBook: vi.fn(),
     sessionsError: signal<string | null>(null),
     today: () => '2026-09-06',
     addBook: vi.fn(),
@@ -45,6 +51,7 @@ const createStore = (overrides: Record<string, unknown> = {}) => {
 };
 
 describe('critical form DOM states', () => {
+  beforeEach(() => TestBed.configureTestingModule({ providers: [provideHttpClient()] }));
   afterEach(() => TestBed.resetTestingModule());
 
   it('keeps the BFF sign-in hand-off keyboard reachable', () => {

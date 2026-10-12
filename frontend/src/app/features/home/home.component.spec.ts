@@ -34,6 +34,7 @@ describe('Home after a persisted reading mutation', () => {
     mutation.subscribe();
     const persisted = operation === 'create' ? [session] : operation === 'update' ? [{ ...session, pages: 20 }] : [];
     http.expectOne(operation === 'create' ? '/api/v1/sessions' : '/api/v1/sessions/saved').flush(operation === 'delete' ? null : persisted[0]);
+    if (operation !== 'delete') http.expectOne('/api/v1/books/book').flush({ id: 'book', title: 'Livro', status: 'READING', stats: { pagesRead: 12, totalPages: null, percent: null, averagePagesPerDay: 12, firstDate: store.today(), referenceDate: store.today(), elapsedDays: 1 } });
     http.expectOne('/api/v1/dashboard').flush({}, { status: 503, statusText: 'Unavailable' });
     http.expectOne((req) => req.url === '/api/v1/stats').flush({ ...oldSummary.week, currentStreakDays: 12, period: { from: store.today(), to: store.today() } });
     http.expectOne('/api/v1/sessions?limit=100&offset=0').flush(persisted);

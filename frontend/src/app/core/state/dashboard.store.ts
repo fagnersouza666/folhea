@@ -4,7 +4,7 @@ import { Observable, catchError, tap, throwError } from 'rxjs';
 import { ApiClient } from '../api/api-client.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { AuthService } from '../auth/auth.service';
-import { Book, BookPatch, Dashboard, ReadingDraft, ReadingSession, ReadingSessionPatch, Stats, StatsPeriod } from '../models/models';
+import { Book, BookCreate, BookPatch, BookStats, Dashboard, ReadingDraft, ReadingSession, ReadingSessionPatch, Stats, StatsPeriod } from '../models/models';
 import { calendarDate, startOfPeriod } from './reading-statistics';
 
 @Injectable({ providedIn: 'root' })
@@ -22,6 +22,9 @@ export class DashboardStore {
   private readonly bookDetailLoadingState = signal(false);
   private readonly sessionDetailLoadingState = signal(false);
   private readonly statsState = signal<Stats | null>(null);
+  private readonly bookStatsState = signal<Record<string, { data: BookStats | null; loading: boolean; error: string | null }>>({});
+  private readonly bookStatsRequests = new Map<string, number>();
+  private bookStatsRevision = 0;
   private readonly periodState = signal<StatsPeriod>('7');
   private readonly loadingState = signal(false);
   private readonly booksLoadingState = signal(false);
@@ -111,12 +114,19 @@ export class DashboardStore {
 
   private fetchBooks(offset: number, append: boolean): void {
     const request = ++this.booksRequest;
+    const revision = this.bookStatsRevision;
+    const metricsRequests = new Map(this.bookStatsRequests);
     this.booksLoadingState.set(true);
     this.booksErrorState.set(null);
     this.api.getBooks(100, offset).subscribe({
       next: (books) => {
         if (request !== this.booksRequest) return;
-        this.booksState.set(append ? this.mergeById(this.booksState(), books) : books);
+        const safeBooks = books.map(book => (metricsRequests.get(book.id) ?? 0) !== (this.bookStatsRequests.get(book.id) ?? 0)
+          ? this.getBook(book.id) ?? book : book);
+        this.booksState.set(append ? this.mergeById(this.booksState(), safeBooks) : safeBooks);
+        for (const book of books) {
+          if (revision === this.bookStatsRevision && (metricsRequests.get(book.id) ?? 0) === (this.bookStatsRequests.get(book.id) ?? 0)) this.acceptBookStats(book);
+        }
         this.booksOffset = offset + books.length;
         this.booksHasMoreState.set(books.length === 100);
         this.booksLoadingState.set(false);
@@ -138,12 +148,70 @@ export class DashboardStore {
 
   loadBook(id: string): void {
     if (this.getBook(id)) return;
+    const request = this.nextBookRequest(id);
     this.bookDetailLoadingState.set(true);
     this.booksErrorState.set(null);
+    this.setBookStatsState(id, null, true, null);
     this.api.getBook(id).subscribe({
-      next: (book) => { this.bookDetails.update((books) => this.mergeById(books, [book])); this.bookDetailLoadingState.set(false); },
-      error: (error: unknown) => { this.bookDetailLoadingState.set(false); this.booksErrorState.set(this.errorMessage(error, 'Não foi possível abrir o livro.')); }
+      next: (book) => {
+        if (request !== this.bookStatsRequests.get(id)) return;
+        this.bookDetails.update(books => this.mergeById(books, [book]));
+        this.acceptBookStats(book); this.bookDetailLoadingState.set(false);
+      },
+      error: (error: unknown) => {
+        if (request !== this.bookStatsRequests.get(id)) return;
+        this.bookDetailLoadingState.set(false);
+        const message = this.errorMessage(error, 'Não foi possível abrir o livro.');
+        this.booksErrorState.set(message); this.setBookStatsState(id, null, false, message);
+      }
     });
+  }
+
+  bookStats(id: string): BookStats | null { return this.bookStatsState()[id]?.data ?? null; }
+  bookStatsLoading(id: string): boolean { return this.bookStatsState()[id]?.loading ?? false; }
+  bookStatsError(id: string): string | null { return this.bookStatsState()[id]?.error ?? null; }
+
+  loadBookStats(id: string): void {
+    if (id.startsWith('local-')) return;
+    const request = this.nextBookRequest(id);
+    this.setBookStatsState(id, null, true, null);
+    this.api.getBook(id).subscribe({
+      next: (book) => {
+        if (request !== this.bookStatsRequests.get(id)) return;
+        this.booksState.update(books => books.map(item => item.id === id ? book : item));
+        this.bookDetails.update(books => this.mergeById(books, [book]));
+        this.acceptBookStats(book);
+      },
+      error: (error: unknown) => {
+        if (request !== this.bookStatsRequests.get(id)) return;
+        this.setBookStatsState(id, null, false, this.errorMessage(error, 'Não foi possível atualizar o progresso do livro.'));
+      }
+    });
+  }
+
+  private nextBookRequest(id: string): number {
+    const request = (this.bookStatsRequests.get(id) ?? 0) + 1;
+    this.bookStatsRequests.set(id, request); return request;
+  }
+
+  private confirmBook(book: Book): void {
+    this.bookStatsRevision++; this.nextBookRequest(book.id);
+    this.booksState.update(books => this.mergeById(books, [book]));
+    this.bookDetails.update(books => this.mergeById(books, [book]));
+    this.acceptBookStats(book);
+  }
+
+  private refreshBookMetrics(...ids: (string | undefined)[]): void {
+    this.bookStatsRevision++;
+    for (const id of new Set(ids.filter((id): id is string => !!id))) this.loadBookStats(id);
+  }
+
+  private acceptBookStats(book: Book): void {
+    this.setBookStatsState(book.id, book.stats ?? null, false, book.stats ? null : 'Não foi possível carregar o progresso do livro.');
+  }
+
+  private setBookStatsState(id: string, data: BookStats | null, loading: boolean, error: string | null): void {
+    this.bookStatsState.update(states => ({ ...states, [id]: { data, loading, error } }));
   }
 
   loadSession(id: string): void {
@@ -207,16 +275,19 @@ export class DashboardStore {
     });
   }
 
-  addBook(title: string, author = ''): Observable<Book> {
+  addBook(input: string | BookCreate, authorOrCover: string | File = ''): Observable<Book> {
     this.clearError();
+    const draft: BookCreate = typeof input === 'string' ? { title: input, author: typeof authorOrCover === 'string' ? authorOrCover || undefined : undefined } : input;
+    const cover = typeof authorOrCover === 'string' ? undefined : authorOrCover;
     const now = new Date().toISOString();
     const optimisticId = `local-book-${Date.now()}`;
-    const optimistic: Book = { id: optimisticId, title, author: author || undefined, status: 'READING', createdAt: now, updatedAt: now };
+    const optimistic: Book = { id: optimisticId, ...draft, status: 'READING', createdAt: now, updatedAt: now };
     this.booksState.update((books) => [optimistic, ...books]);
     this.syncCurrentBook();
-    return this.api.createBook({ title, author: author || undefined }).pipe(
+    return this.api.createBook(draft, cover).pipe(
       tap((book) => {
         this.booksState.update((books) => books.map((item) => item.id === optimisticId ? book : item));
+        this.confirmBook(book);
         this.syncCurrentBook();
         this.analytics.track('book_created');
         this.loadBooks();
@@ -230,12 +301,23 @@ export class DashboardStore {
     );
   }
 
-  updateBook(id: string, patch: BookPatch): Observable<Book> {
+  updateBook(id: string, patch: BookPatch, cover?: File): Observable<Book> {
     this.clearError();
-    return this.api.updateBook(id, patch).pipe(
-      tap((book) => { this.booksState.update((books) => this.mergeById(books, [book]));
-        this.bookDetails.update((books) => books.filter((item) => item.id !== book.id)); this.loadBooks(); this.refreshMetrics(); }),
+    return this.api.updateBook(id, patch, cover).pipe(
+      tap((book) => { this.confirmBook(book); this.loadBooks(); this.refreshMetrics(); }),
       catchError((error: unknown) => { this.setMutationError(error, 'Não foi possível editar o livro.'); return throwError(() => error); })
+    );
+  }
+
+  deleteBookCover(id: string): Observable<void> {
+    this.clearError();
+    return this.api.deleteBookCover(id).pipe(
+      tap(() => {
+        const book = this.getBook(id);
+        if (book) this.confirmBook({ ...book, cover: null });
+        this.refreshBookMetrics(id);
+      }),
+      catchError((error: unknown) => { this.setMutationError(error, 'Não foi possível remover a capa.'); return throwError(() => error); })
     );
   }
 
@@ -243,8 +325,7 @@ export class DashboardStore {
     this.clearError();
     return this.api.finishBook(id, finishedOn).pipe(
       tap((book) => {
-        this.booksState.update((books) => this.mergeById(books, [book]));
-        this.bookDetails.update((books) => books.filter((item) => item.id !== book.id));
+        this.confirmBook(book);
         this.loadBooks();
         this.refreshMetrics();
         this.analytics.track('book_finished');
@@ -257,8 +338,7 @@ export class DashboardStore {
     this.clearError();
     return this.api.reopenBook(id).pipe(
       tap((book) => {
-        this.booksState.update((books) => this.mergeById(books, [book]));
-        this.bookDetails.update((books) => books.filter((item) => item.id !== book.id));
+        this.confirmBook(book);
         this.loadBooks();
         this.refreshMetrics();
         this.analytics.track('book_reopened');
@@ -274,7 +354,7 @@ export class DashboardStore {
     this.sessionsState.update((sessions) => sessions.filter((session) => session.bookId !== id));
     this.syncCurrentBook();
     return this.api.deleteBook(id).pipe(
-      tap(() => { this.bookDetails.update((books) => books.filter((item) => item.id !== id)); this.sessionDetails.update((sessions) => sessions.filter((session) => session.bookId !== id)); this.refreshMetrics(); this.loadSessions(); this.loadBooks(); }),
+      tap(() => { this.bookStatsRevision++; this.nextBookRequest(id); this.setBookStatsState(id, null, false, null); this.bookDetailLoadingState.set(false); this.bookDetails.update((books) => books.filter((item) => item.id !== id)); this.sessionDetails.update((sessions) => sessions.filter((session) => session.bookId !== id)); this.refreshMetrics(); this.loadSessions(); this.loadBooks(); }),
       catchError((error: unknown) => {
         this.booksState.set(previousBooks);
         this.sessionsState.set(previousSessions);
@@ -294,6 +374,7 @@ export class DashboardStore {
     return this.api.createSession(draft).pipe(
       tap((session) => {
         this.sessionsState.update((sessions) => sessions.map((item) => item.id === optimisticId ? session : item));
+        this.refreshBookMetrics(session.bookId);
         this.refreshMetrics();
         this.loadSessions();
         this.analytics.track('reading_session_created', { pages: draft.pages, minutes: draft.minutes });
@@ -307,6 +388,7 @@ export class DashboardStore {
   }
 
   updateSession(id: string, patch: ReadingSessionPatch): Observable<ReadingSession> {
+    const originalBookId = this.getSession(id)?.bookId;
     this.clearError();
     const previous = this.sessionsState();
     this.sessionsState.update((sessions) => sessions.map((session) => session.id === id ? { ...session, ...patch } : session));
@@ -314,6 +396,7 @@ export class DashboardStore {
       tap((session) => {
         this.sessionsState.update((sessions) => this.mergeById(sessions, [session]));
         this.sessionDetails.update((sessions) => sessions.filter((item) => item.id !== id));
+        this.refreshBookMetrics(originalBookId, session.bookId);
         this.refreshMetrics();
         this.loadSessions();
         this.analytics.track('reading_session_updated', { pages: patch.pages, minutes: patch.minutes });
@@ -327,10 +410,12 @@ export class DashboardStore {
   }
 
   deleteSession(id: string): Observable<void> {
+    const originalBookId = this.getSession(id)?.bookId;
     const previous = this.sessionsState();
     this.sessionsState.update((sessions) => sessions.filter((session) => session.id !== id));
     return this.api.deleteSession(id).pipe(
       tap(() => {
+        this.refreshBookMetrics(originalBookId);
         this.refreshMetrics();
         this.sessionDetails.update((sessions) => sessions.filter((item) => item.id !== id));
         this.loadSessions();

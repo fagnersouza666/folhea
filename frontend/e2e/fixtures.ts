@@ -1,16 +1,9 @@
 import { addDays, currentStreak, periodStats } from '../src/app/core/state/reading-statistics';
 import { test as base, expect, type Page, type Route } from '@playwright/test';
 
-type Book = {
-  id: string;
-  userId: string;
-  title: string;
-  author?: string;
-  status: 'READING' | 'FINISHED';
-  finishedOn?: string;
-  createdAt: string;
-  updatedAt: string;
-};
+import { Book as DomainBook, BookStats } from '../src/app/core/models/models';
+
+type Book = Omit<DomainBook, 'stats'> & { userId: string; createdAt: string; updatedAt: string };
 
 type Session = {
   id: string;
@@ -21,7 +14,7 @@ type Session = {
   minutes: number;
 };
 
-type MockState = { books: Book[]; sessions: Session[]; timezone?: string };
+type MockState = { books: Book[]; sessions: Session[]; timezone?: string; covers?: Map<string, Buffer> };
 
 export const TODAY = '2026-09-06';
 const now = '2026-09-06T15:00:00.000Z';
@@ -36,6 +29,9 @@ function responseBook(state: MockState, body: Partial<Book> & Pick<Book, 'title'
     userId: 'demo-user',
     title: body.title,
     author: body.author,
+    edition: body.edition ?? null,
+    totalPages: body.totalPages ?? null,
+    cover: body.cover ?? null,
     status: body.status ?? 'READING',
     finishedOn: body.finishedOn,
     createdAt: body.createdAt ?? now,
@@ -43,6 +39,34 @@ function responseBook(state: MockState, body: Partial<Book> & Pick<Book, 'title'
   };
   state.books.push(book);
   return book;
+}
+
+// Simulated canonical server aggregates: these are fixture values, not production calculations.
+function officialBook(state: MockState, book: Book): Book & { stats: BookStats } {
+  const readings = state.sessions.filter(session => session.bookId === book.id);
+  const pagesRead = readings.reduce((total, session) => total + session.pages, 0);
+  const firstDate = readings.map(session => session.readingDate).sort()[0] ?? null;
+  const referenceDate = book.status === 'FINISHED' ? book.finishedOn ?? TODAY : TODAY;
+  const elapsedDays = firstDate ? Math.max(1, Math.round((Date.parse(referenceDate) - Date.parse(firstDate)) / 86400000) + 1) : 0;
+  return { ...book, stats: { pagesRead, totalPages: book.totalPages ?? null, percent: book.totalPages ? Math.min(100, Math.floor(pagesRead * 10000 / book.totalPages) / 100) : null, averagePagesPerDay: elapsedDays ? Math.round(pagesRead / elapsedDays * 100) / 100 : 0, firstDate, referenceDate, elapsedDays } };
+}
+
+function bookPayload(request: Route['request'] extends () => infer R ? R : never): { metadata: Partial<Book>; bytes?: Buffer } {
+  const contentType = request.headers()['content-type'] ?? '';
+  if (!contentType.startsWith('multipart/form-data')) return { metadata: JSON.parse(request.postData() ?? '{}') };
+  const boundary = contentType.match(/boundary=([^;]+)/)?.[1]?.replaceAll('"', '');
+  if (!boundary) throw new Error('Missing multipart boundary in UI test');
+  const parts = request.postDataBuffer()!.toString('latin1').split('--' + boundary);
+  let metadata: Partial<Book> = {}; let bytes: Buffer | undefined;
+  for (const part of parts) {
+    const split = part.indexOf('\r\n\r\n'); if (split < 0) continue;
+    const header = part.slice(0, split);
+    const body = Buffer.from(part.slice(split + 4).replace(/\r\n$/, ''), 'latin1');
+    if (header.includes('name="book"')) metadata = JSON.parse(body.toString('utf8'));
+    if (header.includes('name="cover"')) bytes = body;
+  }
+  if (bytes) metadata.cover = { mediaType: 'image/jpeg', byteSize: bytes.length, width: 640, height: 960, version: 'version-' + Date.now() + '-' + Math.random() };
+  return { metadata, bytes };
 }
 
 async function handleApi(route: Route, state: MockState): Promise<void> {
@@ -69,7 +93,7 @@ async function handleApi(route: Route, state: MockState): Promise<void> {
   if (method === 'GET' && path === '/api/v1/books') {
     const limit = Number(url.searchParams.get('limit') ?? 50);
     const offset = Number(url.searchParams.get('offset') ?? 0);
-    return json(route, 200, state.books.slice(offset, offset + limit));
+    return json(route, 200, state.books.slice(offset, offset + limit).map(book => officialBook(state, book)));
   }
   if (method === 'GET' && path === '/api/v1/sessions') {
     const from = url.searchParams.get('from');
@@ -85,14 +109,25 @@ async function handleApi(route: Route, state: MockState): Promise<void> {
     return json(route, 200, periodStats(state.sessions, state.books, from, to, currentStreak(state.sessions, TODAY)));
   }
 
+  const coverMatch = path.match(/^\/api\/v1\/books\/([^/]+)\/cover$/);
+  if (coverMatch) {
+    const book = state.books.find(item => item.id === coverMatch[1]);
+    if (!book) return json(route, 404, { status: 404 });
+    if (method === 'DELETE') { book.cover = null; state.covers?.delete(book.id); return route.fulfill({ status: 204 }); }
+    if (method === 'GET' && book.cover && state.covers?.has(book.id)) return route.fulfill({ status: 200, contentType: book.cover.mediaType, body: state.covers.get(book.id)!, headers: { 'Cache-Control': 'no-store' } });
+    return json(route, 404, { status: 404 });
+  }
+
   const bookMatch = path.match(/^\/api\/v1\/books\/([^/]+)(\/finish)?$/);
   if (bookMatch) {
     const book = state.books.find((item) => item.id === bookMatch[1]);
     if (!book) return json(route, 404, { title: 'Livro não encontrado', status: 404 });
-    if (method === 'GET' && !bookMatch[2]) return json(route, 200, book);
+    if (method === 'GET' && !bookMatch[2]) return json(route, 200, officialBook(state, book));
     if (method === 'PATCH' && !bookMatch[2]) {
-      Object.assign(book, JSON.parse(request.postData() ?? '{}'), { updatedAt: now });
-      return json(route, 200, book);
+      const { metadata, bytes } = bookPayload(request);
+      Object.assign(book, metadata, { updatedAt: now });
+      if (bytes) { state.covers ??= new Map(); state.covers.set(book.id, bytes); }
+      return json(route, 200, officialBook(state, book));
     }
     if (method === 'DELETE' && !bookMatch[2]) {
       state.books = state.books.filter((item) => item.id !== book.id);
@@ -100,21 +135,23 @@ async function handleApi(route: Route, state: MockState): Promise<void> {
       return route.fulfill({ status: 204 });
     }
     if (method === 'POST' && bookMatch[2]) {
-      if (book.status === 'FINISHED') return json(route, 200, book);
+      if (book.status === 'FINISHED') return json(route, 200, officialBook(state, book));
       book.status = 'FINISHED';
       book.finishedOn = JSON.parse(request.postData() ?? '{}').finishedOn ?? '2026-09-06';
-      return json(route, 200, book);
+      return json(route, 200, officialBook(state, book));
     }
     if (method === 'DELETE' && bookMatch[2]) {
       book.status = 'READING';
       delete book.finishedOn;
-      return json(route, 200, book);
+      return json(route, 200, officialBook(state, book));
     }
   }
 
   if (method === 'POST' && path === '/api/v1/books') {
-    const body = JSON.parse(request.postData() ?? '{}') as Pick<Book, 'title' | 'author'>;
-    return json(route, 201, responseBook(state, body));
+    const { metadata, bytes } = bookPayload(request);
+    const book = responseBook(state, metadata as Partial<Book> & Pick<Book, 'title'>);
+    if (bytes) { state.covers ??= new Map(); state.covers.set(book.id, bytes); }
+    return json(route, 201, officialBook(state, book));
   }
 
   const sessionMatch = path.match(/^\/api\/v1\/sessions\/([^/]+)$/);
@@ -151,7 +188,7 @@ export const test = base.extend<{ mockApi: MockState }>({
     await page.clock.setFixedTime(new Date(now));
     await page.route('**/api/v1/**', (route) => handleApi(route, state));
     await use(state);
-    await page.unroute('**/api/v1/**');
+    // Keep routes until Playwright closes this test's context: lazy covers may still be pending.
   }
 });
 
