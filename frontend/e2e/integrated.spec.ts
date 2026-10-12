@@ -52,7 +52,7 @@ test('jornada com BFF, Keycloak e banco reais pela UI', async ({ page }) => {
   expect((await download).suggestedFilename()).toBe('folhea-card.png');
   await page.getByRole('link', { name: 'Livros', exact: true }).click();
   await expect(bookRow.locator('.percent')).toHaveText('50%');
-  await expect(bookRow.locator('.daily-average')).toContainText('15 páginas/dia');
+  await expect(bookRow.locator('.daily-average')).toContainText('15 páginas por dia de leitura');
   await page.getByRole('link', { name: `Abrir ${title}` }).click();
   await page.getByRole('button', { name: 'Remover capa salva' }).click();
   await expect(page.getByText('Capa removida.', { exact: true })).toBeVisible();

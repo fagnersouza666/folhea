@@ -15,7 +15,7 @@ describe('selected book outside the first bookshelf page', () => {
     store.loadBooks(); http.expectOne('/api/v1/books?limit=100&offset=0').flush(Array.from({ length: 100 }, (_, i) => ({ id: 'other-' + i, title: 'Outro ' + i, status: 'READING' })));
     const fixture = TestBed.createComponent(ReadingComponent); fixture.detectChanges();
     expect(fixture.componentInstance.form.controls.bookId.value).toBe('');
-    http.expectOne('/api/v1/books/old-book').flush({ id: 'old-book', title: 'Livro antigo', status: 'READING', totalPages: 100, stats: { pagesRead: 40, totalPages: 100, percent: 40, averagePagesPerDay: 4, firstDate: '2026-09-01', referenceDate: '2026-09-10', elapsedDays: 10 } });
+    http.expectOne('/api/v1/books/old-book').flush({ id: 'old-book', title: 'Livro antigo', status: 'READING', totalPages: 100, pagesRead: 40, averagePagesPerReadingDay: 20, progressPercent: 40, stats: { pagesRead: 40, totalPages: 100, percent: 40, averagePagesPerDay: 4, firstDate: '2026-09-01', referenceDate: '2026-09-10', elapsedDays: 10 } });
     fixture.detectChanges();
     const select = fixture.nativeElement.querySelector('#reading-book') as HTMLSelectElement;
     expect(select.value).toBe('old-book'); expect(select.selectedOptions[0].textContent).toContain('Livro antigo');

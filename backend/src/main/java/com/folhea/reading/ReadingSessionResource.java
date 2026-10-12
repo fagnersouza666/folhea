@@ -1,5 +1,7 @@
 package com.folhea.reading;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.folhea.book.BookRepository;
 import com.folhea.identity.CurrentUser;
 import com.folhea.shared.ProblemException;
@@ -27,8 +29,10 @@ import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Path("/api/v1/sessions")
@@ -40,6 +44,7 @@ import java.util.UUID;
 public class ReadingSessionResource {
     private static final int MAX_PAGES = 10_000;
     private static final int MAX_MINUTES = 24 * 60;
+    private static final Set<String> REQUEST_FIELDS = Set.of("bookId", "readingDate", "pages", "minutes");
 
     @Inject CurrentUser currentUser;
     @Inject ReadingSessionRepository sessions;
@@ -95,14 +100,19 @@ public class ReadingSessionResource {
         var user = currentUser.get();
         ReadingSessionEntity session = findOwned(user.id, id);
         if (request == null || request.isEmpty()) invalid("Informe ao menos um campo para alterar.");
-        if (request.bookId() != null) { ensureBookOwned(user.id, request.bookId()); session.bookId = request.bookId(); }
+        UUID nextBookId = request.bookId() == null ? session.bookId : request.bookId();
+        LocalDate nextDate = request.readingDate() == null ? session.readingDate : request.readingDate();
+        int nextPages = request.pages() == null ? session.pages : request.pages();
+        int nextMinutes = request.minutes() == null ? session.minutes : request.minutes();
+        if (request.bookId() != null) ensureBookOwned(user.id, nextBookId);
         if (request.readingDate() != null) {
-            validateDate(request.readingDate(), time.today(user.timezone));
-            session.readingDate = request.readingDate();
+            validateDate(nextDate, time.today(user.timezone));
         }
-        if (request.pages() != null) session.pages = request.pages();
-        if (request.minutes() != null) session.minutes = request.minutes();
-        validateProgress(session.pages, session.minutes);
+        validateProgress(nextPages, nextMinutes);
+        session.bookId = nextBookId;
+        session.readingDate = nextDate;
+        session.pages = nextPages;
+        session.minutes = nextMinutes;
         sessions.flush();
         return SessionResponse.from(session);
     }
@@ -140,6 +150,53 @@ public class ReadingSessionResource {
     }
     private static void invalid(String detail) { throw new ProblemException(400, "https://folhea.com.br/problems/invalid-reading-session", "Sessão de leitura inválida", detail); }
 
+    private static void validateRequestFields(JsonNode request) {
+        if (request == null || !request.isObject()) invalid("Informe os dados da sessão como um objeto JSON.");
+        var fields = request.fieldNames();
+        while (fields.hasNext()) {
+            if (!REQUEST_FIELDS.contains(fields.next())) invalid("Os dados da sessão contêm um campo inválido.");
+        }
+    }
+
+    /** Missing counts mean zero on POST and unchanged on PATCH; explicit null is never a count. */
+    private static Integer requestCount(JsonNode request, String field, Integer missingValue) {
+        if (!request.has(field)) return missingValue;
+        JsonNode value = request.get(field);
+        if (!value.isIntegralNumber() || !value.canConvertToInt()) invalid("Páginas e minutos devem ser inteiros JSON válidos.");
+        return value.intValue();
+    }
+
+    private static String requestText(JsonNode request, String field) {
+        if (!request.has(field)) return null;
+        JsonNode value = request.get(field);
+        if (!value.isTextual()) invalid("Livro e data devem ser valores de texto válidos.");
+        return value.textValue();
+    }
+
+    private static UUID requestBookId(JsonNode request) {
+        String value = requestText(request, "bookId");
+        if (value == null) return null;
+        try {
+            UUID id = UUID.fromString(value);
+            if (!id.toString().equalsIgnoreCase(value)) invalid("Identificador de livro inválido.");
+            return id;
+        } catch (IllegalArgumentException exception) {
+            invalid("Identificador de livro inválido.");
+            return null;
+        }
+    }
+
+    private static LocalDate requestDate(JsonNode request) {
+        String value = requestText(request, "readingDate");
+        if (value == null) return null;
+        try {
+            return LocalDate.parse(value);
+        } catch (DateTimeException exception) {
+            invalid("Informe uma data de leitura válida no formato AAAA-MM-DD.");
+            return null;
+        }
+    }
+
     public record CreateSessionRequest(
             @NotNull(message = "Informe o livro da sessão.") UUID bookId,
             @NotNull(message = "Informe a data da leitura.") LocalDate readingDate,
@@ -148,7 +205,14 @@ public class ReadingSessionResource {
             Integer pages,
             @Min(value = 0, message = "Minutos não podem ser negativos.")
             @Max(value = MAX_MINUTES, message = "Minutos excedem o limite permitido.")
-            Integer minutes) { }
+            Integer minutes) {
+        @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
+        public static CreateSessionRequest fromJson(JsonNode request) {
+            validateRequestFields(request);
+            return new CreateSessionRequest(requestBookId(request), requestDate(request),
+                    requestCount(request, "pages", 0), requestCount(request, "minutes", 0));
+        }
+    }
 
     public record UpdateSessionRequest(
             UUID bookId,
@@ -159,6 +223,12 @@ public class ReadingSessionResource {
             @Min(value = 0, message = "Minutos não podem ser negativos.")
             @Max(value = MAX_MINUTES, message = "Minutos excedem o limite permitido.")
             Integer minutes) {
+        @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
+        public static UpdateSessionRequest fromJson(JsonNode request) {
+            validateRequestFields(request);
+            return new UpdateSessionRequest(requestBookId(request), requestDate(request),
+                    requestCount(request, "pages", null), requestCount(request, "minutes", null));
+        }
         boolean isEmpty() { return bookId == null && readingDate == null && pages == null && minutes == null; }
     }
 

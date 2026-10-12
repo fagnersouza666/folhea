@@ -5,6 +5,8 @@ import com.folhea.user.UserEntity;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
@@ -26,7 +28,8 @@ public class BookReadService {
         List<UUID> ids = books.stream().map(b -> b.id).toList();
         Map<UUID, Object[]> totals = new HashMap<>();
         for (Object[] row : em.createQuery("""
-                SELECT r.bookId, SUM(r.pages), MIN(r.readingDate)
+                SELECT r.bookId, SUM(r.pages), MIN(r.readingDate),
+                       COUNT(DISTINCT CASE WHEN r.pages > 0 THEN r.readingDate ELSE null END)
                 FROM ReadingSessionEntity r WHERE r.userId = :userId AND r.bookId IN :ids GROUP BY r.bookId
                 """, Object[].class).setParameter("userId", user.id).setParameter("ids", ids).getResultList()) {
             totals.put((UUID) row[0], row);
@@ -42,10 +45,20 @@ public class BookReadService {
         LocalDate today = time.today(user.timezone);
         return books.stream().map(book -> {
             Object[] row = totals.get(book.id);
-            BookStats stats = BookStats.calculate(book, row == null ? 0 : ((Number) row[1]).longValue(),
+            long pages = row == null ? 0 : ((Number) row[1]).longValue();
+            long readingDays = row == null ? 0 : ((Number) row[3]).longValue();
+            // All history is aggregated in one query. Minute-only dates never add reading days.
+            BigDecimal average = readingDays == 0 ? null
+                    : BigDecimal.valueOf(pages).divide(BigDecimal.valueOf(readingDays), 1, RoundingMode.HALF_UP);
+            Integer progress = book.totalPages == null ? null
+                    : BigDecimal.valueOf(Math.min(pages, book.totalPages)).multiply(BigDecimal.valueOf(100))
+                        .divide(BigDecimal.valueOf(book.totalPages), 0, RoundingMode.DOWN).intValueExact();
+            // Retain the previous calendar statistics for API compatibility; the UI uses the official fields.
+            BookStats stats = BookStats.calculate(book, pages,
                     row == null ? null : (LocalDate) row[2], today);
             return new BookResource.BookResponse(book.id, book.title, book.author, book.status, book.finishedOn,
-                    book.createdAt, book.updatedAt, book.edition, book.totalPages, covers.get(book.id), stats, covers.containsKey(book.id));
+                    book.createdAt, book.updatedAt, book.edition, book.totalPages, covers.get(book.id), stats,
+                    covers.containsKey(book.id), pages, average, progress);
         }).toList();
     }
 }

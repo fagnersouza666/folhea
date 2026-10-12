@@ -35,6 +35,14 @@ export interface BookStats {
   elapsedDays: number;
 }
 
+/** Official session progress, projected from the top-level book response. */
+export interface BookProgress {
+  pagesRead: number;
+  totalPages: number | null;
+  averagePagesPerReadingDay: number | null;
+  progressPercent: number | null;
+}
+
 export interface BookCreate {
   title: string;
   author?: string | null;
@@ -51,6 +59,10 @@ export interface Book {
   totalPages?: number | null;
   cover?: BookCover | null;
   hasPhoto?: boolean;
+  // Absent on optimistic/older responses: never substitute calendar statistics.
+  pagesRead?: number;
+  averagePagesPerReadingDay?: number | null;
+  progressPercent?: number | null;
   // Optimistic and older responses do not yet have confirmed metrics.
   stats?: BookStats;
   status: BookStatus;

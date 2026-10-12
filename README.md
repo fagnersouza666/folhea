@@ -11,7 +11,7 @@ Frontend (`frontend/package.json`), backend (`backend/pom.xml`) e OpenAPI
 chore, teste ou infra sem mudança de produto não incrementam. Detalhe em
 `.cursor/rules/versionamento.mdc`.
 
-Versão atual: **0.5.0**
+Versão atual: **0.6.0**
 
 ## Estante privada
 
@@ -24,12 +24,13 @@ O cadastro salva o livro e depois envia a foto por RAW; em falha de upload, o
 retry usa o mesmo livro salvo e permite continuar sem foto, sem duplicar cadastro.
 
 A estante mostra páginas lidas, páginas totais, progresso até 100% e média de
-páginas/dia. A média soma todas as páginas do livro e divide pelos dias corridos
-**inclusivos** desde sua primeira leitura até hoje no fuso da conta, incluindo
-dias sem leitura; em livros concluídos, a referência é a data de conclusão.
-Criar, editar ou excluir leitura recalcula os valores. O percentual é truncado
-em duas casas e não mostra 100% antes de atingir o total. Um livro legado sem
-total mantém as páginas/média, com percentual indisponível até completar o campo.
+**páginas por dia de leitura**. A média soma todas as páginas do livro e divide
+pelas datas distintas com páginas positivas, com uma casa decimal; dias sem
+leitura e registros somente de minutos não entram no denominador. Sem páginas,
+a média fica indisponível. Criar, editar, excluir ou transferir uma leitura
+recalcula os livros envolvidos sobre todo o histórico. O percentual é inteiro,
+arredondado para baixo e limitado a 100, sem finalizar automaticamente o livro.
+Um livro sem total mantém suas páginas/média e permite informar o total depois.
 
 ## Backend
 

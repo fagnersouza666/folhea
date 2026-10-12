@@ -25,6 +25,12 @@ class ReadingSessionEntityTest {
         assertDoesNotThrow(minutes::onCreate);
     }
 
+    @Test
+    void domainRejectsNegativeProgressBeforeCreateOrUpdate() {
+        assertThrows(IllegalArgumentException.class, session(-1, 15)::onCreate);
+        assertThrows(IllegalArgumentException.class, session(15, -1)::onUpdate);
+    }
+
     private static ReadingSessionEntity session(int pages, int minutes) {
         ReadingSessionEntity session = new ReadingSessionEntity();
         session.readingDate = LocalDate.of(2026, 9, 5);

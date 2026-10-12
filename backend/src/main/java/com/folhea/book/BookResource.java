@@ -255,9 +255,10 @@ public class BookResource {
 
     public record BookResponse(UUID id, String title, String author, BookStatus status,
                                LocalDate finishedOn, Instant createdAt, Instant updatedAt, String edition, Integer totalPages,
-                               BookCoverEntity.Metadata cover, BookStats stats, boolean hasPhoto) {
+                               BookCoverEntity.Metadata cover, BookStats stats, boolean hasPhoto,
+                               long pagesRead, java.math.BigDecimal averagePagesPerReadingDay, Integer progressPercent) {
         public BookResponse(UUID id, String title, String author, BookStatus status, LocalDate finishedOn, Instant createdAt, Instant updatedAt) {
-            this(id, title, author, status, finishedOn, createdAt, updatedAt, null, null, null, null, false);
+            this(id, title, author, status, finishedOn, createdAt, updatedAt, null, null, null, null, false, 0, null, null);
         }
         /** Backwards-compatible constructor for callers that only need the public book fields. */
         public BookResponse(UUID id, String title, String author, BookStatus status, LocalDate finishedOn) {
@@ -266,7 +267,7 @@ public class BookResource {
 
         public static BookResponse from(BookEntity book) {
             return new BookResponse(book.id, book.title, book.author, book.status,
-                    book.finishedOn, book.createdAt, book.updatedAt, book.edition, book.totalPages, null, null, false);
+                    book.finishedOn, book.createdAt, book.updatedAt, book.edition, book.totalPages, null, null, false, 0, null, null);
         }
     }
 }

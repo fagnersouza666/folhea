@@ -10,7 +10,7 @@ import { DashboardStore } from '../../core/state/dashboard.store';
 import { AuthService } from '../../core/auth/auth.service';
 import { Book } from '../../core/models/models';
 
-const legacy: Book = { id: 'old-book', title: 'Antigo', author: null, edition: null, totalPages: null, cover: null, status: 'READING', stats: { pagesRead: 45, totalPages: null, percent: null, averagePagesPerDay: 5, firstDate: '2026-09-01', referenceDate: '2026-09-09', elapsedDays: 9 } };
+const legacy: Book = { id: 'old-book', title: 'Antigo', author: null, edition: null, totalPages: null, cover: null, status: 'READING', pagesRead: 45, averagePagesPerReadingDay: 22.5, progressPercent: null, stats: { pagesRead: 45, totalPages: null, percent: null, averagePagesPerDay: 5, firstDate: '2026-09-01', referenceDate: '2026-09-09', elapsedDays: 9 } };
 
 describe('book metadata and private cover editing', () => {
   let http: HttpTestingController; let store: DashboardStore;
@@ -37,9 +37,9 @@ describe('book metadata and private cover editing', () => {
     root.querySelector('form')!.dispatchEvent(new Event('submit'));
     const patch = http.expectOne('/api/v1/books/old-book');
     expect(patch.request.method).toBe('PATCH'); expect(patch.request.body).toEqual({ title: 'Antigo', author: null, edition: '3ª edição', totalPages: 200 });
-    const book = { ...legacy, edition: '3ª edição', totalPages: 200, stats: { ...legacy.stats!, totalPages: 200, percent: 22.5 } };
+    const book = { ...legacy, edition: '3ª edição', totalPages: 200, progressPercent: 22, stats: { ...legacy.stats!, totalPages: 200, percent: 22.5 } };
     patch.flush(book); flushRefresh(book); fixture.detectChanges();
-    expect(root.querySelector('.percent')?.textContent).toContain('22,5%');
+    expect(root.querySelector('.percent')?.textContent).toContain('22%');
     http.expectNone(request => request.url.includes('/sessions'));
   });
   it('sends a RAW replacement independently and preserves the old photo and unsaved metadata after failure', () => {
