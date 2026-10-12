@@ -20,9 +20,15 @@ try {
     assert.equal(bff.secret,secret);assert.equal(admin.secret,secret);
     assert.ok(bff.redirectUris.includes(env.OIDC_PUBLIC_ORIGIN+'/auth/callback'));
     assert.equal(admin.fullScopeAllowed,false);assert.equal(admin.standardFlowEnabled,false);
+    assert.equal(realm.registrationAllowed,true,profile+': Keycloak owns self-registration');
+    assert.ok(!realm.loginTheme,profile+': retain the provider default login theme');
+    assert.equal(realm.adminEventsEnabled,true,profile+': administrative deletion must be audited');
+    assert.equal(realm.adminEventsDetailsEnabled,false,profile+': omit private request representations from audit');
+    assert.equal(admin.attributes?.['access.token.lifespan'],'300',profile+': deletion service tokens expire within five minutes');
+    assert.ok(realm.clients.every(client=>client.directAccessGrantsEnabled===false),profile+': no password grant');
     assert.deepEqual(realm.users[0].clientRoles['realm-management'],['manage-users']);
     assert.equal(fs.statSync(env.KEYCLOAK_REALM_OUTPUT).mode&0o777,0o600);
-    console.log('ok - '+profile+' realm has valid JSON, literal secrets and scoped registration client');
+    console.log('ok - '+profile+' realm has valid JSON, literal secrets and scoped deletion/recovery client');
   }
   assert.throws(()=>execFileSync('bash',[path.join(root,'infra/keycloak/render-realm.sh')],{env:{...env,OIDC_CLIENT_SECRET:''},stdio:'pipe'}));
   assert.throws(()=>execFileSync('bash',[path.join(root,'infra/keycloak/render-realm.sh')],{env:{...env,OIDC_PUBLIC_ORIGIN:'https://example.com/evil'},stdio:'pipe'}));

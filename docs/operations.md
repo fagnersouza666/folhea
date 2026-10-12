@@ -129,8 +129,18 @@ scripts/ops/validate-production-compose.sh
 
 O overlay de produção constrói `keycloak-runtime` com `kc.sh build` para
 PostgreSQL, health e métricas antes de usar `start --optimized`. O cliente
-`folhea-registration` recebe somente `realm-management/manage-users`; seu
-secret é diferente do cliente BFF. O renderer JSON escapa segredos, substitui
+`folhea-registration` mantém seu identificador por compatibilidade de configuração,
+mas é usado somente para excluir contas e retomar intenções duráveis V007.
+Recebe somente `realm-management/manage-users`, sem `fullScopeAllowed`,
+password grant ou fluxo de login. Seu secret é diferente do cliente BFF e o
+atributo `access.token.lifespan` limita cada token de serviço a 300 segundos.
+O backend também rejeita respostas de token com TTL fora de 1..300 segundos.
+Não use esse cliente no cadastro: a senha vai diretamente ao Keycloak.
+Os templates habilitam `registrationAllowed`, mantêm o tema padrão do IdP e
+ligam `adminEventsEnabled`, com `adminEventsDetailsEnabled=false` para guardar
+as ações administrativas sem persistir os corpos privados das requisições
+([Keycloak: tokens e auditoria](https://www.keycloak.org/docs/latest/server_admin/index.html)).
+O renderer JSON escapa segredos, substitui
 a origem de callback/login/logout e grava o import com permissão 0600.
 Um realm existente é preservado pelo `--import-realm`; mudanças de clientes
 ou secrets em instalações antigas exigem atualização administrativa explícita.
@@ -175,10 +185,12 @@ oficial não tem `wget` nem `curl`); `wget` permanece nos healthchecks do
 backend e do Caddy, que rodam em Alpine.
 O `%dev` liga o OIDC contra `http://localhost:8180/realms/folhea`. Sem isso o
 BFF devolve `/app/inicio` sem sessão e o guard Angular devolve `/entrar` — o
-botão Entrar parece não fazer nada. Use `/cadastro` para criar a conta pelo
-produto. O cliente técnico
-`folhea-registration` provisiona o usuário no realm `folhea`, sem intervenção
-administrativa. O console na porta8180 pertence apenas ao override de desenvolvimento.
+botão Entrar parece não fazer nada. O link Criar conta navega para
+`/auth/register`, que abre o cadastro do Keycloak. `/auth/login` abre o login;
+`/auth/reauthenticate` pede novamente a senha no IdP antes da confirmação de
+exclusão quando `auth_time` tem mais de 300 segundos. O Folhea não recebe
+senha. O cliente técnico é exclusivo da exclusão e da recuperação V007.
+O console na porta8180 pertence apenas ao override de desenvolvimento.
 
 ## Health checks e diagnóstico
 
@@ -333,8 +345,14 @@ FROM account_deletion GROUP BY local_deleted, pending;
 SELECT count(*) FROM flyway_schema_history WHERE version IN ('7', '007') AND success;
 ```
 
-O backup completo inclui essa tabela; `verify-recovery.sh` exige V007 e sua
-presença por padrão. Não apague intenções/tombstones para desbloquear login.
+O backup completo inclui essa tabela. O guard padrão de `verify-recovery.sh`
+exige Flyway V007/V008/V009 com sucesso (formatos `7`/`007`, `8`/`008`,
+`9`/`009`), as tabelas `folhea_user`, `account_deletion` e `book_cover` e a
+**ausência** de `password_hash` e `login_identifier`. A V009 remove somente
+as credenciais delegadas antigas; não edite checksums das V001..V008.
+O teste PostgreSQL existente cobre versões ausentes/falhas e colunas antigas
+reintroduzidas mesmo com V009 marcada bem-sucedida.
+Não apague intenções/tombstones para desbloquear login.
 Veja [backup e restore](backup-restore.md) para o teste em destino isolado.
 
 ## Google e SMTP

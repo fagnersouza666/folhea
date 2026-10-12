@@ -8,7 +8,7 @@
   "ssoSessionMaxLifespan": 28800,
   "clientSessionIdleTimeout": 1800,
   "clientSessionMaxLifespan": 28800,
-  "registrationAllowed": false,
+  "registrationAllowed": true,
   "resetPasswordAllowed": false,
   "bruteForceProtected": true,
   "permanentLockout": false,
@@ -54,7 +54,7 @@
     },
     {
       "clientId": "folhea-registration",
-      "name": "Folhea account provisioning",
+      "name": "Folhea account deletion and recovery",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": false,
@@ -65,7 +65,10 @@
       "fullScopeAllowed": false,
       "defaultClientScopes": [
         "roles"
-      ]
+      ],
+      "attributes": {
+        "access.token.lifespan": "300"
+      }
     }
   ],
   "users": [
@@ -110,5 +113,7 @@
   "supportedLocales": [
     "pt-BR"
   ],
-  "defaultLocale": "pt-BR"
+  "defaultLocale": "pt-BR",
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": false
 }
