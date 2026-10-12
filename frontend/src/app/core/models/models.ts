@@ -29,10 +29,8 @@ export interface BookStats {
   pagesRead: number;
   totalPages: number | null;
   percent: number | null;
-  averagePagesPerDay: number;
   firstDate: string | null;
   referenceDate: string;
-  elapsedDays: number;
 }
 
 /** Official session progress, projected from the top-level book response. */

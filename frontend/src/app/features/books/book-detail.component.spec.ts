@@ -10,7 +10,7 @@ import { DashboardStore } from '../../core/state/dashboard.store';
 import { AuthService } from '../../core/auth/auth.service';
 import { Book } from '../../core/models/models';
 
-const legacy: Book = { id: 'old-book', title: 'Antigo', author: null, edition: null, totalPages: null, cover: null, status: 'READING', pagesRead: 45, averagePagesPerReadingDay: 22.5, progressPercent: null, stats: { pagesRead: 45, totalPages: null, percent: null, averagePagesPerDay: 5, firstDate: '2026-09-01', referenceDate: '2026-09-09', elapsedDays: 9 } };
+const legacy: Book = { id: 'old-book', title: 'Antigo', author: null, edition: null, totalPages: null, cover: null, status: 'READING', pagesRead: 45, averagePagesPerReadingDay: 22.5, progressPercent: null, stats: { pagesRead: 45, totalPages: null, percent: null, firstDate: '2026-09-01', referenceDate: '2026-09-09' } };
 
 describe('book metadata and private cover editing', () => {
   let http: HttpTestingController; let store: DashboardStore;

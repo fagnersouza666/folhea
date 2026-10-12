@@ -29,8 +29,7 @@ const readingSession: ReadingSession = {
 };
 
 const officialBookStats: BookStats = {
-  pagesRead: 500, totalPages: 1000, percent: 50, averagePagesPerDay: 25,
-  firstDate: '2026-08-18', referenceDate: '2026-09-06', elapsedDays: 20
+  pagesRead: 500, totalPages: 1000, percent: 50, firstDate: '2026-08-18', referenceDate: '2026-09-06'
 };
 
 function flushServerError(httpMock: HttpTestingController, url: string): void {
@@ -329,7 +328,7 @@ describe('DashboardStore', () => {
     store.clearError();
     expect(store.bookStatsError?.(BOOK_ID)).toContain('Não foi possível');
     store.loadBookStats?.(BOOK_ID);
-    httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush({ ...readingBook, pagesRead: 600, stats: { ...officialBookStats, pagesRead: 600, percent: 60, averagePagesPerDay: 30 } });
+    httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush({ ...readingBook, pagesRead: 600, stats: { ...officialBookStats, pagesRead: 600, percent: 60 } });
     expect(store.bookStats?.(BOOK_ID)?.pagesRead).toBe(600);
   });
 
@@ -339,7 +338,7 @@ describe('DashboardStore', () => {
     const older = httpMock.expectOne(`/api/v1/books/${BOOK_ID}`);
     store.loadBookStats?.(BOOK_ID);
     const latest = httpMock.expectOne(`/api/v1/books/${BOOK_ID}`);
-    latest.flush({ ...readingBook, pagesRead: 700, stats: { ...officialBookStats, pagesRead: 700, percent: 70, averagePagesPerDay: 35 } });
+    latest.flush({ ...readingBook, pagesRead: 700, stats: { ...officialBookStats, pagesRead: 700, percent: 70 } });
     older.flush({ ...readingBook, stats: officialBookStats });
     expect(store.bookStats?.(BOOK_ID)?.pagesRead).toBe(700);
     expect(store.bookStatsLoading?.(BOOK_ID)).toBe(false);

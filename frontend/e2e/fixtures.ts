@@ -49,11 +49,10 @@ function officialBook(state: MockState, book: Book): Book & { stats: BookStats }
   const pagesRead = readings.reduce((total, session) => total + session.pages, 0);
   const firstDate = readings.map(session => session.readingDate).sort()[0] ?? null;
   const referenceDate = book.status === 'FINISHED' ? book.finishedOn ?? TODAY : TODAY;
-  const elapsedDays = firstDate ? Math.max(1, Math.round((Date.parse(referenceDate) - Date.parse(firstDate)) / 86400000) + 1) : 0;
   const readingDays = new Set(readings.filter(session => session.pages > 0).map(session => session.readingDate)).size;
   return { ...book, pagesRead, averagePagesPerReadingDay: readingDays ? Math.round(pagesRead / readingDays * 10) / 10 : null,
     progressPercent: book.totalPages ? Math.min(100, Math.floor(pagesRead * 100 / book.totalPages)) : null,
-    stats: { pagesRead, totalPages: book.totalPages ?? null, percent: book.totalPages ? Math.min(100, Math.floor(pagesRead * 10000 / book.totalPages) / 100) : null, averagePagesPerDay: elapsedDays ? Math.round(pagesRead / elapsedDays * 100) / 100 : 0, firstDate, referenceDate, elapsedDays } };
+    stats: { pagesRead, totalPages: book.totalPages ?? null, percent: book.totalPages ? Math.min(100, Math.floor(pagesRead * 10000 / book.totalPages) / 100) : null, firstDate, referenceDate } };
 }
 
 function bookPayload(request: Route['request'] extends () => infer R ? R : never): { metadata: Partial<Book>; bytes?: Buffer } {

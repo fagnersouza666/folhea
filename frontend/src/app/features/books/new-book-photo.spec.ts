@@ -15,7 +15,7 @@ import { NewBookComponent } from './new-book.component';
 const saved: Book & { hasPhoto: boolean } = {
   id: 'photo-book', title: 'Exemplar próprio', author: null, edition: null, totalPages: null,
   status: 'READING', hasPhoto: false, cover: null,
-  stats: { pagesRead: 0, totalPages: null, percent: null, averagePagesPerDay: 0, firstDate: null, referenceDate: '2026-10-12', elapsedDays: 0 }
+  stats: { pagesRead: 0, totalPages: null, percent: null, firstDate: null, referenceDate: '2026-10-12' }
 };
 
 /** Real form/store/client/interceptor; only HTTP, authentication and prepared-file boundaries are doubled. */
