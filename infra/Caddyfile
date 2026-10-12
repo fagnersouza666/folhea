@@ -1,6 +1,5 @@
 # Public edge for Folhea. API and authentication stay on the private Docker
 # network; only Caddy publishes ports to the host.
-
 {
 	# The explicit HTTP site preserves the configured public HTTPS port.
 	auto_https disable_redirects
@@ -34,7 +33,8 @@
 	@openapi path /api/openapi /api/openapi/*
 	respond @openapi 404
 
-	# API responses are private and must never be cached by a browser or proxy.
+	# API responses default to no-store. Only owned photo GET 200/304 can use
+	# private browser revalidation; authorization always runs at the backend.
 	@api path /api/*
 	header @api Cache-Control "no-store"
 	# Only atomic book creation/update accepts a multipart image envelope.
@@ -46,28 +46,75 @@
 	request_body @book-multipart {
 		max_size 3145728
 	}
+	@book-photo-upload {
+		method PUT
+		path_regexp book_photo_upload ^/api/v1/books/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/photo$
+	}
+	# RAW photo MIME/signature validation belongs to the backend. Unsupported
+	# inputs within this limit must reach its 415 response, not the JSON cap.
+	request_body @book-photo-upload {
+		max_size 1000000
+	}
 	@small-api-body {
 		path /api/*
 		not {
 			header_regexp Content-Type `(?i)^multipart/form-data([[:space:]]*;.*)?$`
 			expression `(method('POST') && path('/api/v1/books')) || (method('PATCH') && path_regexp('book_update_small', '^/api/v1/books/[^/]+$'))`
 		}
+		not {
+			method PUT
+			path_regexp book_photo_small ^/api/v1/books/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/photo$
+		}
 	}
 	request_body @small-api-body {
-		max_size 64KB
+		max_size 65536
 	}
 	handle @api {
-		reverse_proxy {$API_UPSTREAM} {
-			# Caddy is the only trusted edge proxy. Strip client-supplied forwarding
-			# headers, replacing canonical values consumed by Quarkus.
-			# Never delete a header also set here: Caddy applies deletes last.
-			header_up -Forwarded
-			header_up -X-Forwarded-Port
-			header_up -X-Forwarded-Ssl
-			header_up -X-Forwarded-Prefix
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Host {hostport}
-			header_up X-Forwarded-Proto {scheme}
+		# Explicit route order keeps the narrow photo handler ahead of the API
+		# fallback regardless of Caddy's matcher sorting.
+		route {
+			@book-photo-read {
+				method GET
+				path_regexp book_photo_read ^/api/v1/books/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/photo$
+			}
+			handle @book-photo-read {
+				reverse_proxy {$API_UPSTREAM} {
+					header_up -Forwarded
+					header_up -X-Forwarded-Port
+					header_up -X-Forwarded-Ssl
+					header_up -X-Forwarded-Prefix
+					header_up X-Forwarded-For {remote_host}
+					header_up X-Forwarded-Host {hostport}
+					header_up X-Forwarded-Proto {scheme}
+					@photo-cacheable status 200 304
+					handle_response @photo-cacheable {
+						header >Cache-Control "private, no-cache, max-age=0, must-revalidate"
+						copy_response
+					}
+					handle_response {
+						header >Cache-Control "no-store"
+						copy_response
+					}
+				}
+			}
+			handle {
+				reverse_proxy {$API_UPSTREAM} {
+					# Caddy is the only trusted edge proxy. Strip client-supplied forwarding
+					# headers, replacing canonical values consumed by Quarkus.
+					# Never delete a header also set here: Caddy applies deletes last.
+					header_up -Forwarded
+					header_up -X-Forwarded-Port
+					header_up -X-Forwarded-Ssl
+					header_up -X-Forwarded-Prefix
+					header_up X-Forwarded-For {remote_host}
+					header_up X-Forwarded-Host {hostport}
+					header_up X-Forwarded-Proto {scheme}
+					handle_response {
+						header >Cache-Control "no-store"
+						copy_response
+					}
+				}
+			}
 		}
 	}
 
@@ -109,7 +156,7 @@
 	@private path /app /app/* /entrar /cadastro
 	handle @private {
 		header X-Robots-Tag "noindex, nofollow"
-		header Cache-Control "no-store"
+		header >Cache-Control "no-store"
 		rewrite * /index.csr.html
 		file_server
 	}

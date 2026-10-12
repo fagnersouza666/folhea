@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Formula regression against a fresh isolated PostgreSQL, never the app volume.
+# Formula/legacy V009 regression against fresh isolated PostgreSQL.
+# Java V010 is exercised by BookPhotoMigrationTest through actual Flyway/JVM.
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
 container="folhea-product-metrics-test-$RANDOM-$$"
@@ -18,6 +19,9 @@ done
 for migration in "$ROOT"/backend/src/main/resources/db/migration/*.sql; do
   docker exec -i "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus < "$migration" >/dev/null
 done
+# Retain every historical V007/V008/V009 assertion without treating this
+# SQL-only fixture as a JVM V010 migration. The current default must reject it.
+LEGACY_V009_SQL="SELECT CASE WHEN EXISTS (SELECT 1 FROM public.flyway_schema_history WHERE version IN ('7', '007') AND success) AND EXISTS (SELECT 1 FROM public.flyway_schema_history WHERE version IN ('8', '008') AND success) AND EXISTS (SELECT 1 FROM public.flyway_schema_history WHERE version IN ('9', '009') AND success) AND to_regclass('public.folhea_user') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'folhea_user' AND column_name IN ('password_hash', 'login_identifier')) AND to_regclass('public.account_deletion') IS NOT NULL AND to_regclass('public.book_cover') IS NOT NULL THEN 1 ELSE 0 END;"
 # Exercise the recovery script against PostgreSQL itself. Only Compose dispatch
 # is adapted to this isolated container; no database/provider response is mocked.
 cat > "$scratch/compose-db" <<'SH'
@@ -34,13 +38,16 @@ SH
 chmod 700 "$scratch/compose-db"
 printf 'services: {}\n' > "$scratch/compose.yml"
 printf 'DB_NAME=quarkus\n' > "$scratch/recovery.env"
-verify_recovery() {
+verify_current_recovery() {
   env DOCKER_BIN="$scratch/compose-db" RECOVERY_TEST_CONTAINER="$container" \
     COMPOSE_FILE="$scratch/compose.yml" COMPOSE_ENV_FILE="$scratch/recovery.env" \
     bash "$ROOT/scripts/ops/verify-recovery.sh" --database quarkus --username quarkus --skip-backend
 }
+verify_recovery() {
+  RECOVERY_VERIFY_SQL="$LEGACY_V009_SQL" verify_current_recovery
+}
 docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
-  -c "CREATE TABLE flyway_schema_history(version varchar(50), success boolean); INSERT INTO flyway_schema_history SELECT lpad(n::text, 3, '0'), true FROM generate_series(1, 6) n; UPDATE flyway_schema_history SET version = '6' WHERE version = '006';"
+  -c "CREATE TABLE flyway_schema_history(version varchar(50), success boolean, type varchar(20) DEFAULT 'SQL'); INSERT INTO flyway_schema_history(version,success) SELECT lpad(n::text, 3, '0'), true FROM generate_series(1, 6) n; UPDATE flyway_schema_history SET version = '6' WHERE version = '006';"
 if verify_recovery > "$scratch/verify.log" 2>&1; then
   echo 'not ok - recovery accepted a schema without successful V007' >&2; exit 1
 fi
@@ -50,7 +57,7 @@ if verify_recovery > "$scratch/verify.log" 2>&1; then
   echo 'not ok - recovery accepted a schema with only real Flyway V006' >&2; exit 1
 fi
 docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
-  -c "INSERT INTO flyway_schema_history VALUES ('7', false);"
+  -c "INSERT INTO flyway_schema_history(version,success) VALUES ('7', false);"
 if verify_recovery > "$scratch/verify.log" 2>&1; then
   echo 'not ok - recovery accepted a failed V007' >&2; exit 1
 fi
@@ -67,7 +74,7 @@ if verify_recovery > "$scratch/verify.log" 2>&1; then
 fi
 # Flyway in the actual Quarkus runtime stores V001..V009 as 001..009.
 docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
-  -c "INSERT INTO flyway_schema_history VALUES ('8', false);"
+  -c "INSERT INTO flyway_schema_history(version,success) VALUES ('8', false);"
 if verify_recovery > "$scratch/verify.log" 2>&1; then
   echo 'not ok - recovery accepted failed V008' >&2; exit 1
 fi
@@ -83,7 +90,7 @@ if verify_recovery > "$scratch/verify.log" 2>&1; then
   echo 'not ok - recovery accepted successful V008 without V009 credential removal' >&2; exit 1
 fi
 docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
-  -c "INSERT INTO flyway_schema_history VALUES ('9', false);"
+  -c "INSERT INTO flyway_schema_history(version,success) VALUES ('9', false);"
 if verify_recovery > "$scratch/verify.log" 2>&1; then
   echo 'not ok - recovery accepted failed V009' >&2; exit 1
 fi
@@ -127,7 +134,11 @@ fi
 docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
   -c "UPDATE flyway_schema_history SET success = true WHERE version = '7';"
 verify_recovery
-echo 'ok - PostgreSQL recovery requires successful Flyway 7/007 and 8/008 and 9/009, no delegated credential columns, private covers and durable deletion state'
+echo 'ok - historical V009 PostgreSQL recovery regression: 7/007, 8/008, 9/009, no delegated credential columns, covers and durable deletion'
+if verify_current_recovery > "$scratch/verify-current.log" 2>&1; then
+  echo 'not ok - current default accepted a SQL-only fixture without actual JVM V010' >&2; exit 1
+fi
+echo 'ok - current default rejects SQL-only V009; V010 positive/negative assertions require BookPhotoMigrationTest real Flyway/JVM'
 docker exec -i "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus <<'SQL'
 INSERT INTO folhea_user(id,identity_subject,email,timezone,created_at,updated_at)
 SELECT ('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,'fixture-'||n,

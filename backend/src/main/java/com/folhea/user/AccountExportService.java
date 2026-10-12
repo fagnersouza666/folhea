@@ -3,6 +3,7 @@ package com.folhea.user;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.folhea.book.BookCoverEntity;
+import com.folhea.book.BookPhotoEntity;
 import com.folhea.book.BookStatus;
 import com.folhea.reading.ReadingSessionResource;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -17,7 +18,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 import javax.sql.DataSource;
 
-/** A read-only snapshot streamed with server cursors, at most one 2 MiB image in flight. */
+/** A read-only snapshot streamed with server cursors, at most one 1 MB photo in flight. */
 @ApplicationScoped
 public class AccountExportService {
     @Inject DataSource dataSource;
@@ -43,15 +44,16 @@ public class AccountExportService {
                     }
                     json.writeArrayFieldStart("books");
                     try (var query = query(connection, """
-                            SELECT b.*,c.media_type,c.byte_size,c.width,c.height,c.version
-                            FROM book b LEFT JOIN book_cover c ON c.book_id=b.id WHERE b.user_id=? ORDER BY b.id
+                            SELECT b.*,c.content_type,c.byte_size,c.width,c.height,c.sha256
+                            FROM book b LEFT JOIN book_photo c ON c.book_id=b.id WHERE b.user_id=? ORDER BY b.id
                             """, userId); var row = query.executeQuery()) {
                         while (row.next()) {
-                            UUID version = row.getObject("version", UUID.class);
-                            BookCoverEntity.Metadata cover = version == null ? null : new BookCoverEntity.Metadata(row.getString("media_type"), row.getInt("byte_size"), row.getInt("width"), row.getInt("height"), version);
+                            String sha256 = row.getString("sha256");
+                            UUID version = sha256 == null ? null : BookPhotoEntity.legacyVersion(sha256);
+                            BookCoverEntity.Metadata cover = version == null ? null : new BookCoverEntity.Metadata(row.getString("content_type"), row.getInt("byte_size"), row.getInt("width"), row.getInt("height"), version);
                             json.writeObject(new PersistedBook(row.getObject("id", UUID.class), row.getString("title"), row.getString("author"),
                                     BookStatus.valueOf(row.getString("status")), row.getObject("finished_on", LocalDate.class), instant(row,"created_at"), instant(row,"updated_at"),
-                                    row.getString("edition"), (Integer) row.getObject("total_pages"), cover));
+                                    row.getString("edition"), (Integer) row.getObject("total_pages"), cover, sha256 != null));
                         }
                     }
                     json.writeEndArray();
@@ -61,24 +63,9 @@ public class AccountExportService {
                                 row.getObject("reading_date",LocalDate.class), row.getInt("pages"), row.getInt("minutes"), instant(row,"created_at"), instant(row,"updated_at")));
                     }
                     json.writeEndArray();
-                    json.writeArrayFieldStart("covers");
-                    try (var query = query(connection, "SELECT c.* FROM book_cover c JOIN book b ON b.id=c.book_id WHERE b.user_id=? ORDER BY c.book_id", userId);
-                         var row = query.executeQuery()) {
-                        while (row.next()) {
-                            json.writeStartObject();
-                            json.writeStringField("bookId", row.getObject("book_id",UUID.class).toString());
-                            json.writeStringField("mediaType",row.getString("media_type"));
-                            json.writeNumberField("byteSize",row.getInt("byte_size"));
-                            json.writeNumberField("width",row.getInt("width"));
-                            json.writeNumberField("height",row.getInt("height"));
-                            json.writeStringField("version",row.getObject("version",UUID.class).toString());
-                            json.writeFieldName("dataBase64");
-                            try (var image = row.getBinaryStream("data")) { json.writeBinary(image, row.getInt("byte_size")); }
-                            json.writeEndObject();
-                            json.flush();
-                        }
-                    }
-                    json.writeEndArray();
+                    // Compatibility export uses the same canonical bytes, not a second stored image.
+                    writePhotos(connection, json, userId, "covers", true);
+                    writePhotos(connection, json, userId, "photos", false);
                     json.writeEndObject();
                 }
             } finally {
@@ -90,6 +77,30 @@ public class AccountExportService {
         } catch (SQLException e) { throw new IOException("Could not export account data"); }
     }
 
+    private static void writePhotos(Connection connection, JsonGenerator json, UUID userId, String field, boolean legacy) throws SQLException, IOException {
+        json.writeArrayFieldStart(field);
+        try (var query = query(connection, "SELECT c.* FROM book_photo c JOIN book b ON b.id=c.book_id WHERE b.user_id=? ORDER BY c.book_id", userId);
+             var row = query.executeQuery()) {
+            while (row.next()) {
+                json.writeStartObject();
+                json.writeStringField("bookId", row.getObject("book_id", UUID.class).toString());
+                json.writeStringField(legacy ? "mediaType" : "contentType", row.getString("content_type"));
+                json.writeNumberField("byteSize", row.getInt("byte_size"));
+                json.writeNumberField("width", row.getInt("width")); json.writeNumberField("height", row.getInt("height"));
+                if (legacy) json.writeStringField("version", BookPhotoEntity.legacyVersion(row.getString("sha256")).toString());
+                else {
+                    json.writeStringField("sha256", row.getString("sha256"));
+                    json.writeStringField("createdAt", instant(row, "created_at").toString());
+                    json.writeStringField("updatedAt", instant(row, "updated_at").toString());
+                }
+                json.writeFieldName("dataBase64");
+                try (var image = row.getBinaryStream("bytes")) { json.writeBinary(image, row.getInt("byte_size")); }
+                json.writeEndObject(); json.flush();
+            }
+        }
+        json.writeEndArray();
+    }
+
     private static java.sql.PreparedStatement query(Connection c, String sql, UUID userId) throws SQLException {
         var statement = c.prepareStatement(sql);
         // PostgreSQL otherwise buffers every bytea row in the result set.
@@ -99,5 +110,5 @@ public class AccountExportService {
     }
     private static Instant instant(ResultSet row, String column) throws SQLException { return row.getTimestamp(column).toInstant(); }
     public record PersistedBook(UUID id, String title, String author, BookStatus status, LocalDate finishedOn,
-                                Instant createdAt, Instant updatedAt, String edition, Integer totalPages, BookCoverEntity.Metadata cover) { }
+                                Instant createdAt, Instant updatedAt, String edition, Integer totalPages, BookCoverEntity.Metadata cover, boolean hasPhoto) { }
 }

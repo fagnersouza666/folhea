@@ -321,6 +321,26 @@ export class DashboardStore {
     );
   }
 
+  uploadBookPhoto(id: string, photo: File): Observable<Book> {
+    this.clearError();
+    return this.api.uploadBookPhoto(id, photo).pipe(
+      tap((book) => { this.confirmBook(book); this.loadBooks(); }),
+      catchError((error: unknown) => { this.setMutationError(error, 'Não foi possível enviar a foto.'); return throwError(() => error); })
+    );
+  }
+
+  deleteBookPhoto(id: string): Observable<void> {
+    this.clearError();
+    return this.api.deleteBookPhoto(id).pipe(
+      tap(() => {
+        const book = this.getBook(id);
+        if (book) this.confirmBook({ ...book, hasPhoto: false, cover: null });
+        this.refreshBookMetrics(id);
+      }),
+      catchError((error: unknown) => { this.setMutationError(error, 'Não foi possível remover a foto.'); return throwError(() => error); })
+    );
+  }
+
   finishBook(id: string, finishedOn = this.today()): Observable<Book> {
     this.clearError();
     return this.api.finishBook(id, finishedOn).pipe(

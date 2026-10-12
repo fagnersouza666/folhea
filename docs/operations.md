@@ -373,8 +373,9 @@ SELECT count(*) FROM flyway_schema_history WHERE version IN ('7', '007') AND suc
 ```
 
 O backup completo inclui essa tabela. O guard padrão de `verify-recovery.sh`
-exige Flyway V007/V008/V009 com sucesso (formatos `7`/`007`, `8`/`008`,
-`9`/`009`), as tabelas `folhea_user`, `account_deletion` e `book_cover` e a
+exige Flyway V007/V008/V009/V010 com sucesso (formatos sem padding ou `007`,
+`008`, `009`, `010`), V010 do tipo `JDBC`, as tabelas `folhea_user`,
+`account_deletion` e `book_photo`, coluna de imagem `bytea` e a
 **ausência** de `password_hash` e `login_identifier`. A V009 remove somente
 as credenciais delegadas antigas; não edite checksums das V001..V008.
 O teste PostgreSQL existente cobre versões ausentes/falhas e colunas antigas
@@ -452,7 +453,7 @@ A prévia usa a política `img-src` já restrita à própria origem, `data:` e `
 
 O Caddy permite envelope **3MiB** apenas para `multipart/form-data` em
 `POST /api/v1/books` e `PATCH /api/v1/books/{id}`. Outras rotas, métodos e
-requisições JSON preservam o limite de **64KB** da borda. O backend mantém as
+requisições JSON preservam o limite de **64KiB (65.536 bytes)** da borda. O backend mantém as
 validações independentes: parte JSON até 8KiB; capa JPEG/PNG até 2MiB; lados até
 4096 e total até 4.194.304 pixels, também limitando a imagem recodificada. Os
 bytes da imagem ficam fora de respostas/listas de livros. Cadastro e edição
@@ -464,6 +465,40 @@ headers. Ele não comprova autenticação ou dados da aplicação. O aceite com
 Keycloak/PG real deve enviar uma imagem válida maior que 64KiB pela UI,
 comparar o SHA da imagem persistida entre GET privado, exportação e restore,
 e verificar CSRF, isolamento de duas contas e exclusão em cascata.
+
+### Fotos privadas de LIVRO-02
+
+`PUT /api/v1/books/{UUID}/photo` recebe a imagem RAW com limite próprio de
+**1.000.000 bytes**. MIME e assinatura são validados pelo backend: um arquivo
+inválido dentro do limite chega à resposta `415`. As demais rotas de API
+continuam limitadas a **65.536 bytes**, e o envelope multipart legado mantém
+3MiB. Não envie a imagem como JSON/base64 nem altere o boundary multipart da
+compatibilidade existente.
+
+Somente `GET` de foto com status `200` ou `304` usa
+`Cache-Control: private, no-cache, max-age=0, must-revalidate`. O proxy preserva
+o ETag, status e corpo do backend; `401`, `404` e outros erros continuam
+`no-store`. A propriedade do livro deve ser verificada pelo backend antes de
+avaliar `If-None-Match`, inclusive quando duas contas tenham a mesma imagem.
+O cabeçalho é definido no envio da resposta, após os headers do upstream, e a
+resposta é copiada uma única vez, evitando duplicar `Cache-Control` ou headers
+de tamanho do corpo.
+As APIs continuam excluídas do service worker: cache privado com revalidação
+HTTP não autoriza armazenamento offline da foto no PWA.
+
+O gate de borda inclui os limites exatos de RAW/JSON e a combinação de método,
+path e status de cache com respostas sintéticas de upstream. Ele comprova o
+proxy, não autenticação, autorização, formato de imagem ou migração. Essas
+provas exigem a stack real e o Flyway/JVM para executar V010; aplicar arquivos
+`.sql` pelo psql não executa uma migração Java.
+O scanner de contratos exige GET/PUT/DELETE de `/photo`: o GET aceita a URL
+declarativa usada pelo `<img>`, e cada método é associado à sua rota backend.
+As regressões negativas do scanner preservam as verificações AUTH anteriores;
+esse gate estático não substitui a prova de sessão, propriedade e ETag no stage.
+O SQL padrão compartilhado está em `scripts/ops/verify-recovery.sql` e é
+avaliado pelo teste `BookPhotoMigrationTest` após o Flyway real. As regressões
+shell V009 continuam explícitas e o fixture somente SQL deve falhar no guard
+atual; ele não cria sucesso V010 nem tabela de foto para simular o JVM.
 
 Para testar outra stack na mesma máquina, use outro projeto Compose, volumes,
 rede, portas, segredos e CA. Prefira a origem `https://127.0.0.1:9444` quando a

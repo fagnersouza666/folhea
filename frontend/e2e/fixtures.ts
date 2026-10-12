@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { addDays, currentStreak, periodStats } from '../src/app/core/state/reading-statistics';
 import { test as base, expect, type Page, type Route } from '@playwright/test';
 
@@ -32,6 +33,7 @@ function responseBook(state: MockState, body: Partial<Book> & Pick<Book, 'title'
     edition: body.edition ?? null,
     totalPages: body.totalPages ?? null,
     cover: body.cover ?? null,
+    hasPhoto: body.hasPhoto ?? Boolean(body.cover),
     status: body.status ?? 'READING',
     finishedOn: body.finishedOn,
     createdAt: body.createdAt ?? now,
@@ -107,11 +109,35 @@ async function handleApi(route: Route, state: MockState): Promise<void> {
     return json(route, 200, periodStats(state.sessions, state.books, from, to, currentStreak(state.sessions, TODAY)));
   }
 
+  const photoMatch = path.match(/^\/api\/v1\/books\/([^/]+)\/photo$/);
+  if (photoMatch) {
+    const book = state.books.find(item => item.id === photoMatch[1]);
+    if (!book) return json(route, 404, { status: 404 });
+    if (method === 'PUT') {
+      const bytes = request.postDataBuffer()!;
+      if (bytes.length > 1_000_000) return json(route, 413, { status: 413 });
+      state.covers ??= new Map(); state.covers.set(book.id, bytes);
+      book.hasPhoto = true;
+      book.cover = { mediaType: 'image/jpeg', byteSize: bytes.length, width: 32, height: 24, version: createHash('sha256').update(bytes).digest('hex') };
+      return json(route, 200, officialBook(state, book));
+    }
+    if (method === 'DELETE') {
+      if (!book.hasPhoto) return json(route, 404, { status: 404 });
+      book.hasPhoto = false; book.cover = null; state.covers?.delete(book.id); return route.fulfill({ status: 204 });
+    }
+    if (method === 'GET' && book.hasPhoto && state.covers?.has(book.id)) {
+      const bytes = state.covers.get(book.id)!;
+      return route.fulfill({ status: 200, contentType: 'image/jpeg', body: bytes,
+        headers: { 'Cache-Control': 'private, no-cache, max-age=0, must-revalidate', ETag: '"' + createHash('sha256').update(bytes).digest('hex') + '"' } });
+    }
+    return json(route, 404, { status: 404 });
+  }
+
   const coverMatch = path.match(/^\/api\/v1\/books\/([^/]+)\/cover$/);
   if (coverMatch) {
     const book = state.books.find(item => item.id === coverMatch[1]);
     if (!book) return json(route, 404, { status: 404 });
-    if (method === 'DELETE') { book.cover = null; state.covers?.delete(book.id); return route.fulfill({ status: 204 }); }
+    if (method === 'DELETE') { book.hasPhoto = false; book.cover = null; state.covers?.delete(book.id); return route.fulfill({ status: 204 }); }
     if (method === 'GET' && book.cover && state.covers?.has(book.id)) return route.fulfill({ status: 200, contentType: book.cover.mediaType, body: state.covers.get(book.id)!, headers: { 'Cache-Control': 'no-store' } });
     return json(route, 404, { status: 404 });
   }
@@ -124,7 +150,7 @@ async function handleApi(route: Route, state: MockState): Promise<void> {
     if (method === 'PATCH' && !bookMatch[2]) {
       const { metadata, bytes } = bookPayload(request);
       Object.assign(book, metadata, { updatedAt: now });
-      if (bytes) { state.covers ??= new Map(); state.covers.set(book.id, bytes); }
+      if (bytes) { book.hasPhoto = true; state.covers ??= new Map(); state.covers.set(book.id, bytes); }
       return json(route, 200, officialBook(state, book));
     }
     if (method === 'DELETE' && !bookMatch[2]) {
@@ -148,7 +174,7 @@ async function handleApi(route: Route, state: MockState): Promise<void> {
   if (method === 'POST' && path === '/api/v1/books') {
     const { metadata, bytes } = bookPayload(request);
     const book = responseBook(state, metadata as Partial<Book> & Pick<Book, 'title'>);
-    if (bytes) { state.covers ??= new Map(); state.covers.set(book.id, bytes); }
+    if (bytes) { book.hasPhoto = true; state.covers ??= new Map(); state.covers.set(book.id, bytes); }
     return json(route, 201, officialBook(state, book));
   }
 

@@ -37,7 +37,9 @@ POSTGRES_SERVICE="${POSTGRES_SERVICE:-postgres}"
 BACKEND_SERVICE="${BACKEND_SERVICE:-backend}"
 DB_NAME="${DB_NAME:-folhea}"
 DB_USERNAME="${DB_USERNAME:-folhea}"
-RECOVERY_VERIFY_SQL="${RECOVERY_VERIFY_SQL:-SELECT CASE WHEN EXISTS (SELECT 1 FROM public.flyway_schema_history WHERE version IN ('7', '007') AND success) AND EXISTS (SELECT 1 FROM public.flyway_schema_history WHERE version IN ('8', '008') AND success) AND EXISTS (SELECT 1 FROM public.flyway_schema_history WHERE version IN ('9', '009') AND success) AND to_regclass('public.folhea_user') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'folhea_user' AND column_name IN ('password_hash', 'login_identifier')) AND to_regclass('public.account_deletion') IS NOT NULL AND to_regclass('public.book_cover') IS NOT NULL THEN 1 ELSE 0 END;}"
+# This file is also evaluated by the real Flyway/JVM V010 migration test.
+# Never fabricate V010 metadata after applying only the SQL migrations.
+RECOVERY_VERIFY_SQL="${RECOVERY_VERIFY_SQL:-$(<"$SCRIPT_DIR/verify-recovery.sql")}"
 RECOVERY_EXPECTED_OUTPUT="${RECOVERY_EXPECTED_OUTPUT:-1}"
 BACKEND_HEALTH_URL="${BACKEND_HEALTH_URL:-http://127.0.0.1:8080/q/health/ready}"
 RECOVERY_REPORT_FILE="${RECOVERY_REPORT_FILE:-}"

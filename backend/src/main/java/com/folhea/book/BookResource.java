@@ -16,6 +16,8 @@ import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PATCH;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -46,6 +48,7 @@ public class BookResource {
     @Inject ObjectMapper objectMapper;
     @Inject BookReadService reads;
     @Inject BookCoverService covers;
+    @Inject BookPhotoService photos;
 
     @GET
     @Operation(summary = "Lista os livros do usuário autenticado")
@@ -104,7 +107,7 @@ public class BookResource {
     }
 
     private BookResponse updateBook(BookEntity book, UpdateBookRequest request, BookCoverService.Normalized image) {
-        if (request == null || (request.title() == null && request.author() == null && request.edition() == null && request.totalPages() == null && image == null)) invalid("Informe ao menos um campo para alterar.");
+        if (request == null || (request.title() == null && request.author() == null && request.edition() == null && !request.hasTotalPages() && image == null)) invalid("Informe ao menos um campo para alterar.");
         if (request.title() != null) {
             if (request.title().isBlank()) invalid("O título não pode ficar vazio.");
             book.title = request.title().trim();
@@ -113,7 +116,7 @@ public class BookResource {
         if (request.author() != null) book.author = blankToNull(request.author());
         validateMetadata(request.edition(), request.totalPages());
         if (request.edition() != null) book.edition = blankToNull(request.edition());
-        if (request.totalPages() != null) book.totalPages = request.totalPages();
+        if (request.hasTotalPages()) book.totalPages = request.totalPages();
         covers.save(book.id, image);
         books.flush();
         return reads.response(book, currentUser.get());
@@ -156,6 +159,35 @@ public class BookResource {
         return reads.response(book, currentUser.get());
     }
 
+    @PUT @Path("/{id}/photo") @Transactional @Consumes(MediaType.WILDCARD)
+    @Operation(summary = "Envia ou substitui a foto privada com corpo RAW")
+    public BookResponse putPhoto(@PathParam("id") UUID id, @HeaderParam("Content-Type") String mime, java.io.InputStream input) throws java.io.IOException {
+        BookEntity book = findOwned(id);
+        byte[] bytes = input == null ? new byte[0] : input.readNBytes(BookPhotoNormalizer.MAX_BYTES + 1);
+        photos.save(book.id, BookPhotoNormalizer.normalize(bytes, mime, BookPhotoNormalizer.MAX_BYTES));
+        return reads.response(book, currentUser.get());
+    }
+
+    @GET @Path("/{id}/photo") @Produces("image/jpeg")
+    @Operation(summary = "Lê foto privada; valida sessão e ownership antes do ETag")
+    public Response photo(@PathParam("id") UUID id, @HeaderParam("If-None-Match") String condition) {
+        BookEntity book = findOwned(id);
+        BookPhotoEntity image = photos.get(book.id);
+        if (image == null) throw BookPhotoService.notFound();
+        String etag = "\"" + image.sha256 + "\"";
+        boolean unchanged = condition != null && java.util.Arrays.stream(condition.split(","))
+                .map(String::trim).map(value -> value.startsWith("W/") ? value.substring(2) : value)
+                .anyMatch(value -> value.equals("*") || value.equals(etag));
+        var response = unchanged ? Response.status(304) : Response.ok(image.bytes, "image/jpeg");
+        return response.header("ETag", etag).header("Cache-Control", "private, no-cache, max-age=0, must-revalidate")
+                .header("X-Content-Type-Options", "nosniff").build();
+    }
+
+    @DELETE @Path("/{id}/photo") @Transactional
+    public Response deletePhoto(@PathParam("id") UUID id) {
+        photos.delete(findOwned(id).id, true); return Response.noContent().build();
+    }
+
     @GET @Path("/{id}/cover") @Produces({"image/jpeg", "image/png"})
     public Response cover(@PathParam("id") UUID id) {
         BookEntity book = findOwned(id);
@@ -173,7 +205,7 @@ public class BookResource {
 
     private static void validateMetadata(String edition, Integer totalPages) {
         if (edition != null && edition.length() > 200) invalid("A edição pode ter no máximo 200 caracteres.");
-        if (totalPages != null && (totalPages < 1 || totalPages > 1000000)) invalid("O total de páginas deve ser inteiro entre 1 e 1000000.");
+        if (totalPages != null && (totalPages < 1)) invalid("O total de páginas deve ser inteiro positivo.");
     }
 
     private BookEntity findOwned(UUID id) {
@@ -198,27 +230,34 @@ public class BookResource {
             @Size(max = 500, message = "O autor pode ter no máximo 500 caracteres.")
             String author,
             @Size(max = 200) String edition,
-            @jakarta.validation.constraints.Min(1) @jakarta.validation.constraints.Max(1000000) Integer totalPages) {
+            @jakarta.validation.constraints.Min(1) Integer totalPages) {
         public CreateBookRequest(String title, String author) { this(title, author, null, null); }
     }
 
-    public record UpdateBookRequest(
-            @Size(max = 500, message = "O título pode ter no máximo 500 caracteres.")
-            String title,
-            @Size(max = 500, message = "O autor pode ter no máximo 500 caracteres.")
-            String author,
-            @Size(max = 200) String edition,
-            @jakarta.validation.constraints.Min(1) @jakarta.validation.constraints.Max(1000000) Integer totalPages) {
-        public UpdateBookRequest(String title, String author) { this(title, author, null, null); }
+    public static final class UpdateBookRequest {
+        @com.fasterxml.jackson.annotation.JsonProperty @Size(max = 500) private String title;
+        @com.fasterxml.jackson.annotation.JsonProperty @Size(max = 500) private String author;
+        @com.fasterxml.jackson.annotation.JsonProperty @Size(max = 200) private String edition;
+        @jakarta.validation.constraints.Min(1) private Integer totalPages;
+        private boolean totalPagesPresent;
+        public UpdateBookRequest() { }
+        public UpdateBookRequest(String title, String author) { this.title = title; this.author = author; }
+        public String title() { return title; }
+        public String author() { return author; }
+        public String edition() { return edition; }
+        public Integer totalPages() { return totalPages; }
+        public boolean hasTotalPages() { return totalPagesPresent; }
+        @com.fasterxml.jackson.annotation.JsonSetter("totalPages")
+        public void setTotalPages(Integer value) { totalPages = value; totalPagesPresent = true; }
     }
 
     public record FinishRequest(LocalDate finishedOn) { }
 
     public record BookResponse(UUID id, String title, String author, BookStatus status,
                                LocalDate finishedOn, Instant createdAt, Instant updatedAt, String edition, Integer totalPages,
-                               BookCoverEntity.Metadata cover, BookStats stats) {
+                               BookCoverEntity.Metadata cover, BookStats stats, boolean hasPhoto) {
         public BookResponse(UUID id, String title, String author, BookStatus status, LocalDate finishedOn, Instant createdAt, Instant updatedAt) {
-            this(id, title, author, status, finishedOn, createdAt, updatedAt, null, null, null, null);
+            this(id, title, author, status, finishedOn, createdAt, updatedAt, null, null, null, null, false);
         }
         /** Backwards-compatible constructor for callers that only need the public book fields. */
         public BookResponse(UUID id, String title, String author, BookStatus status, LocalDate finishedOn) {
@@ -227,7 +266,7 @@ public class BookResource {
 
         public static BookResponse from(BookEntity book) {
             return new BookResponse(book.id, book.title, book.author, book.status,
-                    book.finishedOn, book.createdAt, book.updatedAt, book.edition, book.totalPages, null, null);
+                    book.finishedOn, book.createdAt, book.updatedAt, book.edition, book.totalPages, null, null, false);
         }
     }
 }

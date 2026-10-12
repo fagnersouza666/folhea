@@ -23,7 +23,9 @@ public class SecurityHeadersFilter implements ContainerResponseFilter {
         String path = request.getUriInfo().getPath();
         if (path != null && path.startsWith("/")) path = path.substring(1);
         if (path != null && (path.equals("api") || path.startsWith("api/") || path.equals("auth") || path.startsWith("auth/"))) {
-            response.getHeaders().putSingle("Cache-Control", "no-store");
+            boolean photo = "GET".equals(request.getMethod()) && (response.getStatus() == 200 || response.getStatus() == 304)
+                    && path.matches("api/v1/books/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/photo");
+            response.getHeaders().putSingle("Cache-Control", photo ? "private, no-cache, max-age=0, must-revalidate" : "no-store");
         }
     }
 }

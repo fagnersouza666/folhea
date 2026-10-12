@@ -21,6 +21,9 @@ const operations = [
   ['GET', '/api/v1/books/{id}', 'BookResource.java', '@Path("/{id}")'],
   ['GET', '/api/v1/books/{id}/cover', 'BookResource.java', '@Path("/{id}/cover")'],
   ['DELETE', '/api/v1/books/{id}/cover', 'BookResource.java', '@Path("/{id}/cover")'],
+  ['GET', '/api/v1/books/{id}/photo', 'BookResource.java', '@Path("/{id}/photo")'],
+  ['PUT', '/api/v1/books/{id}/photo', 'BookResource.java', '@Path("/{id}/photo")'],
+  ['DELETE', '/api/v1/books/{id}/photo', 'BookResource.java', '@Path("/{id}/photo")'],
   ['PATCH', '/api/v1/books/{id}', 'BookResource.java', '@Path("/{id}")'],
   ['DELETE', '/api/v1/books/{id}', 'BookResource.java', '@Path("/{id}")'],
   ['POST', '/api/v1/books/{id}/finish', 'BookResource.java', '@Path("/{id}/finish")'],
@@ -47,24 +50,32 @@ function readFileSafe(path) {
 
 // Pair HTTP methods with their actual URL argument instead of allowing a GET
 // anywhere in the file to accidentally satisfy a missing POST on another path.
-const clientOperations = new Set([...(frontendClient + '\n' + frontendCsrf).matchAll(/this\.http\.(get|post|patch|delete)\s*<[^\n]+?>\s*\(\s*(?:`([^`]+)`|\x27([^\x27]+)\x27|"([^"]+)")/g)].map((match) => {
+const clientOperations = new Set([...(frontendClient + '\n' + frontendCsrf).matchAll(/this\.http\.(get|post|put|patch|delete)\s*<[^\n]+?>\s*\(\s*(?:`([^`]+)`|\x27([^\x27]+)\x27|"([^"]+)")/g)].map((match) => {
   const url = (match[2] ?? match[3] ?? match[4]).replace('${this.baseUrl}', '/api/v1')
     .replaceAll('${encodeURIComponent(id)}', '{id}').replaceAll('${id}', '{id}');
   return `${match[1].toUpperCase()} ${url}`;
 }));
-// Cover GET is deliberately a browser <img src> request: no HttpClient Blob
-// call is needed. Accept only the dedicated same-origin URL builder, stripping
-// its version query; do not let an unrelated GET satisfy another endpoint.
-const coverUrl = frontendClient.match(/bookCoverUrl\([^)]*\)[\s\S]*?\breturn\s*`([^`]+)`/)?.[1];
-if (coverUrl) {
-  const path = coverUrl.split('?')[0].replace('${this.baseUrl}', '/api/v1')
+// Media GETs deliberately use browser <img src>, without HttpClient Blob.
+// Accept only each dedicated same-origin URL builder (ignoring its query).
+// An unrelated GET must not satisfy a missing photo/cover endpoint.
+for (const [builder, expectedPath] of [
+  ['bookCoverUrl', '/api/v1/books/{id}/cover'],
+  ['bookPhotoUrl', '/api/v1/books/{id}/photo']
+]) {
+  const url = frontendClient.match(new RegExp(builder + '\\([^)]*\\)[\\s\\S]*?\\breturn\\s*`([^`]+)`'))?.[1];
+  if (!url) continue;
+  const path = url.split('?')[0].replace('${this.baseUrl}', '/api/v1')
     .replaceAll('${encodeURIComponent(id)}', '{id}').replaceAll('${id}', '{id}');
-  if (path === '/api/v1/books/{id}/cover') clientOperations.add(`GET ${path}`);
+  if (path === expectedPath) clientOperations.add(`GET ${path}`);
 }
 for (const [method, path, resource, backendMarker] of operations) {
   if (!clientOperations.has(`${method} ${path}`)) failures.push(`frontend client is missing ${method} ${path}`);
   const source = backendSources.get(resource) ?? '';
-  if (!source || !source.includes(`@${method}`) || !source.includes(backendMarker)) {
+  // Photo has GET/PUT/DELETE on the same path; pair its method annotation
+  // rather than letting the legacy cover's GET hide a missing photo GET.
+  const photoMethod = !path.endsWith('/photo')
+    || new RegExp('@' + method + '\\s*@Path\\(\\s*"/\\{id\\}/photo"\\s*\\)').test(source);
+  if (!source || !source.includes(`@${method}`) || !source.includes(backendMarker) || !photoMethod) {
     failures.push(`backend resource is missing ${method} ${path}`);
   }
 }
