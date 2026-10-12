@@ -58,9 +58,11 @@ async function runAcceptance() {
       await page.locator('#email').fill(stored.email);
       await page.locator('#password').fill(stored.password);
       await page.locator('#password-confirm').fill(stored.password);
-      const registration = page.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname.startsWith('/realms/folhea/login-actions/registration'));
-      await page.locator('#kc-register').click();
-      assert.ok((await registration).status() < 400, 'Only Keycloak receives the signup POST');
+      const [registration] = await Promise.all([
+        page.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname.startsWith('/realms/folhea/login-actions/registration')),
+        page.locator('#kc-register-form [type="submit"]').click()
+      ]);
+      assert.ok(registration.status() < 400, 'Only Keycloak receives the signup POST');
       await page.waitForURL('**/app/inicio', { timeout: 45000 });
       stored.registered = true; save();
     } else {
@@ -115,9 +117,11 @@ async function runAcceptance() {
     await a.page.locator('#reading-pages').fill(String(pages));
     await a.page.getByLabel('Data', { exact: false }).fill(date(a, offset));
     await pace();
-    const created = a.page.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/sessions');
-    await a.page.getByRole('button', { name: /^registrar leitura/i }).click();
-    assert.equal((await created).status(), 201);
+    const [created] = await Promise.all([
+      a.page.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/sessions'),
+      a.page.getByRole('button', { name: /^registrar leitura/i }).click()
+    ]);
+    assert.equal(created.status(), 201);
     await expect(a.page.getByRole('heading', { name: /leitura registrada/i })).toBeVisible();
     const sessions = await (await api(a, 'GET', '/api/v1/sessions')).json();
     return sessions.find(s => s.bookId === id && s.pages === pages && s.readingDate === date(a, offset)).id;
@@ -150,10 +154,12 @@ async function runAcceptance() {
     await page.locator('#book-cover-file').setInputFiles({ name: 'capa.png', mimeType: 'image/png', buffer: noise });
     await expect(page.getByAltText('Prévia da capa escolhida')).toBeVisible();
     await pace();
-    const created = page.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/books');
-    const uploaded = page.waitForResponse(r => r.request().method() === 'PUT' && /\/api\/v1\/books\/[^/]+\/photo$/.test(new URL(r.url()).pathname));
-    await page.getByRole('button', { name: /adicionar livro/i }).click();
-    assert.equal((await created).status(), 201); assert.equal((await uploaded).status(), 200);
+    const [created, uploaded] = await Promise.all([
+      page.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/books'),
+      page.waitForResponse(r => r.request().method() === 'PUT' && /\/api\/v1\/books\/[^/]+\/photo$/.test(new URL(r.url()).pathname)),
+      page.getByRole('button', { name: /adicionar livro/i }).click()
+    ]);
+    assert.equal(created.status(), 201); assert.equal(uploaded.status(), 200);
     await page.waitForURL('**/app/livros');
     const books = await (await api(a, 'GET', '/api/v1/books')).json();
     const book = books.find(item => item.title === title); assert.ok(book?.hasPhoto);
