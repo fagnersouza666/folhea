@@ -33,7 +33,10 @@ test.describe('jornadas pela interface — API e login BFF simulados', () => {
     await page.getByRole('link', { name: /cadastrar livro/i }).click();
     await page.getByLabel('Título').fill('O Nome do Vento');
     await page.getByLabel('Autor').fill('Patrick Rothfuss');
+    await page.getByLabel('Total de páginas').fill('600');
     await page.getByRole('button', { name: /adicionar livro/i }).click();
+    await expect(page).toHaveURL(/\/app\/livros$/);
+    await page.locator('.book-row').last().getByRole('link', { name: 'Registrar leitura', exact: true }).click();
     await expect(page).toHaveURL(/\/app\/ler\?bookId=/);
     await expect(page.getByLabel('Livro', { exact: true })).toHaveValue(mockApi.books[0].id);
     await page.getByRole('button', { name: /^registrar leitura/i }).click();
@@ -91,7 +94,10 @@ test.describe('jornadas pela interface — API e login BFF simulados', () => {
     await page.getByRole('link', { name: /novo livro/i }).click();
     const title = 'A Cidade e a Cidade';
     await page.getByLabel('Título').fill(title);
+    await page.getByLabel('Total de páginas').fill('300');
     await page.getByRole('button', { name: /adicionar livro/i }).click();
+    await expect(page).toHaveURL(/\/app\/livros$/);
+    await page.locator('.book-row').last().getByRole('link', { name: 'Registrar leitura', exact: true }).click();
     await expect(page).toHaveURL(/\/app\/ler\?bookId=/);
     const bookId = new URL(page.url()).searchParams.get('bookId');
     expect(bookId).toBeTruthy();

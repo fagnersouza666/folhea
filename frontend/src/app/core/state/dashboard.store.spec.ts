@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { signal } from '@angular/core';
 import { ANALYTICS_ENDPOINT } from '../analytics/analytics.service';
 import { AuthService } from '../auth/auth.service';
-import { Book, ReadingSession } from '../models/models';
+import { Book, BookStats, ReadingSession } from '../models/models';
 import { DashboardStore } from './dashboard.store';
 
 const BOOK_ID = '550e8400-e29b-41d4-a716-446655440000';
@@ -26,6 +26,11 @@ const readingSession: ReadingSession = {
   minutes: 25,
   createdAt: '2026-09-06T00:00:00.000Z',
   updatedAt: '2026-09-06T00:00:00.000Z'
+};
+
+const officialBookStats: BookStats = {
+  pagesRead: 500, totalPages: 1000, percent: 50, averagePagesPerDay: 25,
+  firstDate: '2026-08-18', referenceDate: '2026-09-06', elapsedDays: 20
 };
 
 function flushServerError(httpMock: HttpTestingController, url: string): void {
@@ -55,8 +60,7 @@ describe('DashboardStore', () => {
   });
 
   afterEach(() => {
-    httpMock.verify();
-    TestBed.resetTestingModule();
+    try { httpMock.verify(); } finally { TestBed.resetTestingModule(); }
   });
 
   function expectSessionsRequest(sessions: ReadingSession[] = []) {
@@ -238,6 +242,7 @@ describe('DashboardStore', () => {
     httpMock.expectNone('/api/v1/dashboard');
     httpMock.expectNone((req) => req.url === '/api/v1/stats');
     httpMock.expectOne('/api/v1/sessions').flush(readingSession);
+    httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush({ ...readingBook, stats: officialBookStats });
     httpMock.expectOne('/api/v1/dashboard').flush({ currentStreakDays: 101, currentBook: null, week: { pages: 500, minutes: 200, booksFinished: 2 } });
     httpMock.expectOne((req) => req.url === '/api/v1/stats').flush({ currentStreakDays: 101, period: { from: store.today(), to: store.today() }, pages: 500, minutes: 200, booksFinished: 2 });
     expectSessionsRequest([readingSession]);
@@ -305,6 +310,113 @@ describe('DashboardStore', () => {
     httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush(readingBook);
     expect(store.booksError()).toBeNull();
     expect(store.selectableBooks().find((book) => book.id === BOOK_ID)).toEqual(readingBook);
+  });
+
+  it('keeps complete official book metrics independent of the first 100 sessions', () => {
+    seedBooks([{ ...readingBook, totalPages: 1000, stats: officialBookStats }]);
+    seedSessions(Array.from({ length: 100 }, (_, index) => ({ ...readingSession, id: `page-${index}`, pages: 1 })));
+    expect(store.bookStats?.(BOOK_ID)).toEqual(officialBookStats);
+    expect(store.sessionsHasMore()).toBe(true);
+  });
+
+  it('hides old book metrics on refresh and keeps their error after dismissing the global alert', () => {
+    seedBooks([{ ...readingBook, stats: officialBookStats }]);
+    store.loadBookStats?.(BOOK_ID);
+    expect(store.bookStats?.(BOOK_ID)).toBeNull();
+    expect(store.bookStatsLoading?.(BOOK_ID)).toBe(true);
+    flushServerError(httpMock, `/api/v1/books/${BOOK_ID}`);
+    expect(store.bookStats?.(BOOK_ID)).toBeNull();
+    expect(store.bookStatsError?.(BOOK_ID)).toContain('Não foi possível');
+    store.clearError();
+    expect(store.bookStatsError?.(BOOK_ID)).toContain('Não foi possível');
+    store.loadBookStats?.(BOOK_ID);
+    httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush({ ...readingBook, stats: { ...officialBookStats, pagesRead: 600, percent: 60, averagePagesPerDay: 30 } });
+    expect(store.bookStats?.(BOOK_ID)?.pagesRead).toBe(600);
+  });
+
+  it('ignores an older book response after a newer metrics request completes', () => {
+    seedBooks([{ ...readingBook, stats: officialBookStats }]);
+    store.loadBookStats?.(BOOK_ID);
+    const older = httpMock.expectOne(`/api/v1/books/${BOOK_ID}`);
+    store.loadBookStats?.(BOOK_ID);
+    const latest = httpMock.expectOne(`/api/v1/books/${BOOK_ID}`);
+    latest.flush({ ...readingBook, stats: { ...officialBookStats, pagesRead: 700, percent: 70, averagePagesPerDay: 35 } });
+    older.flush({ ...readingBook, stats: officialBookStats });
+    expect(store.bookStats?.(BOOK_ID)?.pagesRead).toBe(700);
+    expect(store.bookStatsLoading?.(BOOK_ID)).toBe(false);
+  });
+
+  function flushGlobalRefresh(): void {
+    httpMock.expectOne('/api/v1/dashboard').flush({ currentStreakDays: 1, currentBook: null, week: { pages: 512, minutes: 25, booksFinished: 0 } });
+    httpMock.expectOne(request => request.url === '/api/v1/stats').flush({ period: { from: store.today(), to: store.today() }, pages: 512, minutes: 25, booksFinished: 0, currentStreakDays: 1 });
+    expectSessionsRequest([readingSession]);
+    httpMock.expectOne('/api/v1/analytics/events').flush(null, { status: 202, statusText: 'Accepted' });
+  }
+
+  it('refreshes the saved book from the server after POST and keeps the reading if metrics fail', () => {
+    seedBooks([{ ...readingBook, stats: officialBookStats }]);
+    store.addSession({ bookId: BOOK_ID, readingDate: '2026-09-06', pages: 12, minutes: 25 }).subscribe();
+    httpMock.expectNone(`/api/v1/books/${BOOK_ID}`);
+    httpMock.expectOne('/api/v1/sessions').flush(readingSession);
+    expect(store.bookStats(BOOK_ID)).toBeNull();
+    const refresh = httpMock.expectOne(`/api/v1/books/${BOOK_ID}`);
+    refresh.flush(null, { status: 503, statusText: 'Unavailable' });
+    flushGlobalRefresh();
+    store.clearError();
+    expect(store.getSession(readingSession.id)).toEqual(readingSession);
+    expect(store.bookStatsError(BOOK_ID)).toContain('Não foi possível');
+    store.loadBookStats(BOOK_ID);
+    httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush({ ...readingBook, stats: { ...officialBookStats, pagesRead: 512 } });
+    expect(store.bookStats(BOOK_ID)?.pagesRead).toBe(512);
+    httpMock.expectNone(request => request.method === 'POST');
+  });
+
+  it('refreshes both original and destination books when a reading moves between books', () => {
+    const destination = 'other-book';
+    seedBooks([{ ...readingBook, stats: officialBookStats }, { ...readingBook, id: destination, stats: officialBookStats }]);
+    seedSessions([readingSession]);
+    store.updateSession(readingSession.id, { bookId: destination, pages: 20 }).subscribe();
+    httpMock.expectOne(`/api/v1/sessions/${readingSession.id}`).flush({ ...readingSession, bookId: destination, pages: 20 });
+    expect(store.bookStats(BOOK_ID)).toBeNull(); expect(store.bookStats(destination)).toBeNull();
+    httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush({ ...readingBook, stats: { ...officialBookStats, pagesRead: 488 } });
+    httpMock.expectOne(`/api/v1/books/${destination}`).flush({ ...readingBook, id: destination, stats: { ...officialBookStats, pagesRead: 520 } });
+    flushGlobalRefresh();
+    expect(store.bookStats(BOOK_ID)?.pagesRead).toBe(488);
+    expect(store.bookStats(destination)?.pagesRead).toBe(520);
+  });
+
+  it('refreshes official book metrics after deleting a reading', () => {
+    seedBooks([{ ...readingBook, stats: officialBookStats }]); seedSessions([readingSession]);
+    store.deleteSession(readingSession.id).subscribe();
+    httpMock.expectOne(`/api/v1/sessions/${readingSession.id}`).flush(null, { status: 204, statusText: 'No Content' });
+    httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush({ ...readingBook, stats: { ...officialBookStats, pagesRead: 488 } });
+    flushGlobalRefresh();
+    expect(store.bookStats(BOOK_ID)?.pagesRead).toBe(488);
+  });
+
+  it('does not restore old metadata or totals from a GET started before a successful PATCH', () => {
+    seedBooks([{ ...readingBook, totalPages: 1000, stats: officialBookStats }]);
+    store.loadBookStats(BOOK_ID); const outdated = httpMock.expectOne(`/api/v1/books/${BOOK_ID}`);
+    store.updateBook(BOOK_ID, { totalPages: 2000, edition: '2ª' }).subscribe();
+    const confirmed = { ...readingBook, totalPages: 2000, edition: '2ª', stats: { ...officialBookStats, totalPages: 2000, percent: 25 } };
+    httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush(confirmed);
+    outdated.flush({ ...readingBook, totalPages: 1000, stats: officialBookStats });
+    expect(store.getBook(BOOK_ID)?.totalPages).toBe(2000);
+    expect(store.bookStats(BOOK_ID)?.percent).toBe(25);
+    httpMock.expectOne('/api/v1/books?limit=100&offset=0').flush([confirmed]);
+    httpMock.expectOne('/api/v1/dashboard').flush({ currentStreakDays: 0, currentBook: null, week: { pages: 500, minutes: 0, booksFinished: 0 } });
+    httpMock.expectOne(request => request.url === '/api/v1/stats').flush({ pages: 500 });
+  });
+
+  it('does not resurrect a deleted book from an earlier direct GET', () => {
+    store.loadBook(BOOK_ID); const old = httpMock.expectOne(`/api/v1/books/${BOOK_ID}`);
+    store.deleteBook(BOOK_ID).subscribe();
+    httpMock.expectOne(`/api/v1/books/${BOOK_ID}`).flush(null, { status: 204, statusText: 'No Content' });
+    httpMock.expectOne('/api/v1/books?limit=100&offset=0').flush([]);
+    httpMock.expectOne('/api/v1/dashboard').flush({ currentStreakDays: 0, currentBook: null, week: { pages: 0, minutes: 0, booksFinished: 0 } });
+    httpMock.expectOne(request => request.url === '/api/v1/stats').flush({ pages: 0 }); expectSessionsRequest([]);
+    old.flush({ ...readingBook, stats: officialBookStats });
+    expect(store.getBook(BOOK_ID)).toBeUndefined(); expect(store.bookStats(BOOK_ID)).toBeNull();
   });
 
 });

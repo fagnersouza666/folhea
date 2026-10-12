@@ -13,13 +13,44 @@ export interface UserExport {
   user: User;
   books: Book[];
   sessions: ReadingSession[];
+  covers?: (BookCover & { bookId: string; dataBase64: string })[];
+}
+
+export interface BookCover {
+  mediaType: 'image/jpeg' | 'image/png';
+  byteSize: number;
+  width: number;
+  height: number;
+  version: string;
+}
+
+export interface BookStats {
+  pagesRead: number;
+  totalPages: number | null;
+  percent: number | null;
+  averagePagesPerDay: number;
+  firstDate: string | null;
+  referenceDate: string;
+  elapsedDays: number;
+}
+
+export interface BookCreate {
+  title: string;
+  author?: string | null;
+  edition?: string | null;
+  totalPages?: number | null;
 }
 
 export interface Book {
   id: string;
   userId?: string;
   title: string;
-  author?: string;
+  author?: string | null;
+  edition?: string | null;
+  totalPages?: number | null;
+  cover?: BookCover | null;
+  // Optimistic and older responses do not yet have confirmed metrics.
+  stats?: BookStats;
   status: BookStatus;
   finishedOn?: string;
   createdAt?: string;
@@ -61,7 +92,7 @@ export interface ReadingDraft {
   minutes: number;
 }
 
-export interface BookPatch { title?: string; author?: string; }
+export interface BookPatch { title?: string; author?: string | null; edition?: string | null; totalPages?: number | null; }
 export interface ReadingSessionPatch {
   bookId?: string;
   readingDate?: string;

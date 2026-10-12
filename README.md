@@ -11,7 +11,24 @@ Frontend (`frontend/package.json`), backend (`backend/pom.xml`) e OpenAPI
 chore, teste ou infra sem mudança de produto não incrementam. Detalhe em
 `.cursor/rules/versionamento.mdc`.
 
-Versão atual: **0.4.0**
+Versão atual: **0.5.0**
+
+## Estante privada
+
+Cada livro pode guardar título, autor, edição, total de páginas e capa privada.
+Na tela de cadastro, título e total são obrigatórios; autor, edição e capa são
+opcionais. Livros antigos continuam disponíveis e podem completar os metadados.
+As capas JPEG/PNG ficam no PostgreSQL, são incluídas no backup e na exportação e
+só podem ser lidas pelo proprietário. Upload e metadados são gravados juntos;
+falha de imagem não cria um livro parcial.
+
+A estante mostra páginas lidas, páginas totais, progresso até 100% e média de
+páginas/dia. A média soma todas as páginas do livro e divide pelos dias corridos
+**inclusivos** desde sua primeira leitura até hoje no fuso da conta, incluindo
+dias sem leitura; em livros concluídos, a referência é a data de conclusão.
+Criar, editar ou excluir leitura recalcula os valores. O percentual é truncado
+em duas casas e não mostra 100% antes de atingir o total. Um livro legado sem
+total mantém as páginas/média, com percentual indisponível até completar o campo.
 
 ## Backend
 

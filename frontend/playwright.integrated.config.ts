@@ -10,11 +10,11 @@ export default defineConfig({
   retries: 0,
   reporter: [['list']],
   use: {
-    baseURL: process.env['FOLHEA_E2E_BASE_URL'] ?? 'https://localhost:9443',
+    baseURL: process.env['FOLHEA_E2E_BASE_URL'] ?? 'https://127.0.0.1:9444',
     // Only this opt-in local stack accepts its development CA.
     ignoreHTTPSErrors: true,
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
+    trace: 'off',
+    screenshot: 'off',
     ...devices['Desktop Chrome']
   }
 });

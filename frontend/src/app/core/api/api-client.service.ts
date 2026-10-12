@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { catchError, Observable, throwError } from 'rxjs';
-import { Book, BookPatch, Dashboard, ReadingDraft, ReadingSession, ReadingSessionPatch, RegistrationResponse, Stats, User, UserExport } from '../models/models';
+import { Book, BookCreate, BookPatch, Dashboard, ReadingDraft, ReadingSession, ReadingSessionPatch, RegistrationResponse, Stats, User, UserExport } from '../models/models';
 
 @Injectable({ providedIn: 'root' })
 export class ApiClient {
@@ -20,8 +20,10 @@ export class ApiClient {
     return this.request(this.http.get<Book[]>(`${this.baseUrl}/books`, { ...this.options(), params: this.paginationParams(limit, offset) }));
   }
   getBook(id: string): Observable<Book> { return this.request(this.http.get<Book>(`${this.baseUrl}/books/${encodeURIComponent(id)}`, this.options())); }
-  createBook(input: { title: string; author?: string }): Observable<Book> { return this.request(this.http.post<Book>(`${this.baseUrl}/books`, input, this.options())); }
-  updateBook(id: string, input: BookPatch): Observable<Book> { return this.request(this.http.patch<Book>(`${this.baseUrl}/books/${encodeURIComponent(id)}`, input, this.options())); }
+  createBook(input: BookCreate, cover?: File): Observable<Book> { return this.request(this.http.post<Book>(`${this.baseUrl}/books`, cover ? this.bookMultipart(input, cover) : input, this.options())); }
+  updateBook(id: string, input: BookPatch, cover?: File): Observable<Book> { return this.request(this.http.patch<Book>(`${this.baseUrl}/books/${encodeURIComponent(id)}`, cover ? this.bookMultipart(input, cover) : input, this.options())); }
+  deleteBookCover(id: string): Observable<void> { return this.request(this.http.delete<void>(`${this.baseUrl}/books/${encodeURIComponent(id)}/cover`, this.options())); }
+  bookCoverUrl(id: string, version: string): string { return `${this.baseUrl}/books/${encodeURIComponent(id)}/cover?v=${encodeURIComponent(version)}`; }
   deleteBook(id: string): Observable<void> { return this.request(this.http.delete<void>(`${this.baseUrl}/books/${encodeURIComponent(id)}`, this.options())); }
   finishBook(id: string, finishedOn?: string): Observable<Book> {
     return this.request(this.http.post<Book>(`${this.baseUrl}/books/${encodeURIComponent(id)}/finish`, finishedOn ? { finishedOn } : {}, this.options()));
@@ -42,6 +44,13 @@ export class ApiClient {
   }
 
   private options() { return { withCredentials: true, headers: { Accept: 'application/json', 'Cache-Control': 'no-store' } }; }
+
+  private bookMultipart(input: BookCreate | BookPatch, cover: File): FormData {
+    const form = new FormData();
+    form.append('book', new Blob([JSON.stringify(input)], { type: 'application/json' }));
+    form.append('cover', cover, cover.type === 'image/png' ? 'capa.png' : 'capa.jpg');
+    return form;
+  }
 
   private periodParams(from?: string, to?: string): HttpParams {
     let params = new HttpParams();

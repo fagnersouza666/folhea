@@ -52,6 +52,7 @@ public class UserResource {
     @Inject SessionCookieSettings sessionCookies;
     @Inject OidcSessionCookieSettings oidcCookies;
     @Inject AccountDeletionService deletions;
+    @Inject AccountExportService exports;
 
     @GET
     @Operation(summary = "Retorna o usuário autenticado")
@@ -80,12 +81,10 @@ public class UserResource {
     @GET
     @Path("/export")
     @Operation(summary = "Exporta os dados pessoais do usuário autenticado")
-    public ExportResponse export() {
+    public Response export() {
         UserEntity user = currentUser.get();
-        return new ExportResponse(
-                ExportUserResponse.from(user),
-                books.findOwned(user.id).stream().map(BookResource.BookResponse::from).toList(),
-                sessions.allOwned(user.id).stream().map(ReadingSessionResource.SessionResponse::from).toList());
+        jakarta.ws.rs.core.StreamingOutput stream = output -> exports.write(user.id, output);
+        return Response.ok(stream, MediaType.APPLICATION_JSON).header("Cache-Control", "no-store").build();
     }
 
     @DELETE

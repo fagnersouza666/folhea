@@ -54,6 +54,7 @@ class BackendResourceTest {
     @Inject AccountDeletionPersistence deletions;
     @Inject AccountDeletionRecovery recovery;
     @Inject javax.sql.DataSource dataSource;
+    @Inject com.folhea.user.AccountExportService exports;
     private UUID seededAliceBookId;
     private UUID seededBobBookId;
     private UUID seededBobSessionId;
@@ -896,6 +897,304 @@ class BackendResourceTest {
                 .when().delete("/api/v1/me")
                 .then().statusCode(400).contentType("application/problem+json")
                 .body("type", equalTo("https://folhea.com.br/problems/invalid-account-deletion"));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    void bookshelfMetricsUseAllHistoryEvenBeyondTheSessionPageAndYear() {
+        seedLongStreak();
+        given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
+                .body("stats.pagesRead", equalTo(470))
+                .body("stats.firstDate", equalTo(TODAY.minusDays(449).toString()))
+                .body("stats.elapsedDays", equalTo(450))
+                .body("stats.averagePagesPerDay", equalTo(1.04f))
+                .body("stats.percent", org.hamcrest.Matchers.nullValue())
+                .body("totalPages", org.hamcrest.Matchers.nullValue());
+        given().when().get("/api/v1/books?limit=1").then().statusCode(200)
+                .body("[0].stats.pagesRead", equalTo(470));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    void invalidMultipartCoverNeverCreatesAPartialBook() {
+        given().multiPart("book", "{\"title\":\"Atomic book\",\"totalPages\":300}", "application/json")
+                .multiPart("cover", "cover.png", new byte[]{1, 2, 3}, "image/png")
+                .when().post("/api/v1/books").then().statusCode(400);
+        given().when().get("/api/v1/books").then().statusCode(200).body("size()", equalTo(1));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    void completeMetadataIsValidatedWithoutBreakingLegacyBooksOrRoundingEarlyCompletion() {
+        given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
+                .body("edition", org.hamcrest.Matchers.nullValue()).body("cover", org.hamcrest.Matchers.nullValue())
+                .body("stats.pagesRead", equalTo(0)).body("stats.firstDate", org.hamcrest.Matchers.nullValue())
+                .body("stats.averagePagesPerDay", equalTo(0f)).body("stats.elapsedDays", equalTo(0));
+        given().contentType(ContentType.JSON).body("{\"edition\":\"  2ª edição  \",\"totalPages\":300000}")
+                .when().patch("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
+                .body("edition", equalTo("2ª edição")).body("totalPages", equalTo(300000));
+        for (String total : new String[]{"0", "-1", "1000001", "1.5", "\"12\""}) {
+            given().contentType(ContentType.JSON).body("{\"totalPages\":" + total + "}")
+                    .when().patch("/api/v1/books/{id}", seededAliceBookId).then().statusCode(400);
+        }
+        seedAlmostFinishedBook();
+        given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
+                .body("stats.pagesRead", equalTo(299999)).body("stats.percent", equalTo(99.99f));
+        given().contentType(ContentType.JSON).body("{\"totalPages\":10}")
+                .when().patch("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
+                .body("stats.pagesRead", equalTo(299999)).body("stats.percent", equalTo(100f))
+                .body("status", equalTo("READING"));
+    }
+
+    @Transactional
+    void seedAlmostFinishedBook() {
+        UUID owner = findUserBySubject(ALICE).id;
+        for (int i = 0; i < 29; i++) entityManager.persist(session(owner, seededAliceBookId, TODAY, 10000, 0));
+        entityManager.persist(session(owner, seededAliceBookId, TODAY, 9999, 0));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    void calendarAverageIncludesIdleDaysAndFreezesAtFinishedOnWithoutDroppingLegacyDates() {
+        UUID session = createSession(seededAliceBookId, TODAY.minusDays(4), 30, 0);
+        given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
+                .body("stats.averagePagesPerDay", equalTo(6f)).body("stats.elapsedDays", equalTo(5));
+        given().contentType(ContentType.JSON).body("{\"finishedOn\":\""+TODAY.minusDays(2)+"\"}")
+                .when().post("/api/v1/books/{id}/finish", seededAliceBookId).then().statusCode(200)
+                .body("stats.referenceDate", equalTo(TODAY.minusDays(2).toString()))
+                .body("stats.averagePagesPerDay", equalTo(10f)).body("stats.elapsedDays", equalTo(3));
+        given().contentType(ContentType.JSON).body("{\"pages\":15}")
+                .when().patch("/api/v1/sessions/{id}", session).then().statusCode(200);
+        given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
+                .body("stats.averagePagesPerDay", equalTo(5f)).body("stats.pagesRead", equalTo(15));
+        given().contentType(ContentType.JSON).body("{\"finishedOn\":\""+TODAY.minusDays(10)+"\"}")
+                .when().post("/api/v1/books/{id}/finish", seededAliceBookId).then().statusCode(200)
+                .body("stats.elapsedDays", equalTo(1)).body("stats.averagePagesPerDay", equalTo(15f));
+        given().when().delete("/api/v1/sessions/{id}", session).then().statusCode(204);
+        given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
+                .body("stats.pagesRead", equalTo(0)).body("stats.firstDate", org.hamcrest.Matchers.nullValue())
+                .body("stats.averagePagesPerDay", equalTo(0f));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    void privateCoversAreAtomicPortableAndRemovedWithTheBook() throws Exception {
+        byte[] png = testPng(20, 30);
+        String id = given().multiPart("book", "{\"title\":\"Cover book\",\"totalPages\":120}", "application/json")
+                .multiPart("cover", "cover.png", png, "image/png").when().post("/api/v1/books")
+                .then().statusCode(201).body("cover.mediaType", equalTo("image/png"))
+                .body("cover.width", equalTo(20)).body("cover.height", equalTo(30))
+                .body("stats.percent", equalTo(0f)).extract().path("id");
+        byte[] saved = given().when().get("/api/v1/books/{id}/cover", id).then().statusCode(200)
+                .contentType("image/png").header("Cache-Control", equalTo("no-store"))
+                .header("X-Content-Type-Options", equalTo("nosniff")).extract().asByteArray();
+        org.junit.jupiter.api.Assertions.assertNotNull(javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(saved)));
+        given().when().get("/api/v1/books/{id}/cover", seededBobBookId).then().statusCode(404);
+        given().multiPart("book", "{\"title\":\"Must rollback\"}", "application/json")
+                .multiPart("cover", "bad.png", new byte[]{1,2,3}, "image/png")
+                .when().patch("/api/v1/books/{id}", id).then().statusCode(400);
+        given().when().get("/api/v1/books/{id}", id).then().statusCode(200).body("title", equalTo("Cover book"));
+        var export = given().when().get("/api/v1/me/export").then().statusCode(200).extract().jsonPath();
+        String base64 = export.getString("covers.find { it.bookId == '"+id+"' }.dataBase64");
+        org.junit.jupiter.api.Assertions.assertArrayEquals(saved, java.util.Base64.getDecoder().decode(base64));
+        org.junit.jupiter.api.Assertions.assertFalse(export.getMap("books.find { it.id == '"+id+"' }").containsKey("stats"));
+        given().when().delete("/api/v1/books/{id}", id).then().statusCode(204);
+        given().when().get("/api/v1/books/{id}/cover", id).then().statusCode(404);
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    void imageDimensionsAndByteLimitsRejectBeforeCreatingAnyBook() throws Exception {
+        for (byte[] invalid : new byte[][]{testPng(4097, 1), testPng(3000, 1500)}) {
+            given().multiPart("book", "{\"title\":\"Too large\",\"totalPages\":1}", "application/json")
+                    .multiPart("cover", "cover.png", invalid, "image/png").when().post("/api/v1/books")
+                    .then().statusCode(400);
+        }
+        byte[] oversized = java.util.Arrays.copyOf(testPng(1,1), 2097153);
+        given().multiPart("book", "{\"title\":\"Oversize\",\"totalPages\":1}", "application/json")
+                .multiPart("cover", "cover.png", oversized, "image/png").when().post("/api/v1/books")
+                .then().statusCode(413);
+        given().when().get("/api/v1/books").then().statusCode(200).body("size()", equalTo(1));
+    }
+
+    private static byte[] testPng(int width, int height) throws java.io.IOException {
+        var image = new java.awt.image.BufferedImage(width, height, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        var output = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(image, "png", output);
+        return output.toByteArray();
+    }
+
+    @Test
+    void metadataMigrationPreservesBooksStoredBeforeV008() throws Exception {
+        String schema = "legacy_" + UUID.randomUUID().toString().replace("-", "");
+        try {
+            org.flywaydb.core.Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema)
+                    .locations("classpath:db/migration").target("7").load().migrate();
+            try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
+                String owner = UUID.randomUUID().toString();
+                statement.execute("INSERT INTO " + schema + ".folhea_user(id,identity_subject,timezone,created_at,updated_at) VALUES ('"+owner+"','migration-legacy','UTC',now(),now())");
+                statement.execute("INSERT INTO " + schema + ".book(id,user_id,title,status,created_at,updated_at) VALUES ('"+UUID.randomUUID()+"','"+owner+"','Legacy title','READING',now(),now())");
+            }
+            org.flywaydb.core.Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema)
+                    .locations("classpath:db/migration").load().migrate();
+            try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
+                try (var result = statement.executeQuery("SELECT count(*) FROM information_schema.columns WHERE table_schema='"+schema+"' AND table_name='book' AND column_name IN ('edition','total_pages')")) {
+                    result.next(); assertEquals(2, result.getInt(1));
+                }
+                try (var result = statement.executeQuery("SELECT title,author,edition,total_pages FROM "+schema+".book")) {
+                    result.next(); assertEquals("Legacy title", result.getString(1)); assertNull(result.getString(2)); assertNull(result.getString(3)); assertNull(result.getObject(4));
+                }
+                org.junit.jupiter.api.Assertions.assertThrows(java.sql.SQLException.class, () -> statement.executeUpdate("UPDATE "+schema+".book SET total_pages=0"));
+                try (var result = statement.executeQuery("SELECT total_pages FROM "+schema+".book")) { result.next(); assertNull(result.getObject(1));
+                }
+            }
+        } finally {
+            try (var connection=dataSource.getConnection(); var statement=connection.createStatement()) { statement.execute("DROP SCHEMA IF EXISTS "+schema+" CASCADE"); }
+        }
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    void coverCommitFailureRollsBackTheBookAndRetryCreatesOnlyOne() throws Exception {
+        try (var c=dataSource.getConnection(); var statement=c.createStatement()) {
+            statement.execute("CREATE FUNCTION test_cover_commit_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test-only commit failure' USING ERRCODE='23514'; END $$");
+            statement.execute("CREATE CONSTRAINT TRIGGER test_cover_commit_fail AFTER INSERT ON book_cover DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION test_cover_commit_fail()");
+        }
+        try {
+            given().multiPart("book", "{\"title\":\"Retry book\",\"totalPages\":40}", "application/json")
+                    .multiPart("cover", "cover.png", testPng(2,3), "image/png")
+                    .when().post("/api/v1/books").then().statusCode(500).contentType("application/problem+json");
+            given().when().get("/api/v1/books").then().statusCode(200).body("size()", equalTo(1));
+        } finally {
+            try (var c=dataSource.getConnection(); var statement=c.createStatement()) {
+                statement.execute("DROP TRIGGER IF EXISTS test_cover_commit_fail ON book_cover");
+                statement.execute("DROP FUNCTION IF EXISTS test_cover_commit_fail()");
+            }
+        }
+        given().multiPart("book", "{\"title\":\"Retry book\",\"totalPages\":40}", "application/json")
+                .multiPart("cover", "cover.png", testPng(2,3), "image/png")
+                .when().post("/api/v1/books").then().statusCode(201);
+        given().when().get("/api/v1/books").then().statusCode(200).body("size()", equalTo(2));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    void multipartCoverMutationsPreserveCsrfOwnershipAndAccountCascade() throws Exception {
+        given().header("X-CSRF-Token", "forged")
+                .multiPart("book", "{\"title\":\"Denied\",\"totalPages\":10}", "application/json")
+                .multiPart("cover", "cover.png", testPng(1,1), "image/png")
+                .when().post("/api/v1/books").then().statusCode(403).contentType("application/problem+json");
+        given().multiPart("book", "{}", "application/json")
+                .multiPart("cover", "cover.png", testPng(1,1), "image/png")
+                .when().patch("/api/v1/books/{id}", seededBobBookId).then().statusCode(404);
+        given().when().delete("/api/v1/books/{id}/cover", seededBobBookId).then().statusCode(404);
+        String id = given().multiPart("book", "{\"title\":\"Cascade\",\"totalPages\":10}", "application/json")
+                .multiPart("cover", "cover.png", testPng(1,1), "image/png")
+                .when().post("/api/v1/books").then().statusCode(201).extract().path("id");
+        given().contentType(ContentType.JSON).body("{\"confirm\":true}")
+                .when().delete("/api/v1/me").then().statusCode(204);
+        try (var c=dataSource.getConnection(); var query=c.prepareStatement("SELECT count(*) FROM book_cover WHERE book_id=?")) {
+            query.setObject(1,UUID.fromString(id)); try(var row=query.executeQuery()) { row.next();assertEquals(0,row.getInt(1)); }
+        }
+        assertNotNull(findUserBySubject(BOB));
+    }
+
+    @Test
+    void anonymousCoverRequestsReturnImmediateProblem401() {
+        given().redirects().follow(false).when().get("/api/v1/books/{id}/cover", seededAliceBookId)
+                .then().statusCode(401).contentType("application/problem+json").header("Location",org.hamcrest.Matchers.nullValue());
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    void averageUsesAccountTimezoneCalendarRatherThanServerTimezone() {
+        createSession(seededAliceBookId,TODAY.minusDays(3),12,0);
+        given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
+                .body("stats.elapsedDays",equalTo(4)).body("stats.averagePagesPerDay",equalTo(3f));
+        given().contentType(ContentType.JSON).body("{\"timezone\":\"America/Sao_Paulo\"}")
+                .when().patch("/api/v1/me").then().statusCode(200);
+        given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
+                .body("stats.referenceDate",equalTo(TODAY.minusDays(1).toString()))
+                .body("stats.elapsedDays",equalTo(3)).body("stats.averagePagesPerDay",equalTo(4f));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    void aBookPageUsesBatchedQueriesInsteadOfOneQueryPerCoverOrHistory() {
+        seedBookPage();
+        var statistics=entityManager.getEntityManagerFactory().unwrap(org.hibernate.SessionFactory.class).getStatistics();
+        boolean enabled=statistics.isStatisticsEnabled();
+        statistics.setStatisticsEnabled(true);
+        try {
+            statistics.clear();given().when().get("/api/v1/books?limit=1").then().statusCode(200);long one=statistics.getPrepareStatementCount();
+            statistics.clear();given().when().get("/api/v1/books?limit=40").then().statusCode(200).body("size()",equalTo(40));
+            org.junit.jupiter.api.Assertions.assertTrue(one>0);
+            org.junit.jupiter.api.Assertions.assertTrue(statistics.getPrepareStatementCount()<=one+2,"Page size must not grow the query count");
+        } finally {statistics.setStatisticsEnabled(enabled);}
+    }
+
+    @Transactional
+    void seedBookPage() { UUID owner=findUserBySubject(ALICE).id;for(int i=0;i<39;i++)entityManager.persist(book(owner,"Batch "+i)); }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    void jpegNormalizationRemovesMetadataAndMalformedDecodersCannotPersistImages() throws Exception {
+        var out=new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(20,30,java.awt.image.BufferedImage.TYPE_INT_RGB),"jpeg",out);
+        byte[] raw=out.toByteArray();byte[] marker="test-only-private-metadata".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var withMetadata=new java.io.ByteArrayOutputStream();withMetadata.write(raw,0,2);
+        withMetadata.write(new byte[]{(byte)255,(byte)225,0,(byte)(marker.length+2)});withMetadata.write(marker);withMetadata.write(raw,2,raw.length-2);
+        String id=given().multiPart("book","{\"title\":\"JPEG\",\"totalPages\":1}","application/json")
+                .multiPart("cover","cover.jpg",withMetadata.toByteArray(),"image/jpeg").when().post("/api/v1/books")
+                .then().statusCode(201).body("cover.mediaType",equalTo("image/jpeg")).extract().path("id");
+        byte[] stored=given().when().get("/api/v1/books/{id}/cover",id).then().statusCode(200).extract().asByteArray();
+        org.junit.jupiter.api.Assertions.assertFalse(new String(stored,java.nio.charset.StandardCharsets.ISO_8859_1).contains("test-only-private-metadata"));
+        given().multiPart("book","{\"title\":\"Malformed\",\"totalPages\":1}","application/json")
+                .multiPart("cover","bad.jpg",new byte[]{(byte)255,(byte)216,(byte)255,(byte)224,0,2},"image/jpeg")
+                .when().post("/api/v1/books").then().statusCode(400).contentType("application/problem+json");
+        given().multiPart("book","{}","application/json").multiPart("cover","bad.svg",testPng(1,1),"image/svg+xml")
+                .when().patch("/api/v1/books/{id}",id).then().statusCode(415);
+        given().when().get("/api/v1/books").then().statusCode(200).body("size()",equalTo(2));
+        String before=given().get("/api/v1/me/export").then().statusCode(200).extract().asString();
+        String after=given().get("/api/v1/me/export").then().statusCode(200).extract().asString();
+        assertEquals(before,after);
+        given().when().delete("/api/v1/books/{id}/cover",id).then().statusCode(204);
+        given().when().delete("/api/v1/books/{id}/cover",id).then().statusCode(204);
+        given().get("/api/v1/books/{id}",id).then().statusCode(200).body("cover",org.hamcrest.Matchers.nullValue());
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    void minutesOnlyReadingSetsTheCalendarStartWithoutInventingPages() {
+        createSession(seededAliceBookId,TODAY.minusDays(10),0,5);
+        given().get("/api/v1/books/{id}",seededAliceBookId).then().statusCode(200)
+                .body("stats.firstDate",equalTo(TODAY.minusDays(10).toString()))
+                .body("stats.elapsedDays",equalTo(11)).body("stats.pagesRead",equalTo(0))
+                .body("stats.averagePagesPerDay",equalTo(0f));
+    }
+
+    @Test
+    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    void abortedImageExportClosesItsCursorAndRestoresThePooledConnection() throws Exception {
+        var image=new java.awt.image.BufferedImage(256,256,java.awt.image.BufferedImage.TYPE_INT_RGB);
+        var random=new java.util.Random(45);
+        for(int y=0;y<256;y++)for(int x=0;x<256;x++)image.setRGB(x,y,random.nextInt());
+        var bytes=new java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(image,"png",bytes);
+        given().multiPart("book","{\"title\":\"Streaming\",\"totalPages\":20}","application/json")
+                .multiPart("cover","cover.png",bytes.toByteArray(),"image/png").post("/api/v1/books").then().statusCode(201);
+        var interrupted=new java.io.OutputStream() {
+            int written;
+            @Override public void write(int value) throws java.io.IOException {if(++written>12000)throw new java.io.IOException("test-only client abort");}
+            @Override public void write(byte[] data,int start,int count)throws java.io.IOException {written+=count;if(written>12000)throw new java.io.IOException("test-only client abort");}
+        };
+        UUID owner=findUserBySubject(ALICE).id;
+        org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class,()->exports.write(owner,interrupted));
+        try(var connection=dataSource.getConnection()) {
+            org.junit.jupiter.api.Assertions.assertTrue(connection.getAutoCommit());
+            org.junit.jupiter.api.Assertions.assertFalse(connection.isReadOnly());
+        }
+        createSession(seededAliceBookId,TODAY,1,0);
+        given().get("/api/v1/me/export").then().statusCode(200).body("covers.size()",equalTo(1));
     }
 
     private UUID createBook(String title) {

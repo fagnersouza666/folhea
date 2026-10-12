@@ -1,3 +1,4 @@
+import { transparentCover } from './cover-fixture';
 import { test, expect } from '@playwright/test';
 
 // These credentials must belong to an isolated test account on the local stack.
@@ -16,7 +17,20 @@ test('jornada com BFF, Keycloak e banco reais pela UI', async ({ page }) => {
   await page.getByRole('link', { name: /novo livro/i }).click();
   const title = `Jornada Folhea ${Date.now()}`;
   await page.getByLabel('Título').fill(title);
+  await page.getByLabel('Autor').fill('Autora de teste');
+  await page.getByLabel('Edição').fill('2ª edição');
+  await page.getByLabel('Total de páginas').fill('30');
+  await page.locator('#book-cover-file').setInputFiles(transparentCover);
+  await expect(page.getByAltText('Prévia da capa escolhida')).toBeVisible();
   await page.getByRole('button', { name: /adicionar livro/i }).click();
+  await expect(page).toHaveURL(/\/app\/livros$/);
+  const bookRow = page.locator('.book-row').filter({ hasText: title });
+  await expect(bookRow).toContainText('2ª edição');
+  await expect(bookRow.getByAltText(`Capa de ${title}`)).toBeVisible();
+  await expect(bookRow.locator('.percent')).toHaveText('0%');
+  await page.reload();
+  await expect(bookRow.getByAltText(`Capa de ${title}`)).toBeVisible();
+  await bookRow.getByRole('link', { name: 'Registrar leitura', exact: true }).click();
   await expect(page).toHaveURL(/\/app\/ler\?bookId=/);
   const bookId = new URL(page.url()).searchParams.get('bookId');
   expect(bookId).toBeTruthy();
@@ -37,7 +51,12 @@ test('jornada com BFF, Keycloak e banco reais pela UI', async ({ page }) => {
   await page.getByRole('button', { name: 'Salvar PNG' }).click();
   expect((await download).suggestedFilename()).toBe('folhea-card.png');
   await page.getByRole('link', { name: 'Livros', exact: true }).click();
+  await expect(bookRow.locator('.percent')).toHaveText('50%');
+  await expect(bookRow.locator('.daily-average')).toContainText('15 páginas/dia');
   await page.getByRole('link', { name: `Abrir ${title}` }).click();
+  await page.getByRole('button', { name: 'Remover capa salva' }).click();
+  await expect(page.getByText('Capa removida.', { exact: true })).toBeVisible();
+  await expect(page.getByAltText(`Capa de ${title}`)).toHaveCount(0);
   await page.getByRole('button', { name: 'Marcar como finalizado' }).click();
   await expect(page.getByRole('button', { name: 'Reabrir livro' })).toBeVisible();
   await page.getByRole('button', { name: 'Reabrir livro' }).click();

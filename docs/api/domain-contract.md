@@ -100,6 +100,63 @@ link de um registro fora da página atual. Estatísticas e streak continuam
 calculados pelo backend sobre os respectivos períodos/histórico global,
 independentemente das páginas carregadas no cliente.
 
+## Estante, metadados e capa privada (V008)
+
+`BookResponse` conserva seus campos e acrescenta `edition` (string até200),
+`totalPages` (inteiro1..1000000), `cover` e `stats`. Título/autor têm até500;
+JSON legado somente com título continua válido. Livros anteriores mantêm os
+metadados novos nulos, sem perder dados, e podem ser completados por PATCH.
+O cadastro novo na UI exige título e total; autor, edição e capa são opcionais.
+Campos omitidos/nulos em PATCH preservam o valor; autor/edição vazios os removem.
+
+Sem foto, POST/PATCH `/api/v1/books` usam JSON. Com foto, POST `/api/v1/books`
+e PATCH `/api/v1/books/{id}` usam multipart/form-data: parte `book` contém JSON
+(application/json, até8192bytes) e `cover` contém JPEG/PNG. POST multipart
+exige título/total e cover; autor/edição continuam opcionais. PATCH aceita
+`book={}` para somente substituir a capa. A validação da imagem acontece antes
+de persistir; livro/metadados/capa são confirmados na mesma transação. Falhas
+não deixam livro parcial. Não existe uma segunda fase de upload no cadastro.
+O navegador controla o boundary, preservando Origin/X-CSRF-Token/BFF.
+
+A capa aceita até2097152bytes, lados1..4096 e produto até4194304pixels.
+Assinatura e MIME devem concordar; o decoder real confere dimensões antes de
+carregar pixels. A imagem é reencodada sem metadados/EXIF e também limitada
+a 2 MiB após encoding. SVG/WebP/GIF não são aceitos. `cover` contém
+`{mediaType,byteSize,width,height,version}` (UUID novo a cada substituição),
+sem bytes nem URL pública. GET `/books/{id}/cover` autentica e verifica ownership,
+retorna imagem com MIME fixo/no-store/nosniff ou404; DELETE no mesmo caminho
+exige CSRF e remove a imagem (204 idempotente). Foto/card local não é essa capa.
+Uploads temporários são removidos ao terminar a resposta; bytes persistem na
+tabela `book_cover` do PostgreSQL com PK por livro e FK ON DELETE CASCADE.
+A exclusão de livro/conta inclui a capa e preserva a recuperação durável V007.
+
+`stats={pagesRead,totalPages,percent,averagePagesPerDay,firstDate,referenceDate,
+elapsedDays}` é calculado no backend por usuário+livro, com SUM(pages) e MIN(data)
+de TODO histórico próprio. A listagem agrega em lote os livros de sua página,
+sem limitar sessões a100/366dias e sem N+1. Sem sessões: pagesRead/avg/days=0,
+firstDate=null. Sem total, percent=null. Percentual truncado em duas casas
+(DOWN), limitado a100:299999/300000=99.99 e100 somente se soma>=total.
+Releituras conservam a soma bruta; reduzir o total não apaga leituras nem finaliza.
+
+Média=pagesRead/max(1,diasEntre(firstDate,referenceDate)+1), com dias corridos
+inclusivos (inclusive sem leitura) e duas casas HALF_UP. ReferenceDate é hoje
+no fuso da conta para READING, ou finishedOn para FINISHED. Datas legadas
+inconsistentes não descartam sessões: finalização antes da primeira data usa
+denominador 1. A média de concluídos permanece estável com o passar dos dias;
+CRUD de leitura, metadados, finalização/reabertura repercutem na próxima consulta.
+
+Exportação conserva JSON `{user,books,sessions}` e acrescenta `covers` com
+`{bookId,mediaType,byteSize,width,height,version,dataBase64}`. Os livros exportados
+contêm apenas metadados persistidos, sem stats/referenceDate/today, mantendo
+conteúdo estável sem writes. O JSON é transmitido de um snapshot READ ONLY
+com cursores JDBC/fetchSize1 e encoding Base64 em stream: no máximo uma capa
+limitada por vez, sem materializar todo o catálogo. Não há novo fluxo de UI.
+
+O limite HTTP do backend passa a3MiB para o envelope multipart; o filtro mantém
+o limite JSON64KiB e aceita multipart somente nesses POST/PATCH de livros.
+Todas as mutações de capa continuam protegidas por Origin/CSRF/rate limit.
+Configuração de multipart segue o [guia oficial Quarkus REST3.40](https://quarkus.io/version/3.40/guides/rest/#handling-multipart-form-data).
+
 ## Métricas
 
 `GET /api/v1/stats?period=today|7|30|all`: hoje, hoje menos 6 dias, hoje menos

@@ -269,6 +269,8 @@ jobs:
         run: |
           bash scripts/tests/test-render-realm.sh
           bash scripts/ops/tests/test-backup-restore.sh
+      - name: Validate private book multipart body limits on actual Caddy
+        run: node scripts/ci/tests/test-api-body-limits.mjs
       - name: Validate product metric SQL on isolated PostgreSQL
         run: bash scripts/ops/tests/test-product-metrics.sh
       - name: Validate Compose configuration
