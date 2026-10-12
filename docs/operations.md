@@ -426,3 +426,24 @@ stack habitual usa `https://localhost:9443`: cookies host-only e PWA não são
 isolados por porta. Guarde env e credenciais de teste fora do git com modo
 0600. Use o launcher com `FOLHEA_ENV_FILE=/caminho/privado/staging.env`; não
 reutilize a identidade, o perfil do navegador ou os volumes de usuários reais.
+
+### Aceite opt-in da estante em staging isolado
+
+O helper `scripts/ci/e2e-bookshelf-real.mjs` recusa a origem canônica e usa somente
+`https://127.0.0.1:9444`. A fase `bootstrap` requer a stack anterior V7 em volumes
+novos: cria uma conta própria por cadastro/login reais e dados legados; `accept`
+usa a stack V8, testa Canvas/multipart, métricas, ownership, export e cascatas.
+As fases `covers`/`finish` permitem continuar probes já comprovados sem recriar
+a identidade; `upload-failure` usa offline real do navegador, não resposta fake.
+`legacy-ui` verifica seleção de livro fora dos primeiros 100. `baseline` compara
+PG/GET/export e grava somente hashes/metadados em `E2E_REAL_BASELINE_FILE`.
+`persistence` compara o export e a capa após restart. Use
+`E2E_REAL_CREDENTIAL_FILE` apontando para um JSON privado fora do checkout
+(diretório 0700/arquivo 0600). Nunca use uma conta do usuário nesses testes.
+O observer do helper mede somente `File.size` no `FormData` real da UI; mantém a
+serialização nativa e não simula respostas de API, BFF ou IdP. Ele evita a medida
+incompleta de arquivos que Chromium expõe em `postDataBuffer` quando há SW.
+
+No overlay privado de staging, configure `default_sni 127.0.0.1` no bloco global
+do Caddy: clientes TLS que acessam um IP não enviam SNI. Conserve a CA e os
+volumes exclusivos do staging. Não altere a origem/CA/cookies da stack canônica.
