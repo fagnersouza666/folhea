@@ -540,6 +540,7 @@ instalados, rode este comando (caminhos sem valores secretos):
 mkdir -p "$HOME/.config/folhea/fix02-stage/acceptance"
 chmod 700 "$HOME/.config/folhea/fix02-stage/acceptance"
 E2E_REAL_URL=https://127.0.0.3:9446 \
+E2E_REAL_CA_FILE="$HOME/.config/folhea/fix02-stage/caddy-root.crt" \
 E2E_REAL_CREDENTIAL_FILE="$HOME/.config/folhea/fix02-stage/acceptance/accounts.json" \
 node scripts/ci/e2e-bookshelf-real.mjs accept
 ```
@@ -570,12 +571,15 @@ iguais no GET/export, export byte-estável sem métricas dinâmicas,390/1440 sem
 overflow e nenhuma API no cache do service worker. Não intercepta/responde
 requisições HTTP/IdP, forja cookies, grava traces ou screenshots.
 
-O contexto Chromium aceita apenas o certificado local da stack isolada durante
-o teste (`ignoreHTTPSErrors`); não muda trust/perfil de navegador do usuário.
+Extraia previamente a CA pública do Caddy dessa stack para `E2E_REAL_CA_FILE`.
+O script valida a conexão TLS contra essa CA e fixa o SPKI do certificado de
+servidor verificado apenas no Chromium temporário. Isso permite a instalação do
+worker de produção sem ignorar certificados globalmente e sem mudar trust/perfil
+do usuário. O contexto não usa `ignoreHTTPSErrors` como substituto dessa prova.
 No overlay privado, configure `default_sni 127.0.0.3` no bloco global do Caddy:
 clientes TLS que acessam um IP não enviam SNI. Preserve a CA e os volumes dessa
 stack; não altere origem/CA/cookies das outras instalações. A validação TLS do
-operador deve usar a CA pública própria, não o bypass usado pelo contexto de teste.
+operador deve usar a CA pública própria, nunca a configuração de um outro ambiente.
 
 ### Startup do gate Caddy na CI
 

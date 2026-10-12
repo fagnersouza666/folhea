@@ -2,7 +2,8 @@
 // Opt-in fresh-stack acceptance: Keycloak, BFF, API, Canvas and storage are real.
 // No HTTP/provider responses, session cookies or authentication are fabricated.
 import assert from 'node:assert/strict';
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes, createHash, X509Certificate } from 'node:crypto';
+import { connect } from 'node:tls';
 import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync, mkdirSync, statSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -36,7 +37,24 @@ async function runAcceptance() {
   const sha = bytes => createHash('sha256').update(bytes).digest('hex');
   const require = createRequire(new URL('../../frontend/package.json', import.meta.url));
   const { chromium, expect } = require('@playwright/test');
-  const browser = await chromium.launch({ headless: true });
+  const caFile = process.env.E2E_REAL_CA_FILE;
+  assert.ok(caFile?.startsWith('/'), 'Provide the dedicated stage public CA file');
+  const leafSpki = await new Promise((resolvePin, reject) => {
+    const target = new URL(origin);
+    const socket = connect({ host: target.hostname, port: Number(target.port), ca: readFileSync(caFile), rejectUnauthorized: true });
+    socket.once('error', reject);
+    socket.setTimeout(10000, () => socket.destroy(new Error('Stage TLS timeout')));
+    socket.once('secureConnect', () => {
+      try {
+        assert.ok(socket.authorized, 'Stage certificate must validate against its own CA');
+        const publicKey = new X509Certificate(socket.getPeerCertificate().raw).publicKey.export({ type: 'spki', format: 'der' });
+        resolvePin(createHash('sha256').update(publicKey).digest('base64'));
+      } catch (error) { reject(error); } finally { socket.end(); }
+    });
+  });
+  // Chromium workers need trust at browser launch, not ignoreHTTPSErrors on a
+  // page context. Pin only the stage leaf already verified above; no user trust changes.
+  const browser = await chromium.launch({ headless: true, args: [`--ignore-certificate-errors-spki-list=${leafSpki}`] });
   const contexts = [], failures = [];
   let step = 'Keycloak registration', lastMutation = 0;
   const pace = async () => { await delay(Math.max(0, lastMutation + 3500 - Date.now())); lastMutation = Date.now(); };
@@ -47,7 +65,7 @@ async function runAcceptance() {
       save();
     }
     assert.ok(!stored.deleted, 'A completed fixture cannot be reused; provide a new private fixture-file path');
-    const context = await browser.newContext({ baseURL: origin, ignoreHTTPSErrors: true, viewport: { width: 1440, height: 1000 } });
+    const context = await browser.newContext({ baseURL: origin, viewport: { width: 1440, height: 1000 } });
     contexts.push(context);
     const page = await context.newPage();
     page.on('pageerror', () => failures.push('uncaught browser exception'));
@@ -200,19 +218,23 @@ async function runAcceptance() {
     assert.equal(image.headers()['content-type'].split(';')[0], 'image/jpeg');
     assert.equal(image.headers()['cache-control'], 'private, no-cache, max-age=0, must-revalidate');
     const bytes = await image.body(); assert.ok(bytes.length > 65536 && bytes.length <= 1000000);
+    step = 'Fresh BFF login and photo bytes';
     const fresh = await account('primary');
     assert.equal(sha(await (await api(fresh, 'GET', `/api/v1/books/${id}/photo`)).body()), sha(bytes));
+    step = 'Persisted export bytes';
     const exported = await (await api(a, 'GET', '/api/v1/me/export')).body();
     const data = JSON.parse(exported), photo = data.photos.find(item => item.bookId === id);
     assert.ok(photo); assert.equal(sha(Buffer.from(photo.dataBase64, 'base64')), sha(bytes));
     const persisted = data.books.find(item => item.id === id);
     for (const field of ['stats', 'pagesRead', 'averagePagesPerReadingDay', 'progressPercent']) assert.equal(persisted[field], undefined, 'Export only persisted metadata');
     assert.equal(sha(await (await api(a, 'GET', '/api/v1/me/export')).body()), sha(exported));
+    step = 'Book detail layout';
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 1000 }); await page.goto(`/app/livros/${id}`);
       await expect(page.getByAltText(`Capa de ${title}`)).toBeVisible();
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     }
+    step = 'Production service-worker installation';
     await page.waitForFunction(() => !!navigator.serviceWorker?.controller, { timeout: 30000 });
     assert.equal(await page.evaluate(async () => { for (const name of await caches.keys()) for (const request of await (await caches.open(name)).keys()) if (new URL(request.url).pathname.startsWith('/api/')) return true; return false; }), false);
     assert.equal(failures.length, 0, 'No unexpected page/console exceptions');
@@ -220,7 +242,8 @@ async function runAcceptance() {
     success = true;
   } catch (error) {
     // Never print provider URLs, API bodies, credentials, identifiers or traces.
-    console.error(JSON.stringify({ failure: error.name, step, ...(typeof error.actual === 'number' ? { actual: error.actual } : {}), ...(typeof error.expected === 'number' ? { expected: error.expected } : {}) }));
+    const sourceLine = Number(error.stack?.match(/e2e-bookshelf-real\.mjs:(\d+):/)?.[1]);
+    console.error(JSON.stringify({ failure: error.name, step, ...(Number.isInteger(sourceLine) ? { sourceLine } : {}), ...(typeof error.actual === 'number' ? { actual: error.actual } : {}), ...(typeof error.expected === 'number' ? { expected: error.expected } : {}) }));
     process.exitCode = 1;
   } finally {
     try { step = 'Own fixture cleanup'; await deleteFixture('secondary'); await deleteFixture('primary'); pass('Own books/photos/accounts cleaned; deleted sessions return401'); }
