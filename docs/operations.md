@@ -464,9 +464,11 @@ de respostas/listas de livros. Cadastro e edição multipart são atômicos: fal
 de capa não deixa cadastro parcial.
 
 A V010 usa um algoritmo privado e congelado no pacote de migração, sem depender
-do normalizador HTTP atual. Conserva os limites antigos do backfill e o checksum
-Java NULL já aplicado; V001..V009 permanecem intactas. A mudança dos limites HTTP
-não redefine a conversão de capas antigas e não cria uma V011.
+do normalizador HTTP atual. O backfill conserva entrada legada de **2 MiB**,
+**16.384 pixels por lado** e **24.000.000 pixels**, distinta do limite HTTP de
+1.000.000 bytes. Mantém o checksum Java NULL já aplicado; V001..V009 permanecem
+intactas. A mudança dos limites HTTP não redefine a conversão de capas antigas
+e não cria uma V011.
 
 O gate `node scripts/ci/tests/test-api-body-limits.mjs` usa Caddy real e um
 upstream que conta somente bytes sintéticos para conferir esses limites e
