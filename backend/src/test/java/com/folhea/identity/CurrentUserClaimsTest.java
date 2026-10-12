@@ -44,7 +44,6 @@ class CurrentUserClaimsTest {
         assertEquals(subject, first.identitySubject);
         assertEquals(subject + "@example.test", first.email);
         assertEquals("America/Sao_Paulo", first.timezone);
-        assertNull(first.passwordHash);
         assertEquals(first.id, current.get().id);
 
         first.timezone = "Pacific/Auckland";

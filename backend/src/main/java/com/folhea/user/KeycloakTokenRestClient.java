@@ -11,7 +11,7 @@ import jakarta.ws.rs.core.MediaType;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 import org.jboss.resteasy.reactive.RestForm;
 
-/** Private client-credentials call used to obtain the provisioning token. */
+/** Private client-credentials call used to obtain the deletion-only token. */
 @Path("/realms/{realm}/protocol/openid-connect/token")
 @RegisterRestClient(configKey = "folhea-keycloak-token")
 public interface KeycloakTokenRestClient {
@@ -29,5 +29,7 @@ public interface KeycloakTokenRestClient {
     final class TokenResponse {
         @JsonProperty("access_token")
         public String accessToken;
+        @JsonProperty("expires_in")
+        public com.fasterxml.jackson.databind.JsonNode expiresIn;
     }
 }

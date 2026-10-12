@@ -42,7 +42,7 @@ public class PostLogoutResource {
         if (binding != null) csrf.revoke(binding.getValue());
         return Response.seeOther(URI.create("/"))
                 .header("Cache-Control", "no-store")
-                .cookie(oidcCookies.clearPostLogout(), bindingCookies.clear())
+                .cookie(oidcCookies.clearPostLogout(), bindingCookies.clear(), com.folhea.security.CsrfCookiePolicy.clear())
                 .build();
     }
 }

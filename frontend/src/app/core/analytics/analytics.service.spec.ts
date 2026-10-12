@@ -2,7 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ANALYTICS_ENDPOINT, AnalyticsService, safeAnalyticsProperties } from './analytics.service';
+import { AnalyticsService, safeAnalyticsProperties } from './analytics.service';
 
 describe('safeAnalyticsProperties', () => {
   it('keeps only anonymous product dimensions', () => {
@@ -24,8 +24,7 @@ describe('AnalyticsService', () => {
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
-        provideHttpClientTesting(),
-        { provide: ANALYTICS_ENDPOINT, useValue: '/api/v1/analytics/events' }
+        provideHttpClientTesting()
       ]
     });
     service = TestBed.inject(AnalyticsService);
@@ -36,23 +35,10 @@ describe('AnalyticsService', () => {
     httpMock.verify();
   });
 
-  it('posts sanitized analytics events with credentials', () => {
-    service.track('book_created', { screen: 'books', pages: 12, title: 'secret' });
-
-    const request = httpMock.expectOne('/api/v1/analytics/events');
-    expect(request.request.method).toBe('POST');
-    expect(request.request.withCredentials).toBe(true);
-    expect(request.request.body).toMatchObject({
-      event: 'book_created',
-      properties: { screen: 'books', pages: 12 }
-    });
-    expect(request.request.body.occurredAt).toBeTypeOf('string');
-    request.flush(null, { status: 202, statusText: 'Accepted' });
-  });
-
-  it('swallows HTTP errors without throwing', () => {
-    service.track('stats_viewed');
-    const request = httpMock.expectOne('/api/v1/analytics/events');
-    request.flush('forbidden', { status: 403, statusText: 'Forbidden' });
+  it('never sends product events while analytics is paused by AUTH-01', () => {
+    for (const event of ['book_created', 'stats_viewed', 'account_created'] as const) service.track(event);
+    const requests = httpMock.match('/api/v1/analytics/events');
+    for (const request of requests) request.flush(null, { status: 202, statusText: 'Accepted' });
+    expect(requests).toHaveLength(0);
   });
 });

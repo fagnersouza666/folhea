@@ -50,7 +50,8 @@ public class NotAuthorizedExceptionMapper implements ExceptionMapper<NotAuthoriz
     static boolean isOidcBrowserEntry(String path) {
         if (path == null || path.isBlank()) return false;
         if (path.startsWith("/")) path = path.substring(1);
-        return path.equals("auth/login") || path.startsWith("auth/login/")
+        return path.equals("auth/register") || path.startsWith("auth/register/")
+                || path.equals("auth/login") || path.startsWith("auth/login/")
                 || path.equals("auth/callback") || path.startsWith("auth/callback/")
                 || path.equals("auth/logout") || path.startsWith("auth/logout/");
     }

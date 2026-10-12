@@ -140,7 +140,7 @@ faz na borda pública, e envia `X-Forwarded-Host: localhost:4200` para o
 callback OIDC voltar à SPA. A tela de entrar é `/entrar`; `/auth/login` inicia o
 fluxo OIDC no BFF e não é rota Angular. O perfil `%dev` fala com o Keycloak em
 `http://localhost:8180` (porta publicada pelo override local). Use o cadastro
-público em `/cadastro`: o BFF provisiona a identidade no realm `folhea` usando o cliente técnico, sem intervenção administrativa.
+público em `/cadastro`: a navegação `/auth/register` abre o cadastro padrão do Keycloak (`prompt=create`), com e-mail e senha enviados exclusivamente ao IdP. O cliente técnico é reservado à exclusão durável/recovery, com login recente e auditoria.
 
 ```bash
 cd frontend

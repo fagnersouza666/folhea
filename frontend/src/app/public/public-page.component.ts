@@ -98,7 +98,7 @@ export const publicPages: Record<string, PublicPage> = {
         <a routerLink="/como-funciona" routerLinkActive="active">Como funciona</a>
         <a routerLink="/recursos" routerLinkActive="active">Recursos</a>
         <a routerLink="/sobre" routerLinkActive="active">Sobre</a>
-        <a routerLink="/entrar" class="header-login">Entrar</a>
+        <a href="/auth/login" class="header-login">Entrar</a>
       </nav>
     </header>
     <main id="main-content" class="public-page container">

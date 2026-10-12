@@ -124,11 +124,12 @@ deve registrar a exceção e gerar checksum antes de promover os dados.
 O restore usa `--clean --if-exists --no-owner --no-privileges` e deve ser
 executado com o serviço backend parado ou apontando para outra base enquanto a
 operação acontece. Depois, execute `verify-recovery.sh`; o teste padrão
-confirma as migrações V007 e V008 aplicadas com sucesso (`version` igual a
-`7`/`007` e `8`/`008`, formatos do histórico Flyway), a presença das tabelas
-privadas `public.account_deletion` e `public.book_cover` e que `/q/health/ready` responde dentro do container
-backend. Isso impede aceitar um restore anterior ao contrato de exclusão
-durável. Inclua as intenções pendentes e os tombstones no backup da base do
+confirma as migrações V007, V008 e V009 aplicadas com sucesso (`version` igual a
+`7`/`007`, `8`/`008` e `9`/`009`, formatos do histórico Flyway), a presença de
+`public.folhea_user`, `public.account_deletion` e `public.book_cover`, a ausência
+das colunas `password_hash` e `login_identifier` e que `/q/health/ready` responde
+dentro do container backend. Isso impede aceitar um restore anterior à exclusão
+durável, às capas persistentes ou à delegação completa das credenciais ao IdP. Inclua as intenções pendentes e os tombstones no backup da base do
 Folhea; não restaure somente as tabelas de livros/sessões. Para uma instalação
 com uma verificação específica, informe uma asserção somente leitura:
 

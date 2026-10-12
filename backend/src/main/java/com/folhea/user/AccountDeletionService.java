@@ -28,7 +28,8 @@ public class AccountDeletionService {
             LOG.warn("Account deletion unavailable category=intent-persistence");
             throw unavailable();
         }
-        if (!complete(id)) throw unavailable();
+        if (!complete(id)) throw new ProblemException(503, "https://folhea.com.br/problems/account-deletion-pending",
+                "Exclusão em andamento", "A solicitação foi confirmada. A exclusão continuará automaticamente; o acesso à conta foi encerrado.");
     }
 
     /** A true result means local deletion committed; Redis cleanup may still retry. */

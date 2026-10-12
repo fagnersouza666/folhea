@@ -143,4 +143,52 @@ class OidcLogoutHttpTest {
         assertNull(response.header("Location"));
         assertEquals(0L, response.getDetailedCookie(POST_LOGOUT_COOKIE).getMaxAge());
     }
+
+    @Test
+    void registrationStartsTheKeycloakCreatePromptWithPkceNonceAndState() {
+        var response = given().accept("text/html").redirects().follow(false).get("/auth/register");
+        assertEquals(302, response.statusCode());
+        String location = response.header("Location");
+        assertTrue(location.contains("prompt=create"));
+        for (String key : new String[]{"state=", "nonce=", "code_challenge=", "code_challenge_method=S256"}) {
+            assertTrue(location.contains(key));
+        }
+        assertTrue(response.getCookies().keySet().stream().anyMatch(name -> name.startsWith("q_auth_")));
+    }
+
+    @Test
+    void reauthenticationChallengeForcesLoginEvenWithAnIdpSsoSession() {
+        var response = given().accept("text/html").redirects().follow(false)
+                .queryParam("reauthenticate", "true").get("/auth/login");
+        assertEquals(302, response.statusCode());
+        String location = response.header("Location");
+        assertTrue(location.contains("prompt=login"));
+        assertTrue(location.contains("max_age=0"));
+        assertTrue(location.contains("code_challenge_method=S256"));
+    }
+
+    @Test
+    void publicReauthenticationClearsTheOldBindingAndUsesOnlyTheFixedLoginReturn() {
+        String ticket = SessionCookiePolicy.newTicket(new SecureRandom());
+        String value = csrf.getOrIssue(ticket);
+        var response = given().redirects().follow(false).cookie(bindingCookies.name(), ticket)
+                .queryParam("redirect", "https://untrusted.example/").get("/auth/reauthenticate");
+        assertEquals(303, response.statusCode());
+        URI location = URI.create(response.header("Location"));
+        assertEquals("/auth/login", location.getPath());
+        assertEquals("reauthenticate=true", location.getQuery());
+        assertEquals(0L, response.getDetailedCookie(oidcCookies.name()).getMaxAge());
+        assertEquals(0L, response.getDetailedCookie(CsrfCookiePolicy.NAME).getMaxAge());
+        assertFalse(csrf.isValid(ticket,value));
+    }
+
+    @Test
+    void invalidOidcReferenceCannotSkipTheLoginPromptOnReauthentication() {
+        var response = given().redirects().follow(false).cookie(oidcCookies.name(), invalidReference("missing"))
+                .get("/auth/reauthenticate");
+        assertEquals(302, response.statusCode());
+        assertTrue(response.header("Location").contains("prompt=login"));
+        assertTrue(response.header("Location").contains("max_age=0"));
+        assertEquals(0L, response.getDetailedCookie(oidcCookies.name()).getMaxAge());
+    }
 }

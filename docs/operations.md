@@ -129,12 +129,49 @@ scripts/ops/validate-production-compose.sh
 
 O overlay de produção constrói `keycloak-runtime` com `kc.sh build` para
 PostgreSQL, health e métricas antes de usar `start --optimized`. O cliente
-`folhea-registration` recebe somente `realm-management/manage-users`; seu
-secret é diferente do cliente BFF. O renderer JSON escapa segredos, substitui
+`folhea-registration` mantém seu identificador por compatibilidade de configuração,
+mas é usado somente para excluir contas e retomar intenções duráveis V007.
+Recebe somente `realm-management/manage-users`, sem `fullScopeAllowed`,
+password grant ou fluxo de login. Seu secret é diferente do cliente BFF e o
+atributo `access.token.lifespan` limita cada token de serviço a 300 segundos.
+O backend também rejeita respostas de token com TTL fora de 1..300 segundos.
+Não use esse cliente no cadastro: a senha vai diretamente ao Keycloak.
+O gate `scripts/ci/validate-api-contract.mjs` verifica redirects de navegador,
+GET CSRF e fontes de cookie/header/binding, além de recusar os POSTs de
+cadastro aposentados, analytics e formulário de senha Angular.
+`test-auth-contract.mjs` exerce a fonte atual e oito mutações negativas em
+fixtures privadas, sem alterar a fonte real. Esses checks são estáticos:
+o aceite continua exigindo cadastro/login na tela real do Keycloak e
+inspeção de cookies/mutações na stack isolada.
+Os templates habilitam `registrationAllowed` e `registrationEmailAsUsername`: o
+Keycloak usa o e-mail como identificador, sem um username adicional no Angular.
+Mantêm o tema padrão do IdP e
+ligam `adminEventsEnabled`, com `adminEventsDetailsEnabled=false` para guardar
+as ações administrativas sem persistir os corpos privados das requisições
+([Keycloak: tokens e auditoria](https://www.keycloak.org/docs/latest/server_admin/index.html)).
+O renderer JSON escapa segredos, substitui
 a origem de callback/login/logout e grava o import com permissão 0600.
-Um realm existente é preservado pelo `--import-realm`; mudanças de clientes
-ou secrets em instalações antigas exigem atualização administrativa explícita.
-Nunca remova o volume para aplicar configuração.
+O `--import-realm` ignora realms existentes; reiniciar não aplica os novos
+templates ([Keycloak: importação no boot](https://www.keycloak.org/server/importExport)).
+Antes de usar AUTH-01 numa instalação existente, execute
+`COMPOSE_ENV_FILE=/caminho/privado/staging.env scripts/ops/configure-keycloak.sh auth`
+com a configuração do projeto correto e o Keycloak saudável. O helper usa a
+Admin API privada para reconciliar cadastro/e-mail como identificador, login
+por e-mail, tema padrão, auditoria administrativa sem detalhes, desativação de
+password grant e o cliente exclusivo de exclusão/recovery com TTL de 300s.
+Verifica a configuração efetiva e uma segunda execução não escreve novamente.
+Atualiza somente esses campos e preserva usuários, credenciais, secrets,
+callbacks, demais atributos de clientes e provedores existentes. Se os clientes
+esperados estiverem ausentes ou ambíguos, falha antes de escrever. Requer o
+administrador operacional configurado no arquivo privado, não o cliente de
+serviço de exclusão. O launcher não aplica essa alteração automaticamente.
+Nunca remova volumes nem delete/reimporte o realm com override para aplicar
+configuração. Secrets não são girados por esse procedimento.
+As credenciais operacionais são obtidas do modelo efetivo de
+`docker compose config --format json`, capturado somente em memória. Isso mantém
+a sintaxe de `.env`, interpolação `${VAR}` e precedência do ambiente do Compose
+sem avaliar o arquivo como shell nem imprimir configuração ou credenciais
+([Docker: interpolação](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/)).
 
 O perfil de usuário v1 mantém e-mail obrigatório e nomes opcionais. Isso evita
 que o Keycloak exija nome/sobrenome após o cadastro e-mail/senha do produto.
@@ -175,10 +212,12 @@ oficial não tem `wget` nem `curl`); `wget` permanece nos healthchecks do
 backend e do Caddy, que rodam em Alpine.
 O `%dev` liga o OIDC contra `http://localhost:8180/realms/folhea`. Sem isso o
 BFF devolve `/app/inicio` sem sessão e o guard Angular devolve `/entrar` — o
-botão Entrar parece não fazer nada. Use `/cadastro` para criar a conta pelo
-produto. O cliente técnico
-`folhea-registration` provisiona o usuário no realm `folhea`, sem intervenção
-administrativa. O console na porta8180 pertence apenas ao override de desenvolvimento.
+botão Entrar parece não fazer nada. O link Criar conta navega para
+`/auth/register`, que abre o cadastro do Keycloak. `/auth/login` abre o login;
+`/auth/reauthenticate` pede novamente a senha no IdP antes da confirmação de
+exclusão quando `auth_time` tem mais de 300 segundos. O Folhea não recebe
+senha. O cliente técnico é exclusivo da exclusão e da recuperação V007.
+O console na porta8180 pertence apenas ao override de desenvolvimento.
 
 ## Health checks e diagnóstico
 
@@ -333,8 +372,14 @@ FROM account_deletion GROUP BY local_deleted, pending;
 SELECT count(*) FROM flyway_schema_history WHERE version IN ('7', '007') AND success;
 ```
 
-O backup completo inclui essa tabela; `verify-recovery.sh` exige V007 e sua
-presença por padrão. Não apague intenções/tombstones para desbloquear login.
+O backup completo inclui essa tabela. O guard padrão de `verify-recovery.sh`
+exige Flyway V007/V008/V009 com sucesso (formatos `7`/`007`, `8`/`008`,
+`9`/`009`), as tabelas `folhea_user`, `account_deletion` e `book_cover` e a
+**ausência** de `password_hash` e `login_identifier`. A V009 remove somente
+as credenciais delegadas antigas; não edite checksums das V001..V008.
+O teste PostgreSQL existente cobre versões ausentes/falhas e colunas antigas
+reintroduzidas mesmo com V009 marcada bem-sucedida.
+Não apague intenções/tombstones para desbloquear login.
 Veja [backup e restore](backup-restore.md) para o teste em destino isolado.
 
 ## Google e SMTP

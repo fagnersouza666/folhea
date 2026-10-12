@@ -65,7 +65,7 @@ docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
 if verify_recovery > "$scratch/verify.log" 2>&1; then
   echo 'not ok - recovery accepted successful V007 without V008 and private covers' >&2; exit 1
 fi
-# Flyway in the actual Quarkus runtime stores V001..V008 as 001..008.
+# Flyway in the actual Quarkus runtime stores V001..V009 as 001..009.
 docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
   -c "INSERT INTO flyway_schema_history VALUES ('8', false);"
 if verify_recovery > "$scratch/verify.log" 2>&1; then
@@ -78,12 +78,37 @@ if verify_recovery > "$scratch/verify.log" 2>&1; then
 fi
 docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
   -c "UPDATE flyway_schema_history SET success = true WHERE version = '008';"
-# book_cover comes from the actual migrations above, never a stand-in table.
-verify_recovery
+# Tables/removed columns come from the actual migrations above, not stand-ins.
+if verify_recovery > "$scratch/verify.log" 2>&1; then
+  echo 'not ok - recovery accepted successful V008 without V009 credential removal' >&2; exit 1
+fi
 docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
-  -c "UPDATE flyway_schema_history SET version = '8' WHERE version = '008'; UPDATE flyway_schema_history SET version = '7' WHERE version = '007';"
+  -c "INSERT INTO flyway_schema_history VALUES ('9', false);"
+if verify_recovery > "$scratch/verify.log" 2>&1; then
+  echo 'not ok - recovery accepted failed V009' >&2; exit 1
+fi
+docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
+  -c "UPDATE flyway_schema_history SET version = '009' WHERE version = '9';"
+if verify_recovery > "$scratch/verify.log" 2>&1; then
+  echo 'not ok - recovery accepted failed real Flyway V009' >&2; exit 1
+fi
+docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
+  -c "UPDATE flyway_schema_history SET success = true WHERE version = '009';"
 verify_recovery
-for table in account_deletion book_cover; do
+for column in password_hash login_identifier; do
+  docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
+    -c "ALTER TABLE folhea_user ADD COLUMN $column TEXT;"
+  if verify_recovery > "$scratch/verify.log" 2>&1; then
+    echo 'not ok - successful V009 masked a delegated credential column' >&2; exit 1
+  fi
+  docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
+    -c "ALTER TABLE folhea_user DROP COLUMN $column;"
+  verify_recovery
+done
+docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
+  -c "UPDATE flyway_schema_history SET version = '8' WHERE version = '008'; UPDATE flyway_schema_history SET version = '7' WHERE version = '007'; UPDATE flyway_schema_history SET version = '9' WHERE version = '009';"
+verify_recovery
+for table in account_deletion book_cover folhea_user; do
   docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
     -c "ALTER TABLE $table RENAME TO hidden_$table;"
   if verify_recovery > "$scratch/verify.log" 2>&1; then
@@ -102,7 +127,7 @@ fi
 docker exec "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus \
   -c "UPDATE flyway_schema_history SET success = true WHERE version = '7';"
 verify_recovery
-echo 'ok - PostgreSQL recovery requires successful Flyway 7/007 and 8/008, private covers and durable deletion state'
+echo 'ok - PostgreSQL recovery requires successful Flyway 7/007 and 8/008 and 9/009, no delegated credential columns, private covers and durable deletion state'
 docker exec -i "$container" psql -Xq -v ON_ERROR_STOP=1 -U quarkus -d quarkus <<'SQL'
 INSERT INTO folhea_user(id,identity_subject,email,timezone,created_at,updated_at)
 SELECT ('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,'fixture-'||n,

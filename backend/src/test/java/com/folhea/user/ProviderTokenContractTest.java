@@ -21,6 +21,8 @@ class ProviderTokenContractTest {
                  "not-before-policy":0, "scope":"profile email"}
                 """, KeycloakTokenRestClient.TokenResponse.class);
         assertEquals("dummy-technical-token", token.accessToken);
+        assertTrue(token.expiresIn.isIntegralNumber());
+        assertEquals(300, token.expiresIn.intValue());
         assertThrows(UnrecognizedPropertyException.class, () -> mapper.readValue(
                 "{\"title\":\"Livro\",\"unexpected\":true}", BookResource.CreateBookRequest.class));
     }

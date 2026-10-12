@@ -1,4 +1,15 @@
-# API de leitura e conta
+# Contrato API e domínio
+
+## AUTH-01 — identidade delegada ao Keycloak
+
+Cadastro e login são navegações GET `/auth/register` (OIDC `prompt=create`) e `/auth/login`. A escolha `prompt=create` usa a forma padrão recomendada pelo [Keycloak 26.7](https://www.keycloak.org/docs/26.7.0/server_admin/index.html#_application_initiated_actions) para abrir a mesma tela de registro; `/registrations` é a alternativa depreciada. O [OidcRedirectFilter do Quarkus 3.40](https://quarkus.io/version/3.40/guides/security-oidc-code-flow-authentication/#oidc-redirect-filters) acrescenta o prompt sem contornar state, nonce ou PKCE. Esta decisão de implementação não reescreve o anexo/spec aprovada. Folhea nunca recebe senha; os três POSTs de cadastro legados e `/api/v1/analytics/events` não existem. V009 remove `password_hash` e `login_identifier`, sem editar V001..V008 nem dados de livros/capas.
+
+O BFF usa somente authorization code (sessão opaca Secure/HttpOnly/Lax no servidor). Callback/login/cadastro fazem upsert pelo `sub` e rejeitam subjects com intenção de exclusão persistida. `GET /api/v1/csrf` emite `__Host-folhea_csrf` Secure/Lax/Path=/ legível e mantém `{token}` para compatibilidade. Toda mutação exige Origin confiável e `X-CSRF-Token` igual ao cookie, além do vínculo servidor com a sessão HttpOnly; GET não exige CSRF.
+
+`DELETE /api/v1/me` exige `{confirm:true}` com booleano JSON literal (strings e números retornam 400) e `auth_time` numérico inteiro do ID token OIDC verificado, entre agora-300s e agora (inclusivos); não usa `iat`, refresh ou login local. Ausência/antiguidade/futuro devolve `401 problem+json`, tipo `recent-authentication-required`, sem redirect. O cliente oferece `/auth/reauthenticate`, que encerra somente a sessão local, inicia login com `prompt=login`/`max_age=0` e retorna às Configurações; uma nova confirmação é necessária, nunca DELETE automático.
+
+A intenção V007 confirma antes de chamar o IdP. Uma intenção pendente já bloqueia acesso e novos callbacks; erro posterior devolve `503 account-deletion-pending`, expira cookies e continua pelo job, sem novo login. Falha ao persistir a intenção devolve `503 account-deletion-unavailable` sem confirmar a operação. O cliente administrativo só possui DELETE por subject e recovery, exige TTL informado 1..300s e auditoria administrativa sem payloads. O commit da exclusão local é independente da limpeza Redis posterior. Exportação privada e V008/capas permanecem portáveis e sem métricas dinâmicas.
+
 
 Contrato formal: `GET /api/openapi` (YAML/JSON por negociação). A aplicação web
 usa sessão BFF HttpOnly; obter `GET /api/v1/csrf` e enviar `X-CSRF-Token` e
@@ -9,14 +20,7 @@ usa sessão BFF HttpOnly; obter `GET /api/v1/csrf` e enviar `X-CSRF-Token` e
 
 Cadastro e login seguem a [AUTH-01](../specs/AUTH-01.md): os dois acontecem na tela do
 Keycloak, por redirect (`/auth/register` e `/auth/login`). O Folhea não recebe senha.
-O vínculo local com o `sub` é criado no `/auth/callback`.
-O backend emite `account_created` depois do commit do vínculo local com o
-subject provisionado. Incrementa `folhea_product_events_total{event="account_created"}`
-e registra somente o nome do evento e a categoria `registration`; e-mail,
-identificadores e senha não entram no evento. Cadastros rejeitados (400/409)
-ou indisponíveis (503), inclusive rollback local após provisionamento, não
-incrementam o contador. O frontend não precisa emitir esse evento anônimo.
-
+O vínculo local com o `sub` é criado no callback/entrada restaurada após o fluxo OIDC.
 `GET /api/v1/me` retorna `{id, email, timezone}`. `PATCH /api/v1/me` aceita
 `{"timezone":"America/Sao_Paulo"}` e retorna o mesmo formato. O fuso deve ser
 um identificador IANA válido. A escolha explícita persiste e não é substituída
@@ -35,9 +39,9 @@ repetições sem alteração não geram um novo evento de atualização.
 `DELETE /me` exige `{"confirm":true}`. Antes de apagar dados, remove a identidade
 do subject no Keycloak e suas sessões (se indisponível, retorna 503 sem apagar naquele momento). Remove livros
 e sessões por cascade, revoga o estado opaco `q_session_Default_folhea` e o CSRF,
-e expira ambos os cookies. Requer novo cadastro para voltar a usar a aplicação.
+e expira os cookies OIDC, binding HttpOnly e CSRF legível. Requer novo cadastro para voltar a usar a aplicação.
 Nenhuma senha é gravada
-pelo fluxo de cadastro Folhea.
+pelo Folhea.
 O subject excluído também recebe revogação de sessão por 8 horas (hash SHA-256,
 TTL no store de segurança), impedindo um JWT ainda válido de reprovisionar a
 conta silenciosamente. Após remoção no Keycloak, um novo cadastro tem outro
@@ -52,9 +56,7 @@ pendente; DELETE 404 no IdP é sucesso na retomada. O worker interno reprocessa
 até 25 intenções por execução, a cada 60 segundos, também depois de um restart,
 sem exigir sessão ou novo login. Não há limite que descarte uma intenção após
 falhas; indisponibilidade do banco/IdP mantém a solicitação para nova tentativa.
-Um 503 preserva dados/sessão imediatamente e permite repetir a confirmação na
-UI, mas a solicitação já confirmada pode concluir em background quando o serviço
-se recuperar. Intenções repetidas do mesmo subject não duplicam a operação.
+O `503 account-deletion-pending` conserva temporariamente os dados ainda não removidos, mas bloqueia acesso imediatamente e expira os cookies. A UI informa conclusão automática; não repete a confirmação. O `503 account-deletion-unavailable` antes do commit da intenção não confirma a exclusão. Intenções repetidas do mesmo subject não duplicam a operação.
 
 A limpeza de referências OIDC/CSRF no Redis só ocorre depois do commit local.
 Falhas nessa limpeza não desfazem a exclusão nem mudam seu 204: os cookies são
@@ -203,11 +205,7 @@ com parâmetros nem tráfego administrativo com segredos. Logs JSON permanecem
 ativos. [Referência Micrometer](https://quarkus.io/guides/telemetry-micrometer/)
 e [OpenTelemetry](https://quarkus.io/guides/opentelemetry-tracing/).
 
-`POST /analytics/events` aceita os eventos do PRD e propriedades contadoras
-inteiras não negativas (até 1.000.000). `source`, `screen` e `method` só aceitam
-categorias conhecidas; texto livre, título, autor, foto e dados pessoais são
-rejeitados. A métrica `folhea_product_events_total{event}` conta eventos aceitos;
-o log estruturado conserva apenas o evento e propriedades validadas.
+Analytics de produto está pausado por AUTH-01; não há endpoint de eventos nem emissão no Angular. Métricas técnicas permanecem privadas.
 
 Logout normal continua em `/auth/logout`, processado pelo mecanismo OIDC do
 Quarkus. A policy `authenticated` com mecanismo `code` ativa o fluxo nesse

@@ -123,6 +123,8 @@ jobs:
       - run: npm run test:coverage
       - name: Validate frontend/backend API contract
         run: node ../scripts/ci/validate-api-contract.mjs contract-report.txt
+      - name: Regress AUTH navigation and CSRF source contract
+        run: node ../scripts/ci/tests/test-auth-contract.mjs
       - name: Upload frontend test evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -268,6 +270,7 @@ jobs:
       - name: Validate realm and backup/restore scripts
         run: |
           bash scripts/tests/test-render-realm.sh
+          python3 -B -m unittest discover -s scripts/ops/tests -p test_keycloak_auth.py
           bash scripts/ops/tests/test-backup-restore.sh
       - name: Validate private book multipart body limits on actual Caddy
         timeout-minutes: 10

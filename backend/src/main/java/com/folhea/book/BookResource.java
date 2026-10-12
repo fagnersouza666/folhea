@@ -38,7 +38,7 @@ import java.util.UUID;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 @Tag(name = "Books")
-@SecurityRequirement(name = "bearerAuth")
+@SecurityRequirement(name = "cookieAuth")
 public class BookResource {
     @Inject CurrentUser currentUser;
     @Inject BookRepository books;

@@ -130,11 +130,18 @@ for (const [realm,label] of [[devRealm,'dev'],[prodRealm,'prod']]) {
   }
   assert.deepEqual(userProfile.attributes.find(attribute => attribute.name === 'email')?.required, {roles:['user']});
   assert.equal(realm.defaultLocale, 'pt-BR');
+  assert.equal(realm.registrationAllowed, true, `${label}: registration belongs to Keycloak`);
+  assert.equal(realm.registrationEmailAsUsername, true, `${label}: email supplies the IdP username`);
+  assert.ok(!realm.loginTheme, `${label}: retain Keycloak's default theme`);
+  assert.equal(realm.adminEventsEnabled, true, `${label}: administrative actions must be audited`);
+  assert.equal(realm.adminEventsDetailsEnabled, false, `${label}: omit private representations`);
+  assert.ok(realm.clients.every(client => client.directAccessGrantsEnabled === false), `${label}: no password grant`);
   const registration=realm.clients.find(c=>c.clientId==='folhea-registration');
   assert.equal(registration.secret,'${KEYCLOAK_ADMIN_CLIENT_SECRET}', label);
   assert.equal(registration.serviceAccountsEnabled,true,label);
   assert.equal(registration.fullScopeAllowed,false,label);
   assert.equal(registration.standardFlowEnabled,false,label);
+  assert.equal(registration.attributes?.['access.token.lifespan'],'300',label);
   assert.deepEqual(realm.users[0].clientRoles['realm-management'],['manage-users']);
 }
 execFileSync('bash',[path.join(root,'scripts/tests/test-render-realm.sh')],{stdio:'inherit'});

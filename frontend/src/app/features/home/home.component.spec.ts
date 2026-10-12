@@ -38,7 +38,7 @@ describe('Home after a persisted reading mutation', () => {
     http.expectOne('/api/v1/dashboard').flush({}, { status: 503, statusText: 'Unavailable' });
     http.expectOne((req) => req.url === '/api/v1/stats').flush({ ...oldSummary.week, currentStreakDays: 12, period: { from: store.today(), to: store.today() } });
     http.expectOne('/api/v1/sessions?limit=100&offset=0').flush(persisted);
-    http.expectOne('/api/v1/analytics/events').flush(null, { status: 202, statusText: 'Accepted' });
+    http.expectNone('/api/v1/analytics/events');
     store.clearError(); // Fechar in the shell, before Concluir/return to Home.
     const fixture = TestBed.createComponent(HomeComponent);
     fixture.detectChanges();

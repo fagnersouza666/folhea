@@ -18,17 +18,19 @@ import java.security.SecureRandom;
 @Produces(MediaType.APPLICATION_JSON)
 public class CsrfResource {
     @Inject CsrfTokenService csrfTokens;
+    @Inject com.folhea.identity.CurrentUser currentUser;
     @Inject SessionCookieSettings sessionCookies;
     @Inject SecureRandom random;
 
     @GET
     public Response token(@jakarta.ws.rs.core.Context HttpHeaders headers) {
+        currentUser.get();
         Cookie existing = headers.getCookies().get(sessionCookies.name());
         String ticket = existing == null || !SessionCookiePolicy.isValidTicket(existing.getValue())
                 ? SessionCookiePolicy.newTicket(random)
                 : existing.getValue();
         String csrf = csrfTokens.getOrIssue(ticket);
-        Response.ResponseBuilder response = Response.ok(new CsrfResponse(csrf)).cacheControl(noStore());
+        Response.ResponseBuilder response = Response.ok(new CsrfResponse(csrf)).cacheControl(noStore()).cookie(CsrfCookiePolicy.issue(csrf));
         if (existing == null || !ticket.equals(existing.getValue())) {
             response.cookie(sessionCookies.issue(ticket));
         }

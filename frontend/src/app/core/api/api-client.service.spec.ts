@@ -17,16 +17,8 @@ describe('public and private API contracts', () => {
     api = TestBed.inject(ApiClient); http = TestBed.inject(HttpTestingController);
   });
   afterEach(() => { http.verify(); TestBed.resetTestingModule(); });
-  it('uses the canonical public registration path and exact payload', () => {
-    api.getMe().subscribe({ error: () => undefined });
-    http.expectOne('/api/v1/me').flush({}, { status: 401, statusText: 'Unauthorized' });
-    api.register({ email: 'reader@example.test', password: 'test-only' }).subscribe();
-    http.expectNone('/api/v1/csrf');
-    const req = http.expectOne('/api/v1/registration');
-    expect(req.request.method).toBe('POST');
-    expect(req.request.headers.has('X-CSRF-Token')).toBe(false);
-    expect(req.request.body).toEqual({ email: 'reader@example.test', password: 'test-only' });
-    req.flush({ id: 'id', email: 'reader@example.test' });
+  it('has no API that receives delegated passwords', () => {
+    expect('register' in api).toBe(false);
   });
   it('loads one session by id with credentials and no-store', () => {
     api.getSession('old-id').subscribe();
