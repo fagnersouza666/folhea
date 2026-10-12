@@ -3,7 +3,6 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { signal } from '@angular/core';
-import { ANALYTICS_ENDPOINT } from '../analytics/analytics.service';
 import { AuthService } from '../auth/auth.service';
 import { Book, BookStats, ReadingSession } from '../models/models';
 import { DashboardStore } from './dashboard.store';
@@ -46,7 +45,6 @@ describe('DashboardStore', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
-        { provide: ANALYTICS_ENDPOINT, useValue: '/api/v1/analytics/events' },
         {
           provide: AuthService,
           useValue: {
