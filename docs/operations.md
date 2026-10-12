@@ -467,3 +467,13 @@ incompleta de arquivos que Chromium expõe em `postDataBuffer` quando há SW.
 No overlay privado de staging, configure `default_sni 127.0.0.1` no bloco global
 do Caddy: clientes TLS que acessam um IP não enviam SNI. Conserve a CA e os
 volumes exclusivos do staging. Não altere a origem/CA/cookies da stack canônica.
+
+### Startup do gate Caddy na CI
+
+O teste de limite multipart cria o Caddy em modo destacado: o pull/create tem
+prazo de120s e precisa terminar antes de iniciar a readiness de60s. O cleanup
+remove somente seu container temporário com prazo explícito, sem aguardar um
+`docker run` que possa iniciar depois da remoção. A regressão
+`test-caddy-startup.mjs` atrasa esse comando9s e executa os mesmos14casos reais;
+exige conclusão/cleanup em20s. Nenhum status/limite ou scanner é ignorado.
+O workflow conserva todos os gates e acrescenta essa regressão e prazos de steps.
