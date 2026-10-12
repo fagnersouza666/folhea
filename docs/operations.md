@@ -136,6 +136,13 @@ password grant ou fluxo de login. Seu secret é diferente do cliente BFF e o
 atributo `access.token.lifespan` limita cada token de serviço a 300 segundos.
 O backend também rejeita respostas de token com TTL fora de 1..300 segundos.
 Não use esse cliente no cadastro: a senha vai diretamente ao Keycloak.
+O gate `scripts/ci/validate-api-contract.mjs` verifica redirects de navegador,
+GET CSRF e fontes de cookie/header/binding, além de recusar os POSTs de
+cadastro aposentados, analytics e formulário de senha Angular.
+`test-auth-contract.mjs` exerce a fonte atual e oito mutações negativas em
+fixtures privadas, sem alterar a fonte real. Esses checks são estáticos:
+o aceite continua exigindo cadastro/login na tela real do Keycloak e
+inspeção de cookies/mutações na stack isolada.
 Os templates habilitam `registrationAllowed` e `registrationEmailAsUsername`: o
 Keycloak usa o e-mail como identificador, sem um username adicional no Angular.
 Mantêm o tema padrão do IdP e
