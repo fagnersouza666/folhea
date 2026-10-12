@@ -286,3 +286,5 @@ A [referência oficial ASM](https://asm.ow2.io/versions.html) registra suporte
 Java 27 a partir de 9.10; 9.9.x cobre Java 26. O clean focado com Byte Buddy
 1.18.14 passou pela instrumentação e iniciou PostgreSQL/migrações, revelando a
 regressão esperada do nome OIDC anterior, sem erro de enhancement.
+
+O primeiro upsert OIDC é idempotente em requisições concorrentes. Conflitos nos índices de subject/e-mail não atualizam a identidade existente: a conta é resolvida exclusivamente pelo `sub`; outro subject com o mesmo e-mail recebe `401`, sem reassociação.

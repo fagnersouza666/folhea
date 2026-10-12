@@ -22,6 +22,7 @@ class CurrentUserClaimsTest {
     @Inject UserRepository users;
     @Inject TokenStateStore tokenStateStore;
     @Inject AccountDeletionPersistence deletions;
+    @Inject javax.sql.DataSource dataSource;
 
     @Test
     @TestTransaction
@@ -69,6 +70,75 @@ class CurrentUserClaimsTest {
             io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
                 assertEquals(1, users.count("identitySubject", subject));
                 users.delete("identitySubject", subject);
+            });
+        }
+    }
+
+    @Test
+    @TestTransaction
+    void anEmailCollisionNeverRebindsADifferentIdentitySubject() {
+        String email = UUID.randomUUID() + "@example.test";
+        String first = UUID.randomUUID().toString();
+        String second = UUID.randomUUID().toString();
+        users.createIfAbsent(first, email, "UTC");
+        var claims = new JwtClaims();
+        claims.setSubject(second);
+        claims.setClaim("email", email);
+        var current = new CurrentUser();
+        current.users = users;
+        current.deletions = deletions;
+        current.tokenStateStore = tokenStateStore;
+        current.securityIdentity = QuarkusSecurityIdentity.builder().setPrincipal(
+                new OidcJwtCallerPrincipal(claims, new IdTokenCredential("test-only"))).build();
+        var failure = assertThrows(com.folhea.shared.ProblemException.class, current::get);
+        assertEquals(401, failure.status());
+        assertNull(users.findByIdentitySubject(second));
+        assertEquals(first, users.findByNormalizedEmail(email).identitySubject);
+    }
+
+    @Test
+    void concurrentEmailConflictIsHandledWithoutAdoptingAnotherSubject() throws Exception {
+        String first = UUID.randomUUID().toString();
+        String second = UUID.randomUUID().toString();
+        String email = UUID.randomUUID() + "@example.test";
+        var firstInserted = new java.util.concurrent.CountDownLatch(1);
+        var secondStarted = new java.util.concurrent.CountDownLatch(1);
+        var commitFirst = new java.util.concurrent.CountDownLatch(1);
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var one = executor.submit(() -> io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+                users.createIfAbsent(first, email, "UTC");
+                firstInserted.countDown();
+                try { assertTrue(commitFirst.await(10, java.util.concurrent.TimeUnit.SECONDS)); }
+                catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new IllegalStateException(interrupted); }
+            }));
+            var two = executor.submit(() -> {
+                assertTrue(firstInserted.await(10, java.util.concurrent.TimeUnit.SECONDS));
+                io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+                    secondStarted.countDown();
+                    users.createIfAbsent(second, email, "UTC");
+                });
+                return true;
+            });
+            try {
+                assertTrue(secondStarted.await(10, java.util.concurrent.TimeUnit.SECONDS));
+                boolean overlapping = false;
+                long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+                while (!overlapping && System.nanoTime() < deadline) {
+                    try (var connection = dataSource.getConnection(); var query = connection.createStatement();
+                         var rows = query.executeQuery("SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%INSERT INTO folhea_user%')")) {
+                        rows.next(); overlapping = rows.getBoolean(1);
+                    }
+                    if (!overlapping) Thread.sleep(10);
+                }
+                assertTrue(overlapping, "PostgreSQL must observe both concurrent inserts");
+            } finally { commitFirst.countDown(); }
+            one.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            assertTrue(two.get(10, java.util.concurrent.TimeUnit.SECONDS));
+            io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+                assertEquals(first, users.findByNormalizedEmail(email).identitySubject);
+                assertNull(users.findByIdentitySubject(second));
+                assertEquals(1, users.count("email", email));
+                users.delete("identitySubject", first);
             });
         }
     }
