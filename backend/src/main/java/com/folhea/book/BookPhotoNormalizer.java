@@ -18,17 +18,17 @@ import javax.imageio.ImageWriteParam;
 import javax.imageio.stream.MemoryCacheImageInputStream;
 import javax.imageio.stream.MemoryCacheImageOutputStream;
 
-/** Shared by HTTP and the transactional legacy backfill; retains pixels, never source metadata. */
+/** Canonical HTTP normalizer; retains pixels, never source metadata. V010 has its own frozen encoder. */
 public final class BookPhotoNormalizer {
     public static final int MAX_BYTES = 1_000_000;
     public static final int MAX_SIDE = 1600;
-    private static final long MAX_INPUT_PIXELS = 24_000_000;
+    public static final long MAX_INPUT_PIXELS = 24_000_000;
+    public static final int MAX_INPUT_SIDE = 16_384;
     private BookPhotoNormalizer() { }
 
     public static Photo normalize(byte[] source, String mime, int inputLimit) {
-        return normalize(source, mime, inputLimit, MAX_INPUT_PIXELS, 16384);
-    }
-    public static Photo normalize(byte[] source, String mime, int inputLimit, long maxPixels, int maxSide) {
+        final long maxPixels = MAX_INPUT_PIXELS;
+        final int maxSide = MAX_INPUT_SIDE;
         if (source == null || source.length == 0) throw invalid();
         if (source.length > inputLimit) throw new ProblemException(413, "https://folhea.com.br/problems/photo-too-large", "Foto muito grande", "A foto excede o limite permitido.");
         String type = mime == null ? "" : mime.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
@@ -46,7 +46,10 @@ public final class BookPhotoNormalizer {
             try {
                 reader.setInput(input, true, true);
                 int width = reader.getWidth(0), height = reader.getHeight(0);
-                if (width < 1 || height < 1 || width > maxSide || height > maxSide || (long)width * height > maxPixels) throw invalid();
+                if (width < 1 || height < 1) throw invalid();
+                if (width > maxSide || height > maxSide || (long)width * height > maxPixels) {
+                    throw new ProblemException(400, "https://folhea.com.br/problems/photo-dimensions", "Dimensões inválidas", "A imagem deve ter no máximo 16.384 pixels por lado e 24.000.000 pixels no total.");
+                }
                 BufferedImage decoded = reader.read(0);
                 if (decoded == null) throw invalid();
                 try {

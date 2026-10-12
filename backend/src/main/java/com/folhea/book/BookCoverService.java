@@ -13,7 +13,7 @@ import org.jboss.resteasy.reactive.server.multipart.MultipartFormDataInput;
 
 @ApplicationScoped
 public class BookCoverService {
-    public static final int MAX_BYTES = 2097152;
+    public static final int MAX_BYTES = BookPhotoNormalizer.MAX_BYTES;
     @Inject BookPhotoService photos;
     @Inject ObjectMapper mapper;
 
@@ -33,7 +33,7 @@ public class BookCoverService {
         }
         byte[] data = bytes(part, MAX_BYTES);
         try {
-            var photo = BookPhotoNormalizer.normalize(data, mime, MAX_BYTES, 4_194_304, 4096);
+            var photo = BookPhotoNormalizer.normalize(data, mime, MAX_BYTES);
             return new Normalized(photo.bytes(), "image/jpeg", photo.width(), photo.height());
         } catch (ProblemException e) {
             if (e.status() == 415) invalid();
@@ -77,7 +77,7 @@ public class BookCoverService {
         }
     }
     private static void invalid() {
-        throw new ProblemException(400, "https://folhea.com.br/problems/invalid-cover", "Capa inválida", "Informe uma imagem JPEG/PNG válida de até 2 MiB, 4096 pixels por lado e 4 megapixels.");
+        throw new ProblemException(400, "https://folhea.com.br/problems/invalid-cover", "Capa inválida", "Informe uma imagem JPEG/PNG válida de até 1.000.000 bytes, 16.384 pixels por lado e 24.000.000 pixels no total.");
     }
     private static void tooLarge() {
         throw new ProblemException(413, "https://folhea.com.br/problems/cover-too-large", "Capa muito grande", "A imagem ou os metadados excedem o limite permitido.");

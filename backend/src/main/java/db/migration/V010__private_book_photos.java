@@ -1,6 +1,5 @@
 package db.migration;
 
-import com.folhea.book.BookPhotoNormalizer;
 import java.sql.SQLException;
 import org.flywaydb.core.api.migration.BaseJavaMigration;
 import org.flywaydb.core.api.migration.Context;
@@ -32,8 +31,8 @@ public class V010__private_book_photos extends BaseJavaMigration {
             query.setFetchSize(1);
             try (var rows = query.executeQuery(); var insert = connection.prepareStatement("INSERT INTO book_photo(book_id,content_type,bytes,sha256,byte_size,width,height,created_at,updated_at) VALUES (?,'image/jpeg',?,?,?,?,?,?,?)")) {
                 while (rows.next()) {
-                    BookPhotoNormalizer.Photo photo;
-                    try { photo = BookPhotoNormalizer.normalize(rows.getBytes("data"), rows.getString("media_type"), 2_097_152); }
+                    LegacyBookPhotoV010.Photo photo;
+                    try { photo = LegacyBookPhotoV010.normalize(rows.getBytes("data"), rows.getString("media_type"), 2_097_152); }
                     catch (RuntimeException e) { throw new SQLException("Legacy photo conversion failed; originals are preserved by rollback", e); }
                     insert.setObject(1, rows.getObject("book_id")); insert.setBytes(2, photo.bytes()); insert.setString(3, photo.sha256());
                     insert.setInt(4, photo.bytes().length); insert.setInt(5, photo.width()); insert.setInt(6, photo.height());
