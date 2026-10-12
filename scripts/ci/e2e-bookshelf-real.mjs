@@ -112,7 +112,7 @@ async function runAcceptance() {
   async function readingUi(a, id, pages, offset) {
     await a.page.goto(`/app/ler?bookId=${id}`);
     await expect(a.page.getByLabel('Livro', { exact: true })).toHaveValue(id);
-    await a.page.getByLabel('Páginas', { exact: true }).fill(String(pages));
+    await a.page.locator('#reading-pages').fill(String(pages));
     await a.page.getByLabel('Data', { exact: false }).fill(date(a, offset));
     await pace();
     const created = a.page.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/sessions');
