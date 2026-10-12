@@ -1,0 +1,16 @@
+{
+  "legacy-png" : {
+    "contentType" : "image/jpeg",
+    "byteSize" : 437050,
+    "width" : 1024,
+    "sha256" : "2014dce676736ac5964cdff056fcbb63e57350532e36283051ca0e0ff3236c0b",
+    "height" : 512
+  },
+  "exif-jpeg" : {
+    "contentType" : "image/jpeg",
+    "byteSize" : 643,
+    "width" : 24,
+    "sha256" : "bea2cbb642e20fcd38d994ec09938916edb56fe3903166ff0cb3a9d14510a94d",
+    "height" : 32
+  }
+}

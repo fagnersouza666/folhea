@@ -1084,12 +1084,12 @@ class BackendResourceTest {
     @Test
     @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
     void imageDimensionsAndByteLimitsRejectBeforeCreatingAnyBook() throws Exception {
-        for (byte[] invalid : new byte[][]{testPng(4097, 1), testPng(3000, 1500)}) {
+        for (byte[] invalid : new byte[][]{testPng(16_385, 1), testPng(5000, 5000)}) {
             given().multiPart("book", "{\"title\":\"Too large\",\"totalPages\":1}", "application/json")
                     .multiPart("cover", "cover.png", invalid, "image/png").when().post("/api/v1/books")
                     .then().statusCode(400);
         }
-        byte[] oversized = java.util.Arrays.copyOf(testPng(1,1), 2097153);
+        byte[] oversized = java.util.Arrays.copyOf(testPng(1,1), 1_000_001);
         given().multiPart("book", "{\"title\":\"Oversize\",\"totalPages\":1}", "application/json")
                 .multiPart("cover", "cover.png", oversized, "image/png").when().post("/api/v1/books")
                 .then().statusCode(413);

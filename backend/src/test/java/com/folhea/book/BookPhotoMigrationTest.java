@@ -31,15 +31,31 @@ class BookPhotoMigrationTest {
             UUID jpegBook = seedLegacyCover(schema, PhotoFixtures.jpegWithExif(), "image/jpeg", 24, 32);
             String originalChecksum = checksumV008(schema);
             migrate(schema, "9");
+            var appliedSqlChecksums = sqlChecksums(schema);
             requireV010(schema);
             Flyway finalMigration = migrate(schema, "10");
             assertEquals(0, finalMigration.info().current().getVersion().compareTo(MigrationVersion.fromVersion("10")), "The Java V010 backfill must really run");
             assertEquals(originalChecksum, checksumV008(schema), "Applied V008 must never be edited");
             finalMigration.validate();
+            assertEquals(0, finalMigration.migrate().migrationsExecuted, "An already applied V010 is validated, never replayed");
+            assertEquals(appliedSqlChecksums, sqlChecksums(schema), "Applied SQL V001..V009 must keep their checksums");
 
             try (var connection = dataSource.getConnection()) {
+                try (var statement = connection.createStatement(); var history = statement.executeQuery(
+                        "SELECT type,checksum,success FROM " + schema + ".flyway_schema_history WHERE version IN ('10','010')")) {
+                    assertTrue(history.next()); assertEquals("JDBC",history.getString(1));
+                    assertNull(history.getObject(2), "The real persisted Java checksum must stay NULL");
+                    assertTrue(history.getBoolean(3)); assertFalse(history.next());
+                }
                 assertPhoto(connection, schema, pngBook);
                 assertPhoto(connection, schema, jpegBook);
+                var outputs = java.util.Map.of("legacy-png", photoMetadata(connection, schema, pngBook),
+                        "exif-jpeg", photoMetadata(connection, schema, jpegBook));
+                var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                try (var input = getClass().getResourceAsStream("/book-photo/migration-v010-golden.json")) {
+                    assertNotNull(input, "Golden metadata captured before the application change must exist");
+                    assertEquals(mapper.readTree(input), mapper.valueToTree(outputs));
+                }
                 try (var statement = connection.createStatement(); var rows = statement.executeQuery("SELECT title,author,edition,total_pages FROM " + schema + ".book ORDER BY id")) {
                     int count = 0;
                     while (rows.next()) {
@@ -183,9 +199,29 @@ class BookPhotoMigrationTest {
             }
         }
     }
+    private java.util.Map<String,Integer> sqlChecksums(String schema) throws Exception {
+        var checksums = new java.util.TreeMap<String,Integer>();
+        try (var connection = dataSource.getConnection(); var statement = connection.createStatement();
+             var rows = statement.executeQuery("SELECT version,checksum FROM " + schema + ".flyway_schema_history WHERE type='SQL' ORDER BY installed_rank")) {
+            while (rows.next()) {
+                assertNotNull(rows.getObject(2)); checksums.put(rows.getString(1),rows.getInt(2));
+            }
+        }
+        assertEquals(9,checksums.size()); return checksums;
+    }
     private String checksumV008(String schema) throws Exception {
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement(); var rows = statement.executeQuery("SELECT checksum FROM " + schema + ".flyway_schema_history WHERE version='008' OR version='8'")) {
             assertTrue(rows.next()); return rows.getString(1);
+        }
+    }
+    private static java.util.Map<String,Object> photoMetadata(Connection connection, String schema, UUID id) throws Exception {
+        try (var query = connection.prepareStatement("SELECT content_type,sha256,byte_size,width,height FROM " + schema + ".book_photo WHERE book_id=?")) {
+            query.setObject(1,id);
+            try (var row = query.executeQuery()) {
+                assertTrue(row.next());
+                return java.util.Map.of("contentType",row.getString(1),"sha256",row.getString(2),
+                        "byteSize",row.getInt(3),"width",row.getInt(4),"height",row.getInt(5));
+            }
         }
     }
     private void dropSchema(String schema) throws Exception {

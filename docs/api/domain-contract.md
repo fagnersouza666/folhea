@@ -151,8 +151,10 @@ não deixam livro parcial nesse contrato legado. No fluxo RAW novo, falha de
 upload preserva o livro salvo e oferece retry sem novo cadastro.
 O navegador controla o boundary, preservando Origin/X-CSRF-Token/BFF.
 
-O endpoint multipart legado recebe JPEG/PNG até2097152bytes, lados1..4096 e
-produto até4194304pixels. A validação ocorre antes de carregar pixels; assinatura
+O endpoint multipart legado recebe JPEG/PNG até 1.000.000 bytes, lados 1..16.384 e
+produto até 24.000.000 pixels, com a mesma validação de entrada de PUT /photo.
+Corpo maior retorna 413; excesso de lado/pixels retorna 400 com o mesmo detail de /photo.
+MIME não permitido continua 415; imagem multipart malformada continua 400. A validação ocorre antes de carregar pixels; assinatura
 e MIME devem concordar. A saída agora delega ao JPEG canônico de até1.000.000bytes
 e1600pixels, sem metadados. `cover` mantém
 `{mediaType,byteSize,width,height,version}`; version deriva do SHA dos bytes,
@@ -329,8 +331,22 @@ O novo fluxo salva o livro por JSON; `totalPages` é opcional, inteiro positivo 
 - `GET /api/v1/books/{id}/photo`: JPEG normalizado e ETag SHA-256 dos bytes; `private, no-cache, max-age=0, must-revalidate` em 200/304. Autenticação e ownership são verificados antes de If-None-Match; alheio/ausente 404, anônimo 401, erros no-store.
 - `DELETE /api/v1/books/{id}/photo`: CSRF e ownership, 204 presente; foto ausente ou livro alheio/inexistente 404. Exclusão do livro/conta remove a foto por FK cascade.
 
-Assinatura e decoder ImageIO reais são conferidos, com entrada limitada a 24 MP/16384 px por lado antes da alocação. JPEG/PNG/WebP são regravados como JPEG sem EXIF/GPS, fundo branco para alpha, lado máximo 1600 e saída até 1.000.000 bytes; qualidade/dimensões adaptam ao orçamento. WebP usa SPI Java TwelveMonkeys ImageIO 3.15.3, sem JNI. Formato inválido 415; corpo acima do limite 413; problemas usam application/problem+json.
+Assinatura e decoder ImageIO reais são conferidos, com entrada limitada a 24 MP/16384 px por lado antes da alocação. JPEG/PNG/WebP são regravados como JPEG sem EXIF/GPS, fundo branco para alpha, lado máximo 1600 e saída até 1.000.000 bytes; qualidade/dimensões adaptam ao orçamento. WebP usa SPI Java TwelveMonkeys ImageIO 3.15.3, sem JNI. Formato/decoder inválido retorna 415 em /photo; corpo acima do limite retorna 413; excesso de dimensões/pixels retorna 400, com o mesmo detail usado por multipart; problemas usam application/problem+json.
 
-V010 é migração Java Flyway transacional: processa cada capa V008 com cursor de uma linha, preserva o original até o sucesso de toda a transação e apaga as linhas legadas somente depois da conversão. Falha reverte DDL/dados e mantém originais. V008/V009 não são alteradas. `book_photo` contém uma foto por livro (bytes, content_type, SHA, dimensões/tamanho e timestamps); `book_cover` permanece vazia apenas para compatibilidade de schema, nunca como segunda mídia retida. POST/PATCH multipart e /cover anteriores delegam à foto canônica; a UI nova usa somente JSON e /photo RAW.
+V010 é migração Java Flyway transacional com normalizador congelado integralmente em `db.migration`, sem dependência de serviços da aplicação. `getChecksum()` continua NULL, como no histórico já aplicado; não há repair nem V011. A conversão legada conserva entrada até 2 MiB, 16.384 pixels por lado e 24 MP, separada da política HTTP atual. Os testes comparam bytes/SHA e metadados a goldens sintéticos capturados antes da alteração. A migração processa cada capa V008 com cursor de uma linha, preserva o original até o sucesso de toda a transação e apaga as linhas legadas somente depois da conversão. Falha reverte DDL/dados e mantém originais. V008/V009 não são alteradas. `book_photo` contém uma foto por livro (bytes, content_type, SHA, dimensões/tamanho e timestamps); `book_cover` permanece vazia apenas para compatibilidade de schema, nunca como segunda mídia retida. POST/PATCH multipart e /cover anteriores delegam à foto canônica; a UI nova usa somente JSON e /photo RAW.
 
 Export é um snapshot somente leitura, com cursor/fetchSize 1: `photos` inclui bytes base64/SHA/timestamps persistidos; o campo `covers` compatível representa os mesmos bytes canônicos, sem uma segunda foto no banco. Livros exportados incluem hasPhoto e metadados persistidos, sem stats/datas calculadas.
+
+
+## Flyway e validação de migrações (FIX-02)
+
+Flyway core e módulo PostgreSQL usam a mesma versão estável 13.10.0, explicitada
+em dependencyManagement para preservar coerência com a extensão Quarkus 3.40.1.
+O experimento isolado com Java 27 e PostgreSQL 18.6 verificou bootstrap, migrações
+SQL/Java, validate, backfill legado e rollback. A suíte final mantém esses gates
+com o normalizador congelado; o aceite REAL da stack é registrado separadamente.
+A V010 aplicada continua do tipo JDBC com checksum NULL. Os SQL V001..V009
+mantêm conteúdo/checksums e não há repair, nova versão de migração ou segundo backfill.
+Fontes: [Quarkus Flyway](https://quarkus.io/version/3.40/guides/flyway),
+[Java migrations/checksum](https://documentation.red-gate.com/flyway/flyway-concepts/migrations/java-based-migrations)
+e [PostgreSQL 18](https://documentation.red-gate.com/flyway/reference/database-driver-reference/postgresql-database).

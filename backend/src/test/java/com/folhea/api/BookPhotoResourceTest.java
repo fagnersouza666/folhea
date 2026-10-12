@@ -68,6 +68,72 @@ class BookPhotoResourceTest {
     @AfterEach void clearHttpSpecification() { RestAssured.requestSpecification = null; }
 
     @Test @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = OWNER, attributes = @SecurityAttribute(key = "email", value = "photo-owner@example.test"))
+    void multipartMissingBookAndZeroTotalReturnProblem400() throws Exception {
+        byte[] photo = PhotoFixtures.jpeg(2,3,false,.8f);
+        given().multiPart("book", "{\"title\":\"Zero\",\"totalPages\":0}", "application/json")
+                .multiPart("cover", "cover.jpg", photo, "image/jpeg").post("/api/v1/books")
+                .then().statusCode(400).contentType("application/problem+json");
+        given().multiPart("cover", "cover.jpg", photo, "image/jpeg").post("/api/v1/books")
+                .then().statusCode(400).contentType("application/problem+json");
+        given().get("/api/v1/books").then().statusCode(200).body("size()",equalTo(1));
+    }
+
+    @Test @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = OWNER, attributes = @SecurityAttribute(key = "email", value = "photo-owner@example.test"))
+    void oversizedInputDimensionsHaveTheSameProblem400InBothUploadPaths() throws Exception {
+        byte[] oversized = PhotoFixtures.jpeg(16385,1,false,.8f);
+        var raw = given().contentType("image/jpeg").body(oversized).put(photoPath())
+                .then().statusCode(400).contentType("application/problem+json").extract().response();
+        var multipart = given().multiPart("book", "{\"title\":\"Too wide\"}", "application/json")
+                .multiPart("cover", "cover.jpg", oversized, "image/jpeg").post("/api/v1/books")
+                .then().statusCode(400).contentType("application/problem+json").extract().response();
+        assertEquals(raw.jsonPath().getString("detail"),multipart.jsonPath().getString("detail"));
+        given().get("/api/v1/books").then().statusCode(200).body("size()",equalTo(1));
+    }
+
+    @Test @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = OWNER, attributes = @SecurityAttribute(key = "email", value = "photo-owner@example.test"))
+    void excessivePixelCountHasTheSameProblem400AndPreservesTheSavedPhoto() throws Exception {
+        given().contentType("image/jpeg").body(PhotoFixtures.jpeg(2,3,false,.8f)).put(photoPath()).then().statusCode(200);
+        String etag = given().get(photoPath()).then().statusCode(200).extract().header("ETag");
+        byte[] oversized = PhotoFixtures.jpeg(5000,5000,false,.8f);
+        assertTrue(oversized.length <= PhotoFixtures.ONE_MB);
+        var raw = given().contentType("image/jpeg").body(oversized).put(photoPath())
+                .then().statusCode(400).contentType("application/problem+json").extract().response();
+        var multipart = given().multiPart("book", "{\"title\":\"Must not change\"}", "application/json")
+                .multiPart("cover", "cover.jpg", oversized, "image/jpeg").patch(bookPath())
+                .then().statusCode(400).contentType("application/problem+json").extract().response();
+        assertEquals(raw.jsonPath().getString("detail"),multipart.jsonPath().getString("detail"));
+        assertEquals(etag,given().get(photoPath()).then().statusCode(200).extract().header("ETag"));
+        given().get(bookPath()).then().statusCode(200).body("title",equalTo("Livro sintético"));
+    }
+
+    @Test @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = OWNER, attributes = @SecurityAttribute(key = "email", value = "photo-owner@example.test"))
+    void validInputAboveOldCoverPixelLimitIsAcceptedByBothPaths() throws Exception {
+        byte[] image = PhotoFixtures.jpeg(3000,2000,false,.8f);
+        assertTrue(image.length <= PhotoFixtures.ONE_MB);
+        given().contentType("image/jpeg").body(image).put(photoPath()).then().statusCode(200);
+        byte[] raw = given().get(photoPath()).then().statusCode(200).extract().asByteArray();
+        assertNormalized(raw);
+        String id = given().multiPart("book", "{\"title\":\"Six megapixels\"}", "application/json")
+                .multiPart("cover", "cover.jpg", image, "image/jpeg").post("/api/v1/books")
+                .then().statusCode(201).body("totalPages",nullValue()).body("progressPercent",nullValue()).extract().path("id");
+        byte[] multipart = given().get("/api/v1/books/{id}/photo",id).then().statusCode(200).extract().asByteArray();
+        assertArrayEquals(raw,multipart,"The same valid input must produce the same canonical JPEG");
+    }
+
+    @Test @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = OWNER, attributes = @SecurityAttribute(key = "email", value = "photo-owner@example.test"))
+    void multipartDecimalOneMbBoundaryReturns413AndPreservesMetadataAndPhoto() throws Exception {
+        given().multiPart("book", "{}", "application/json")
+                .multiPart("cover", "cover.jpg", PhotoFixtures.jpegAtSize(PhotoFixtures.ONE_MB), "image/jpeg")
+                .patch(bookPath()).then().statusCode(200);
+        String etag = given().get(photoPath()).then().statusCode(200).extract().header("ETag");
+        given().multiPart("book", "{\"title\":\"Must not change\"}", "application/json")
+                .multiPart("cover", "cover.jpg", PhotoFixtures.jpegAtSize(PhotoFixtures.ONE_MB+1), "image/jpeg")
+                .patch(bookPath()).then().statusCode(413).contentType("application/problem+json");
+        assertEquals(etag,given().get(photoPath()).then().statusCode(200).extract().header("ETag"));
+        given().get(bookPath()).then().statusCode(200).body("title",equalTo("Livro sintético"));
+    }
+
+    @Test @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = OWNER, attributes = @SecurityAttribute(key = "email", value = "photo-owner@example.test"))
     void multipartTitleAndPhotoWithoutTotalCreatesABookWithoutPercent() throws Exception {
         var created = given().multiPart("book", "{\"title\":\"Foto sem total\"}", "application/json")
                 .multiPart("cover", "cover.jpg", PhotoFixtures.jpeg(2,3,false,.8f), "image/jpeg")
