@@ -5,11 +5,11 @@ export interface CoverSelection { file: File | null; preparing: boolean; error: 
 
 @Component({ selector: 'folhea-cover-picker', standalone: true, changeDetection: ChangeDetectionStrategy.OnPush, template: `
   <fieldset class="cover-picker"><legend>Foto de capa <span>opcional</span></legend>
-    <p [id]="prefix + '-cover-hint'">JPEG ou PNG de até 8 MB. Sua capa fica privada na sua conta.</p>
+    <p [id]="prefix + '-cover-hint'">JPEG, PNG ou WebP de até 8 MiB. Preparamos uma foto de até 1 MB, privada na sua conta.</p>
     @if (preview()) { <img class="preview" [src]="preview()" alt="Prévia da capa escolhida" /> }
     <div class="choices">
-      <div class="field"><label [for]="prefix + '-cover-file'">Escolher capa</label><input [id]="prefix + '-cover-file'" type="file" accept="image/jpeg,image/png" [disabled]="disabled || preparing()" [attr.aria-describedby]="prefix + '-cover-hint'" (change)="choose($event)" /></div>
-      <div class="field"><label [for]="prefix + '-cover-camera'">Usar câmera</label><input [id]="prefix + '-cover-camera'" type="file" accept="image/jpeg,image/png" capture="environment" [disabled]="disabled || preparing()" [attr.aria-describedby]="prefix + '-cover-hint'" (change)="choose($event)" /></div>
+      <div class="field"><label [for]="prefix + '-cover-file'">Escolher capa</label><input [id]="prefix + '-cover-file'" type="file" accept="image/jpeg,image/png,image/webp" [disabled]="disabled || preparing()" [attr.aria-describedby]="prefix + '-cover-hint'" (change)="choose($event)" /></div>
+      <div class="field"><label [for]="prefix + '-cover-camera'">Usar câmera</label><input [id]="prefix + '-cover-camera'" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" [disabled]="disabled || preparing()" [attr.aria-describedby]="prefix + '-cover-hint'" (change)="choose($event)" /></div>
     </div>
     @if (preparing()) { <p role="status">Preparando capa…</p> }
     @if (error()) { <p class="field-error" role="alert">{{ error() }}</p> }

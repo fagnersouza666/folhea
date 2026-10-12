@@ -102,35 +102,35 @@ link de um registro fora da página atual. Estatísticas e streak continuam
 calculados pelo backend sobre os respectivos períodos/histórico global,
 independentemente das páginas carregadas no cliente.
 
-## Estante, metadados e capa privada (V008)
+## Estante e compatibilidade do contrato V008
 
 `BookResponse` conserva seus campos e acrescenta `edition` (string até200),
-`totalPages` (inteiro1..1000000), `cover` e `stats`. Título/autor têm até500;
+`totalPages` (inteiro positivo de 32 bits ou null), `cover`, `hasPhoto` e `stats`. Título/autor têm até500;
 JSON legado somente com título continua válido. Livros anteriores mantêm os
 metadados novos nulos, sem perder dados, e podem ser completados por PATCH.
-O cadastro novo na UI exige título e total; autor, edição e capa são opcionais.
-Campos omitidos/nulos em PATCH preservam o valor; autor/edição vazios os removem.
+O cadastro novo na UI exige título; total, autor, edição e foto são opcionais.
+Omissão em PATCH preserva; totalPages null apaga o total. Autor/edição vazios removem seus valores.
 
-Sem foto, POST/PATCH `/api/v1/books` usam JSON. Com foto, POST `/api/v1/books`
+A UI usa JSON para metadados e RAW /photo separado, conforme LIVRO-02 abaixo.
+Clientes anteriores continuam aceitos: com foto, POST `/api/v1/books`
 e PATCH `/api/v1/books/{id}` usam multipart/form-data: parte `book` contém JSON
 (application/json, até8192bytes) e `cover` contém JPEG/PNG. POST multipart
 exige título/total e cover; autor/edição continuam opcionais. PATCH aceita
 `book={}` para somente substituir a capa. A validação da imagem acontece antes
 de persistir; livro/metadados/capa são confirmados na mesma transação. Falhas
-não deixam livro parcial. Não existe uma segunda fase de upload no cadastro.
+não deixam livro parcial nesse contrato legado. No fluxo RAW novo, falha de
+upload preserva o livro salvo e oferece retry sem novo cadastro.
 O navegador controla o boundary, preservando Origin/X-CSRF-Token/BFF.
 
-A capa aceita até2097152bytes, lados1..4096 e produto até4194304pixels.
-Assinatura e MIME devem concordar; o decoder real confere dimensões antes de
-carregar pixels. A imagem é reencodada sem metadados/EXIF e também limitada
-a 2 MiB após encoding. SVG/WebP/GIF não são aceitos. `cover` contém
-`{mediaType,byteSize,width,height,version}` (UUID novo a cada substituição),
-sem bytes nem URL pública. GET `/books/{id}/cover` autentica e verifica ownership,
-retorna imagem com MIME fixo/no-store/nosniff ou404; DELETE no mesmo caminho
-exige CSRF e remove a imagem (204 idempotente). Foto/card local não é essa capa.
-Uploads temporários são removidos ao terminar a resposta; bytes persistem na
-tabela `book_cover` do PostgreSQL com PK por livro e FK ON DELETE CASCADE.
-A exclusão de livro/conta inclui a capa e preserva a recuperação durável V007.
+O endpoint multipart legado recebe JPEG/PNG até2097152bytes, lados1..4096 e
+produto até4194304pixels. A validação ocorre antes de carregar pixels; assinatura
+e MIME devem concordar. A saída agora delega ao JPEG canônico de até1.000.000bytes
+e1600pixels, sem metadados. `cover` mantém
+`{mediaType,byteSize,width,height,version}`; version deriva do SHA dos bytes,
+portanto enviar a mesma imagem normalizada conserva a identidade do conteúdo.
+GET `/books/{id}/cover` é alias autenticado com no-store; DELETE é compatível
+e idempotente. A UI nova usa /photo; nada vira URL pública. V010 migra bytes
+para book_photo e esvazia book_cover, preservando rollback e recuperação V007.
 
 `stats={pagesRead,totalPages,percent,averagePagesPerDay,firstDate,referenceDate,
 elapsedDays}` é calculado no backend por usuário+livro, com SUM(pages) e MIN(data)
@@ -286,3 +286,17 @@ Java 27 a partir de 9.10; 9.9.x cobre Java 26. O clean focado com Byte Buddy
 regressão esperada do nome OIDC anterior, sem erro de enhancement.
 
 O primeiro upsert OIDC é idempotente em requisições concorrentes. Conflitos nos índices de subject/e-mail não atualizam a identidade existente: a conta é resolvida exclusivamente pelo `sub`; outro subject com o mesmo e-mail recebe `401`, sem reassociação.
+
+## LIVRO-02: total opcional e foto privada
+
+O novo fluxo salva o livro por JSON; `totalPages` é opcional, inteiro positivo de 32 bits ou null. Em PATCH, omissão preserva e null apaga o total. Autor/edição e finalização manual são preservados; esta entrega não muda cálculos de leitura.
+
+- `PUT /api/v1/books/{id}/photo`: corpo RAW JPEG/PNG/WebP, sessão BFF e CSRF; retorna BookResponse com `hasPhoto`. Limite **1 MB = 1.000.000 bytes** independente do JSON de 64 KiB. Falha mantém a foto anterior; retry usa o mesmo livro.
+- `GET /api/v1/books/{id}/photo`: JPEG normalizado e ETag SHA-256 dos bytes; `private, no-cache, max-age=0, must-revalidate` em 200/304. Autenticação e ownership são verificados antes de If-None-Match; alheio/ausente 404, anônimo 401, erros no-store.
+- `DELETE /api/v1/books/{id}/photo`: CSRF e ownership, 204 presente; foto ausente ou livro alheio/inexistente 404. Exclusão do livro/conta remove a foto por FK cascade.
+
+Assinatura e decoder ImageIO reais são conferidos, com entrada limitada a 24 MP/16384 px por lado antes da alocação. JPEG/PNG/WebP são regravados como JPEG sem EXIF/GPS, fundo branco para alpha, lado máximo 1600 e saída até 1.000.000 bytes; qualidade/dimensões adaptam ao orçamento. WebP usa SPI Java TwelveMonkeys ImageIO 3.15.3, sem JNI. Formato inválido 415; corpo acima do limite 413; problemas usam application/problem+json.
+
+V010 é migração Java Flyway transacional: processa cada capa V008 com cursor de uma linha, preserva o original até o sucesso de toda a transação e apaga as linhas legadas somente depois da conversão. Falha reverte DDL/dados e mantém originais. V008/V009 não são alteradas. `book_photo` contém uma foto por livro (bytes, content_type, SHA, dimensões/tamanho e timestamps); `book_cover` permanece vazia apenas para compatibilidade de schema, nunca como segunda mídia retida. POST/PATCH multipart e /cover anteriores delegam à foto canônica; a UI nova usa somente JSON e /photo RAW.
+
+Export é um snapshot somente leitura, com cursor/fetchSize 1: `photos` inclui bytes base64/SHA/timestamps persistidos; o campo `covers` compatível representa os mesmos bytes canônicos, sem uma segunda foto no banco. Livros exportados incluem hasPhoto e metadados persistidos, sem stats/datas calculadas.

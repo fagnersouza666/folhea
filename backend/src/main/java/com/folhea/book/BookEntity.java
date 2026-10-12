@@ -32,7 +32,6 @@ public class BookEntity {
     @Size(max = 200)
     @Column(length = 200) public String edition;
     @jakarta.validation.constraints.Min(1)
-    @jakarta.validation.constraints.Max(1000000)
     @Column(name = "total_pages") public Integer totalPages;
     @NotNull
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 32) public BookStatus status;
@@ -58,7 +57,7 @@ public class BookEntity {
         if (title.length() > 500 || (author != null && author.length() > 500)) {
             throw new IllegalArgumentException("Book text fields exceed their maximum length");
         }
-        if ((edition != null && edition.length() > 200) || (totalPages != null && (totalPages < 1 || totalPages > 1000000))) {
+        if ((edition != null && edition.length() > 200) || (totalPages != null && (totalPages < 1))) {
             throw new IllegalArgumentException("Invalid book metadata");
         }
         if (status == BookStatus.FINISHED && finishedOn == null) {

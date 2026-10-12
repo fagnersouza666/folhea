@@ -28,9 +28,10 @@ import { DashboardStore } from '../../core/state/dashboard.store';
           <div class="field"><label for="detail-book-title">Título</label><input id="detail-book-title" formControlName="title" maxlength="500" [attr.aria-invalid]="title.invalid && title.touched" [attr.aria-describedby]="title.invalid && title.touched ? 'detail-book-title-error' : null" />@if (title.invalid && title.touched) { <span id="detail-book-title-error" class="field-error">Dê um título ao seu livro.</span> }</div>
           <div class="field"><label for="detail-book-author">Autor <span class="optional">opcional</span></label><input id="detail-book-author" formControlName="author" maxlength="500" /></div>
           <div class="field"><label for="detail-book-edition">Edição <span class="optional">opcional</span></label><input id="detail-book-edition" formControlName="edition" maxlength="200" /></div>
-          <div class="field"><label for="detail-book-total-pages">Total de páginas</label><input id="detail-book-total-pages" type="number" min="1" max="1000000" step="1" inputmode="numeric" formControlName="totalPages" [attr.aria-invalid]="totalPages.invalid && totalPages.touched" aria-describedby="detail-book-total-pages-hint" />@if (totalPages.invalid && totalPages.touched) { <span class="field-error" role="alert">Informe um total inteiro entre 1 e 1.000.000.</span> }<span class="hint" id="detail-book-total-pages-hint">Livros antigos podem ficar sem total. Suas leituras serão preservadas.</span></div>
+          <div class="field"><label for="detail-book-total-pages">Total de páginas</label><input id="detail-book-total-pages" type="number" min="1" step="1" inputmode="numeric" formControlName="totalPages" [attr.aria-invalid]="totalPages.invalid && totalPages.touched" aria-describedby="detail-book-total-pages-hint" />@if (totalPages.invalid && totalPages.touched) { <span class="field-error" role="alert">Informe um total inteiro positivo.</span> }<span class="hint" id="detail-book-total-pages-hint">Livros antigos podem ficar sem total. Suas leituras serão preservadas.</span></div>
           <folhea-cover-picker prefix="detail-book" [disabled]="busy()" (selectionChange)="cover.set($event)" />
-          @if (currentBook.cover) { <button type="button" class="button button-quiet" [disabled]="busy()" (click)="removeCover()">Remover capa salva</button> }
+          @if (currentBook.hasPhoto ?? currentBook.cover) { <button type="button" class="button button-quiet" [disabled]="busy()" (click)="removeCover()">Remover capa salva</button> }
+          @if (cover().file) { <button type="button" class="button button-secondary" [disabled]="busy() || cover().preparing" (click)="uploadPhoto()">Enviar foto</button> }
           <button class="button button-primary" type="submit" [disabled]="busy() || cover().preparing">{{ busy() ? 'Salvando…' : 'Salvar alterações' }}</button>
         </form>
         <section class="actions surface" aria-labelledby="book-actions-title">
@@ -60,7 +61,7 @@ export class BookDetailComponent {
   readonly cover = signal<CoverSelection>({ file: null, preparing: false, error: null });
   @ViewChild(CoverPickerComponent) private picker?: CoverPickerComponent;
   readonly finishedOn = new FormControl(this.store.today(), { nonNullable: true, validators: [Validators.required, notFutureDateValidator(() => this.store.today())] });
-  readonly form = this.fb.group({ title: ['', [Validators.required, Validators.maxLength(500)]], author: ['', Validators.maxLength(500)], edition: ['', Validators.maxLength(200)], totalPages: this.fb.control<number | null>(null, [Validators.min(1), Validators.max(1000000), wholeNumberValidator]) });
+  readonly form = this.fb.group({ title: ['', [Validators.required, Validators.maxLength(500)]], author: ['', Validators.maxLength(500)], edition: ['', Validators.maxLength(200)], totalPages: this.fb.control<number | null>(null, [Validators.min(1), wholeNumberValidator]) });
   get title() { return this.form.controls.title; }
   get totalPages() { return this.form.controls.totalPages; }
 
@@ -80,10 +81,15 @@ export class BookDetailComponent {
     const title = this.title.value.trim();
     if (!title) { this.title.setErrors({ required: true }); return; }
     if (this.form.invalid || !this.id) return;
-    this.run(this.store.updateBook(this.id, { title, author: this.form.controls.author.value.trim() || null, edition: this.form.controls.edition.value.trim() || null, totalPages: this.totalPages.value }, this.cover().file ?? undefined), 'Alterações salvas.', true);
+    this.run(this.store.updateBook(this.id, { title, author: this.form.controls.author.value.trim() || null, edition: this.form.controls.edition.value.trim() || null, totalPages: this.totalPages.value }), 'Alterações salvas.', false);
   }
 
-  removeCover(): void { if (this.id) this.run(this.store.deleteBookCover(this.id), 'Capa removida.'); }
+  uploadPhoto(): void {
+    const file = this.cover().file;
+    if (this.id && file && !this.cover().preparing && !this.cover().error) this.run(this.store.uploadBookPhoto(this.id, file), 'Foto salva.', true);
+  }
+
+  removeCover(): void { if (this.id) this.run(this.store.deleteBookPhoto(this.id), 'Capa removida.'); }
 
   finish(): void {
     this.finishedOn.markAsTouched();
@@ -106,7 +112,7 @@ export class BookDetailComponent {
     action.subscribe({
       next: () => {
         this.busy.set(false); this.message.set(success);
-        if (resetDraft) { this.form.markAsPristine(); this.picker?.clear(); }
+        if (resetDraft) this.picker?.clear();
       },
       error: () => { this.busy.set(false); this.error.set(this.store.error() ?? 'Não foi possível salvar. Tente novamente.'); }
     });

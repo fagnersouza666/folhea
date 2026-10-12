@@ -20,6 +20,12 @@ export class ApiClient {
   createBook(input: BookCreate, cover?: File): Observable<Book> { return this.request(this.http.post<Book>(`${this.baseUrl}/books`, cover ? this.bookMultipart(input, cover) : input, this.options())); }
   updateBook(id: string, input: BookPatch, cover?: File): Observable<Book> { return this.request(this.http.patch<Book>(`${this.baseUrl}/books/${encodeURIComponent(id)}`, cover ? this.bookMultipart(input, cover) : input, this.options())); }
   deleteBookCover(id: string): Observable<void> { return this.request(this.http.delete<void>(`${this.baseUrl}/books/${encodeURIComponent(id)}/cover`, this.options())); }
+  uploadBookPhoto(id: string, photo: File): Observable<Book> {
+    return this.request(this.http.put<Book>(`${this.baseUrl}/books/${encodeURIComponent(id)}/photo`, photo,
+      { ...this.options(), headers: { ...this.options().headers, 'Content-Type': photo.type } }));
+  }
+  deleteBookPhoto(id: string): Observable<void> { return this.request(this.http.delete<void>(`${this.baseUrl}/books/${encodeURIComponent(id)}/photo`, this.options())); }
+  bookPhotoUrl(id: string): string { return `${this.baseUrl}/books/${encodeURIComponent(id)}/photo`; }
   bookCoverUrl(id: string, version: string): string { return `${this.baseUrl}/books/${encodeURIComponent(id)}/cover?v=${encodeURIComponent(version)}`; }
   deleteBook(id: string): Observable<void> { return this.request(this.http.delete<void>(`${this.baseUrl}/books/${encodeURIComponent(id)}`, this.options())); }
   finishBook(id: string, finishedOn?: string): Observable<Book> {

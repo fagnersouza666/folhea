@@ -16,11 +16,12 @@ Versão atual: **0.5.0**
 ## Estante privada
 
 Cada livro pode guardar título, autor, edição, total de páginas e capa privada.
-Na tela de cadastro, título e total são obrigatórios; autor, edição e capa são
+Na tela de cadastro, título é obrigatório; total de páginas, autor, edição e foto são
 opcionais. Livros antigos continuam disponíveis e podem completar os metadados.
-As capas JPEG/PNG ficam no PostgreSQL, são incluídas no backup e na exportação e
-só podem ser lidas pelo proprietário. Upload e metadados são gravados juntos;
-falha de imagem não cria um livro parcial.
+Fotos JPEG/PNG/WebP são normalizadas para JPEG privado de até 1.000.000 bytes e
+1600 px no lado maior, sem EXIF. Ficam no PostgreSQL, no backup e na exportação.
+O cadastro salva o livro e depois envia a foto por RAW; em falha de upload, o
+retry usa o mesmo livro salvo e permite continuar sem foto, sem duplicar cadastro.
 
 A estante mostra páginas lidas, páginas totais, progresso até 100% e média de
 páginas/dia. A média soma todas as páginas do livro e divide pelos dias corridos

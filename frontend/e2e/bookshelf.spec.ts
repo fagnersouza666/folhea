@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { transparentCover as cover } from './cover-fixture';
 import { expect, signIn, test, TODAY } from './fixtures';
 
 test.describe('estante e capas — API/BFF simulados, arquivo e Canvas reais', () => {
-  test('cria metadados e capa atomicamente, seleciona livro e recalcula após editar/excluir leitura', async ({ page, mockApi }) => {
+  test('cria JSON e foto RAW no mesmo livro, seleciona livro e recalcula após editar/excluir leitura', async ({ page, mockApi }) => {
     mockApi.books = []; await signIn(page);
     await page.getByRole('link', { name: /cadastrar livro/i }).click();
     await page.getByRole('textbox', { name: 'Título', exact: true }).fill('Livro com capa');
@@ -74,14 +76,19 @@ test.describe('estante e capas — API/BFF simulados, arquivo e Canvas reais', (
   test('substitui e remove a capa privada, com fallback e retry quando o GET falha', async ({ page, mockApi }) => {
     await signIn(page); await page.getByRole('link', { name: 'Livros', exact: true }).click(); await page.getByRole('link', { name: 'Abrir O Hobbit' }).click();
     await page.locator('#detail-book-cover-file').setInputFiles(cover); await expect(page.getByAltText('Prévia da capa escolhida')).toBeVisible();
-    await page.getByRole('button', { name: 'Salvar alterações' }).click(); await expect(page.getByAltText('Capa de O Hobbit')).toBeVisible();
+    await page.getByRole('button', { name: 'Enviar foto' }).click(); await expect(page.getByAltText('Capa de O Hobbit')).toBeVisible();
     const firstVersion = mockApi.books[0].cover?.version;
-    await page.locator('#detail-book-cover-camera').setInputFiles(cover); await expect(page.getByAltText('Prévia da capa escolhida')).toBeVisible();
-    await page.getByRole('button', { name: 'Salvar alterações' }).click();
+    const replacement = await page.evaluate(() => {
+      const canvas = document.createElement('canvas'); canvas.width = 24; canvas.height = 32;
+      const context = canvas.getContext('2d')!; context.fillStyle = '#315945'; context.fillRect(0,0,24,32);
+      return canvas.toDataURL('image/png').split(',')[1];
+    });
+    await page.locator('#detail-book-cover-camera').setInputFiles({ name: 'outra-capa.png', mimeType: 'image/png', buffer: Buffer.from(replacement, 'base64') }); await expect(page.getByAltText('Prévia da capa escolhida')).toBeVisible();
+    await page.getByRole('button', { name: 'Enviar foto' }).click();
     await expect.poll(() => mockApi.books[0].cover?.version).not.toBe(firstVersion);
-    await page.route('**/api/v1/books/hobbit/cover?*', route => route.fulfill({ status: 404 })); await page.reload();
+    await page.route('**/api/v1/books/hobbit/photo?*', route => route.fulfill({ status: 404 })); await page.reload();
     await expect(page.getByText('Capa indisponível', { exact: true })).toBeVisible();
-    await page.unroute('**/api/v1/books/hobbit/cover?*'); await page.getByRole('button', { name: 'Tentar capa novamente' }).click();
+    await page.unroute('**/api/v1/books/hobbit/photo?*'); await page.getByRole('button', { name: 'Tentar capa novamente' }).click();
     await expect(page.getByAltText('Capa de O Hobbit')).toBeVisible();
     await page.getByRole('button', { name: 'Remover capa salva' }).click(); await expect(page.getByText('Capa removida.', { exact: true })).toBeVisible();
     await expect(page.getByAltText('Capa de O Hobbit')).toHaveCount(0); expect(mockApi.books[0].cover).toBeNull();
@@ -99,5 +106,56 @@ test.describe('estante e capas — API/BFF simulados, arquivo e Canvas reais', (
     await expect(page.getByText('Progresso indisponível.', { exact: true })).toBeVisible();
     await page.unroute('**/api/v1/books/hobbit'); await page.locator('.book-progress').getByRole('button', { name: 'Tentar novamente' }).click();
     await expect(page.locator('.pages-read')).toContainText('10 de 100'); expect(mockApi.sessions).toHaveLength(1);
+  });
+});
+
+
+test.describe('LIVRO-02 — API/BFF simulados, WebP e Canvas reais', () => {
+  test('total opcional não vira zero nem impede criar e abrir o livro', async ({ page, mockApi }) => {
+    mockApi.books = []; await signIn(page);
+    await page.getByRole('link', { name: /cadastrar livro/i }).click();
+    await page.getByRole('textbox', { name: 'Título', exact: true }).fill('Sem total conhecido');
+    await page.getByRole('button', { name: /adicionar livro/i }).click();
+    await expect(page).toHaveURL(/\/app\/livros$/);
+    expect(mockApi.books).toHaveLength(1); expect(mockApi.books[0].totalPages).toBeNull();
+    await expect(page.locator('[role="progressbar"]')).toHaveCount(0);
+    await page.getByRole('link', { name: 'Abrir Sem total conhecido' }).click();
+    await expect(page.getByLabel('Total de páginas')).toHaveValue('');
+    await page.getByLabel('Total de páginas').fill('300'); await page.getByRole('button', { name: 'Salvar alterações' }).click();
+    await expect.poll(() => mockApi.books[0].totalPages).toBe(300);
+    await page.getByLabel('Total de páginas').fill(''); await page.getByRole('button', { name: 'Salvar alterações' }).click();
+    await expect.poll(() => mockApi.books[0].totalPages).toBeNull();
+    await expect(page.locator('[role="progressbar"]')).toHaveCount(0);
+  });
+
+  test('falha PUT da foto preserva livro salvo e prévia; retry usa mesmo id sem segundo POST', async ({ page, mockApi }) => {
+    mockApi.books = []; await signIn(page); await page.getByRole('link', { name: /cadastrar livro/i }).click();
+    await page.getByRole('textbox', { name: 'Título', exact: true }).fill('Foto pendente');
+    const webp = readFileSync(resolve(process.cwd(), '../backend/src/test/resources/book-photo/synthetic-metadata.webp'));
+    await page.locator('#book-cover-file').setInputFiles({ name: 'sintetica.webp', mimeType: 'image/webp', buffer: webp });
+    await expect(page.getByAltText('Prévia da capa escolhida')).toBeVisible();
+    let creates = 0;
+    page.on('request', request => { if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/books') creates++; });
+    await page.route('**/api/v1/books/*/photo', route => route.request().method() === 'PUT'
+      ? route.fulfill({ status: 503, contentType: 'application/problem+json', body: JSON.stringify({ status: 503 }) }) : route.fallback());
+    await page.getByRole('button', { name: /adicionar livro/i }).click();
+    await expect(page.locator('form').getByRole('alert')).toContainText('Livro salvo');
+    expect(mockApi.books).toHaveLength(1); expect(creates).toBe(1);
+    const id = mockApi.books[0].id; await expect(page.getByAltText('Prévia da capa escolhida')).toBeVisible();
+    await page.unroute('**/api/v1/books/*/photo');
+    const uploaded = page.waitForRequest(request => request.method() === 'PUT' && new URL(request.url()).pathname === '/api/v1/books/' + id + '/photo');
+    await page.getByRole('button', { name: 'Tentar enviar foto novamente' }).click();
+    const request = await uploaded; expect(request.headers()['content-type']).toBe('image/jpeg');
+    expect(request.postDataBuffer()!.length).toBeLessThanOrEqual(1_000_000);
+    expect(request.postDataBuffer()!.subarray(0,2)).toEqual(Buffer.from([255,216]));
+    expect(request.postDataBuffer()!.toString('latin1')).not.toContain('Exif');
+    expect(request.postDataBuffer()!.toString('latin1')).not.toContain('SYNTHETIC_GPS_REMOVAL_SENTINEL');
+    await expect(page).toHaveURL(/\/app\/livros$/); expect(mockApi.books).toHaveLength(1); expect(creates).toBe(1);
+    const pixel = await page.locator('.book-row img').evaluate(async (image: HTMLImageElement) => {
+      await image.decode(); const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 24;
+      const context = canvas.getContext('2d')!; context.drawImage(image,0,0,32,24); return [...context.getImageData(30,22,1,1).data];
+    });
+    expect(pixel.slice(0,3).every(channel => channel > 240)).toBe(true); expect(pixel[3]).toBe(255);
+    await page.reload(); await expect(page.locator('.book-row img')).toBeVisible();
   });
 });

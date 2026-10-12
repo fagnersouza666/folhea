@@ -63,7 +63,8 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
         boolean json = mediaType != null && MediaType.APPLICATION_JSON_TYPE.isCompatible(mediaType);
         boolean bodyless = !context.hasEntity() && context.getLength() <= 0;
         boolean bookMultipart = isBookMultipart(context, mediaType);
-        if (!json && !bodyless && !bookMultipart && !isEmptyFinishForm(context, mediaType)) {
+        boolean rawPhoto = isRawPhoto(context);
+        if (!json && !bodyless && !bookMultipart && !rawPhoto && !isEmptyFinishForm(context, mediaType)) {
             abort(context, 415, "https://folhea.com.br/problems/unsupported-content-type", "Tipo de conteúdo não suportado", "Mutações autenticadas aceitam somente application/json.");
             return;
         }
@@ -71,7 +72,7 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
             abort(context, 403, "https://folhea.com.br/problems/csrf-invalid", "Token CSRF inválido", "O token CSRF está ausente, expirado ou não pertence à sessão.");
             return;
         }
-        if (!bookMultipart) limitBody(context);
+        if (!bookMultipart) limitBody(context, rawPhoto ? com.folhea.book.BookPhotoNormalizer.MAX_BYTES : maxJsonBodyBytes, rawPhoto);
     }
 
     private static boolean isBookMultipart(ContainerRequestContext context, MediaType type) {
@@ -79,6 +80,11 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
         String path = context.getUriInfo().getPath().replaceFirst("^/", "");
         return ("POST".equals(context.getMethod()) && path.equals("api/v1/books"))
                 || ("PATCH".equals(context.getMethod()) && path.matches("api/v1/books/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"));
+    }
+
+    private static boolean isRawPhoto(ContainerRequestContext context) {
+        return "PUT".equals(context.getMethod()) && context.getUriInfo().getPath().replaceFirst("^/", "")
+                .matches("api/v1/books/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/photo");
     }
 
     private boolean validOrigin(ContainerRequestContext context) {
@@ -105,24 +111,24 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
                 && csrfTokens.isValid(ticket, token);
     }
 
-    private void limitBody(ContainerRequestContext context) {
+    private void limitBody(ContainerRequestContext context, long limit, boolean photo) {
         int declaredLength = context.getLength();
-        if (declaredLength > maxJsonBodyBytes) {
-            abort(context, 413, "https://folhea.com.br/problems/body-too-large", "Corpo muito grande", "O corpo JSON excede o limite de 64 KiB.");
+        if (declaredLength > limit) {
+            abort(context, 413, "https://folhea.com.br/problems/body-too-large", "Corpo muito grande", photo ? "A foto excede 1.000.000 bytes." : "O corpo JSON excede o limite de 64 KiB.");
             return;
         }
         if (declaredLength == 0 || !context.hasEntity()) return;
         try {
             InputStream input = context.getEntityStream();
             if (input == null) return;
-            ByteArrayOutputStream body = new ByteArrayOutputStream(Math.min(declaredLength > 0 ? declaredLength : 4096, (int) maxJsonBodyBytes));
+            ByteArrayOutputStream body = new ByteArrayOutputStream(Math.min(declaredLength > 0 ? declaredLength : 4096, (int) limit));
             byte[] chunk = new byte[8192];
             long total = 0;
             int read;
             while ((read = input.read(chunk)) != -1) {
                 total += read;
-                if (total > maxJsonBodyBytes) {
-                    abort(context, 413, "https://folhea.com.br/problems/body-too-large", "Corpo muito grande", "O corpo JSON excede o limite de 64 KiB.");
+                if (total > limit) {
+                    abort(context, 413, "https://folhea.com.br/problems/body-too-large", "Corpo muito grande", photo ? "A foto excede 1.000.000 bytes." : "O corpo JSON excede o limite de 64 KiB.");
                     return;
                 }
                 body.write(chunk, 0, read);

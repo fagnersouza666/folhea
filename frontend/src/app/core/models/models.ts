@@ -14,6 +14,7 @@ export interface UserExport {
   books: Book[];
   sessions: ReadingSession[];
   covers?: (BookCover & { bookId: string; dataBase64: string })[];
+  photos?: { bookId: string; contentType: 'image/jpeg'; sha256: string; byteSize: number; createdAt: string; updatedAt: string; dataBase64: string }[];
 }
 
 export interface BookCover {
@@ -49,6 +50,7 @@ export interface Book {
   edition?: string | null;
   totalPages?: number | null;
   cover?: BookCover | null;
+  hasPhoto?: boolean;
   // Optimistic and older responses do not yet have confirmed metrics.
   stats?: BookStats;
   status: BookStatus;

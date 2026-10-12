@@ -33,11 +33,11 @@ public class BookReadService {
         }
         Map<UUID, BookCoverEntity.Metadata> covers = new HashMap<>();
         for (Object[] row : em.createQuery("""
-                SELECT c.bookId,c.mediaType,c.byteSize,c.width,c.height,c.version
-                FROM BookCoverEntity c WHERE c.bookId IN :ids
+                SELECT c.bookId,c.contentType,c.byteSize,c.width,c.height,c.sha256
+                FROM BookPhotoEntity c WHERE c.bookId IN :ids
                 """, Object[].class).setParameter("ids", ids).getResultList()) {
             covers.put((UUID) row[0], new BookCoverEntity.Metadata((String) row[1], ((Number) row[2]).intValue(),
-                    ((Number) row[3]).intValue(), ((Number) row[4]).intValue(), (UUID) row[5]));
+                    ((Number) row[3]).intValue(), ((Number) row[4]).intValue(), BookPhotoEntity.legacyVersion((String) row[5])));
         }
         LocalDate today = time.today(user.timezone);
         return books.stream().map(book -> {
@@ -45,7 +45,7 @@ public class BookReadService {
             BookStats stats = BookStats.calculate(book, row == null ? 0 : ((Number) row[1]).longValue(),
                     row == null ? null : (LocalDate) row[2], today);
             return new BookResource.BookResponse(book.id, book.title, book.author, book.status, book.finishedOn,
-                    book.createdAt, book.updatedAt, book.edition, book.totalPages, covers.get(book.id), stats);
+                    book.createdAt, book.updatedAt, book.edition, book.totalPages, covers.get(book.id), stats, covers.containsKey(book.id));
         }).toList();
     }
 }

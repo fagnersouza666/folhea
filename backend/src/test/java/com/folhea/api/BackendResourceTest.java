@@ -1013,7 +1013,7 @@ class BackendResourceTest {
         given().contentType(ContentType.JSON).body("{\"edition\":\"  2ª edição  \",\"totalPages\":300000}")
                 .when().patch("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
                 .body("edition", equalTo("2ª edição")).body("totalPages", equalTo(300000));
-        for (String total : new String[]{"0", "-1", "1000001", "1.5", "\"12\""}) {
+        for (String total : new String[]{"0", "-1", "2147483648", "1.5", "\"12\""}) {
             given().contentType(ContentType.JSON).body("{\"totalPages\":" + total + "}")
                     .when().patch("/api/v1/books/{id}", seededAliceBookId).then().statusCode(400);
         }
@@ -1062,11 +1062,11 @@ class BackendResourceTest {
         byte[] png = testPng(20, 30);
         String id = given().multiPart("book", "{\"title\":\"Cover book\",\"totalPages\":120}", "application/json")
                 .multiPart("cover", "cover.png", png, "image/png").when().post("/api/v1/books")
-                .then().statusCode(201).body("cover.mediaType", equalTo("image/png"))
+                .then().statusCode(201).body("cover.mediaType", equalTo("image/jpeg"))
                 .body("cover.width", equalTo(20)).body("cover.height", equalTo(30))
                 .body("stats.percent", equalTo(0f)).extract().path("id");
         byte[] saved = given().when().get("/api/v1/books/{id}/cover", id).then().statusCode(200)
-                .contentType("image/png").header("Cache-Control", equalTo("no-store"))
+                .contentType("image/jpeg").header("Cache-Control", equalTo("no-store"))
                 .header("X-Content-Type-Options", equalTo("nosniff")).extract().asByteArray();
         org.junit.jupiter.api.Assertions.assertNotNull(javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(saved)));
         given().when().get("/api/v1/books/{id}/cover", seededBobBookId).then().statusCode(404);
@@ -1138,7 +1138,7 @@ class BackendResourceTest {
     void coverCommitFailureRollsBackTheBookAndRetryCreatesOnlyOne() throws Exception {
         try (var c=dataSource.getConnection(); var statement=c.createStatement()) {
             statement.execute("CREATE FUNCTION test_cover_commit_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test-only commit failure' USING ERRCODE='23514'; END $$");
-            statement.execute("CREATE CONSTRAINT TRIGGER test_cover_commit_fail AFTER INSERT ON book_cover DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION test_cover_commit_fail()");
+            statement.execute("CREATE CONSTRAINT TRIGGER test_cover_commit_fail AFTER INSERT ON book_photo DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION test_cover_commit_fail()");
         }
         try {
             given().multiPart("book", "{\"title\":\"Retry book\",\"totalPages\":40}", "application/json")
@@ -1147,7 +1147,7 @@ class BackendResourceTest {
             given().when().get("/api/v1/books").then().statusCode(200).body("size()", equalTo(1));
         } finally {
             try (var c=dataSource.getConnection(); var statement=c.createStatement()) {
-                statement.execute("DROP TRIGGER IF EXISTS test_cover_commit_fail ON book_cover");
+                statement.execute("DROP TRIGGER IF EXISTS test_cover_commit_fail ON book_photo");
                 statement.execute("DROP FUNCTION IF EXISTS test_cover_commit_fail()");
             }
         }

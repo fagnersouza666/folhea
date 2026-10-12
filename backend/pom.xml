@@ -37,6 +37,8 @@
         </dependencies>
     </dependencyManagement>
     <dependencies>
+        <!-- Pure Java ImageIO SPI for WebP input; JPEG output uses the JDK encoder. -->
+        <dependency><groupId>com.twelvemonkeys.imageio</groupId><artifactId>imageio-webp</artifactId><version>3.15.3</version></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-rest-jackson</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-hibernate-orm-panache</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-jdbc-postgresql</artifactId></dependency>

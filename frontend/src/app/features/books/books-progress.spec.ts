@@ -59,7 +59,7 @@ describe('private bookshelf official progress', () => {
   it('uses an authenticated lazy cover URL and offers a readable fallback when the image fails', () => {
     const fixture = render({ ...book, cover: { mediaType: 'image/jpeg', byteSize: 50, width: 100, height: 150, version: 'cover-v1' } });
     const image = fixture.nativeElement.querySelector('img') as HTMLImageElement;
-    expect(image?.getAttribute('src')).toBe('/api/v1/books/book-1/cover?v=cover-v1');
+    expect(image?.getAttribute('src')).toBe('/api/v1/books/book-1/photo?v=cover-v1');
     expect(image?.getAttribute('loading')).toBe('lazy');
     image.dispatchEvent(new Event('error')); fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Capa indisponível');

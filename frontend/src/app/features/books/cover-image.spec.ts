@@ -44,12 +44,12 @@ describe('local cover re-encoding', () => {
     });
     const result = await normalizeCover(png(3200, 1600));
     expect(result.type).toBe('image/jpeg'); expect(result.name).toBe('capa.jpg');
-    expect(encodedSizes).toEqual([[1600, 800]]); expect(result.size).toBeLessThanOrEqual(2097152); expect(close).toHaveBeenCalledOnce();
+    expect(encodedSizes).toEqual([[1600, 800]]); expect(result.size).toBeLessThanOrEqual(1000000); expect(close).toHaveBeenCalledOnce();
   });
   it('returns a useful preparation error and releases the bitmap when encoding exceeds the API limit', async () => {
     const close = vi.fn(); vi.stubGlobal('createImageBitmap', async () => ({ width: 800, height: 1200, close }));
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ fillRect() {}, drawImage() {} } as unknown as CanvasRenderingContext2D);
-    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(callback => callback(new Blob([new Uint8Array(2097153)], { type: 'image/jpeg' })));
-    await expect(normalizeCover(png(800,1200))).rejects.toThrow(/até 2 MB/); expect(close).toHaveBeenCalledOnce();
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(callback => callback(new Blob([new Uint8Array(1000001)], { type: 'image/jpeg' })));
+    await expect(normalizeCover(png(800,1200))).rejects.toThrow(/até 1 MB/); expect(close).toHaveBeenCalledOnce();
   });
 });
