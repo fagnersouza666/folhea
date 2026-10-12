@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-# Configures only explicitly supplied external providers; preserves users.
+# Configures explicit providers/profile or reconciles AUTH-01; preserves users.
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 cd "$ROOT"
 ENV_FILE="${COMPOSE_ENV_FILE:-$ROOT/.env}"
+ACTION="${1:-diagnose}"
+if [[ "$ACTION" == auth ]]; then
+  exec python3 -B "$ROOT/scripts/ops/keycloak-auth.py" --env-file "$ENV_FILE" --compose-file "$ROOT/docker-compose.yml"
+fi
 set -a
 source "$ENV_FILE"
 set +a
 COMPOSE=(docker compose --env-file "$ENV_FILE" -f docker-compose.yml)
-ACTION="${1:-diagnose}"
 if [[ "$ACTION" == diagnose ]]; then
   for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET SMTP_HOST SMTP_FROM SMTP_USER SMTP_PASSWORD; do
     if [[ -n "${!name:-}" ]]; then printf '%s: configurado\n' "$name"; else printf '%s: ausente\n' "$name"; fi
@@ -16,7 +19,7 @@ if [[ "$ACTION" == diagnose ]]; then
   echo "Callback Google: ${OIDC_PUBLIC_ORIGIN}/realms/folhea/broker/google/endpoint"
   exit 0
 fi
-if [[ "$ACTION" != apply && "$ACTION" != profile ]]; then echo 'Uso: configure-keycloak.sh [diagnose|profile|apply]' >&2; exit 1; fi
+if [[ "$ACTION" != apply && "$ACTION" != profile ]]; then echo 'Uso: configure-keycloak.sh [diagnose|profile|apply|auth]' >&2; exit 1; fi
 
 apply_json() {
   local operation="$1" resource="$2"

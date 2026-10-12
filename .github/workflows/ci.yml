@@ -270,6 +270,7 @@ jobs:
       - name: Validate realm and backup/restore scripts
         run: |
           bash scripts/tests/test-render-realm.sh
+          python3 -B -m unittest discover -s scripts/ops/tests -p test_keycloak_auth.py
           bash scripts/ops/tests/test-backup-restore.sh
       - name: Validate private book multipart body limits on actual Caddy
         timeout-minutes: 10

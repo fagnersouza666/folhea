@@ -151,9 +151,22 @@ as ações administrativas sem persistir os corpos privados das requisições
 ([Keycloak: tokens e auditoria](https://www.keycloak.org/docs/latest/server_admin/index.html)).
 O renderer JSON escapa segredos, substitui
 a origem de callback/login/logout e grava o import com permissão 0600.
-Um realm existente é preservado pelo `--import-realm`; mudanças de clientes
-ou secrets em instalações antigas exigem atualização administrativa explícita.
-Nunca remova o volume para aplicar configuração.
+O `--import-realm` ignora realms existentes; reiniciar não aplica os novos
+templates ([Keycloak: importação no boot](https://www.keycloak.org/server/importExport)).
+Antes de usar AUTH-01 numa instalação existente, execute
+`COMPOSE_ENV_FILE=/caminho/privado/staging.env scripts/ops/configure-keycloak.sh auth`
+com a configuração do projeto correto e o Keycloak saudável. O helper usa a
+Admin API privada para reconciliar cadastro/e-mail como identificador, login
+por e-mail, tema padrão, auditoria administrativa sem detalhes, desativação de
+password grant e o cliente exclusivo de exclusão/recovery com TTL de 300s.
+Verifica a configuração efetiva e uma segunda execução não escreve novamente.
+Atualiza somente esses campos e preserva usuários, credenciais, secrets,
+callbacks, demais atributos de clientes e provedores existentes. Se os clientes
+esperados estiverem ausentes ou ambíguos, falha antes de escrever. Requer o
+administrador operacional configurado no arquivo privado, não o cliente de
+serviço de exclusão. O launcher não aplica essa alteração automaticamente.
+Nunca remova volumes nem delete/reimporte o realm com override para aplicar
+configuração. Secrets não são girados por esse procedimento.
 
 O perfil de usuário v1 mantém e-mail obrigatório e nomes opcionais. Isso evita
 que o Keycloak exija nome/sobrenome após o cadastro e-mail/senha do produto.
