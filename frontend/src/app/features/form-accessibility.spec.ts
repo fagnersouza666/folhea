@@ -69,7 +69,7 @@ describe('critical form DOM states', () => {
     expect(submit.tabIndex).toBeGreaterThanOrEqual(0);
     expect(fixture.nativeElement.querySelector('.auth-intro')?.textContent).toContain('hábito');
     expect(registrationLink.textContent).toContain('Cadastre-se');
-    expect(registrationLink.getAttribute('href')).toBe('/cadastro');
+    expect(registrationLink.getAttribute('href')).toBe('/auth/register');
     expect(registrationLink.tabIndex).toBeGreaterThanOrEqual(0);
     submit.click();
     expect(auth.signIn).toHaveBeenCalledOnce();

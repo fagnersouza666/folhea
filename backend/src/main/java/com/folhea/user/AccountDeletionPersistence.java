@@ -75,9 +75,9 @@ public class AccountDeletionPersistence implements PanacheRepositoryBase<Account
                 Instant.now()).page(0, 25).list().stream().map(intent -> intent.id).toList();
     }
 
-    /** Also protects against Redis outages after the PostgreSQL deletion commit. */
+    /** A committed intent blocks access immediately, including provider outages. */
     public boolean isDeleted(String subject) {
-        return count("subjectHash = ?1 and localDeleted = true", SubjectReference.of(subject)) != 0;
+        return count("subjectHash = ?1", SubjectReference.of(subject)) != 0;
     }
 
     public record Snapshot(String subject, String csrfTicket, String oidcReference,

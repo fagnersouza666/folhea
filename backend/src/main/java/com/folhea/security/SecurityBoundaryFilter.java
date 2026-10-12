@@ -47,8 +47,7 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
         // API callers must never be sent to the browser login flow. The
         // browser starts OIDC explicitly at /auth/login; an API request with
         // no authenticated identity gets the machine-readable contract.
-        boolean publicRegistration = isPublicRegistration(context);
-        if ((identity == null || identity.isAnonymous()) && !publicRegistration) {
+        if ((identity == null || identity.isAnonymous())) {
             abort(context, 401, "https://folhea.com.br/problems/unauthorized", "Não autenticado", "É necessário autenticar-se.");
             return;
         }
@@ -56,7 +55,7 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
         String method = context.getMethod();
         if (!isMutation(method)) return;
 
-        if ((!publicRegistration || context.getHeaderString("Origin") != null) && !validOrigin(context)) {
+        if (!validOrigin(context)) {
             abort(context, 403, "https://folhea.com.br/problems/csrf-origin", "Origem não permitida", "A requisição deve vir da origem canônica.");
             return;
         }
@@ -68,7 +67,7 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
             abort(context, 415, "https://folhea.com.br/problems/unsupported-content-type", "Tipo de conteúdo não suportado", "Mutações autenticadas aceitam somente application/json.");
             return;
         }
-        if (!publicRegistration && !validCsrf(context)) {
+        if (!validCsrf(context)) {
             abort(context, 403, "https://folhea.com.br/problems/csrf-invalid", "Token CSRF inválido", "O token CSRF está ausente, expirado ou não pertence à sessão.");
             return;
         }
@@ -99,7 +98,11 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
         Cookie sessionCookie = context.getCookies().get(sessionCookies.name());
         String ticket = sessionCookie == null ? null : sessionCookie.getValue();
         String token = context.getHeaderString(CSRF_HEADER);
-        return csrfTokens.isValid(ticket, token);
+        Cookie readable = context.getCookies().get(CsrfCookiePolicy.NAME);
+        return readable != null && readable.getValue().length() <= 256 && token != null && token.length() <= 256
+                && java.security.MessageDigest.isEqual(token.getBytes(java.nio.charset.StandardCharsets.US_ASCII),
+                        readable.getValue().getBytes(java.nio.charset.StandardCharsets.US_ASCII))
+                && csrfTokens.isValid(ticket, token);
     }
 
     private void limitBody(ContainerRequestContext context) {
@@ -142,13 +145,6 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
         String path = context.getUriInfo().getPath();
         if (path != null && path.startsWith("/")) path = path.substring(1);
         return path != null && (path.equals("api") || path.startsWith("api/"));
-    }
-
-    private static boolean isPublicRegistration(ContainerRequestContext context) {
-        if (!"POST".equalsIgnoreCase(context.getMethod())) return false;
-        String path = context.getUriInfo().getPath();
-        if (path != null && path.startsWith("/")) path = path.substring(1);
-        return "api/v1/registration".equals(path) || "api/v1/auth/register".equals(path) || "api/v1/register".equals(path);
     }
 
     private static boolean isMutation(String method) {

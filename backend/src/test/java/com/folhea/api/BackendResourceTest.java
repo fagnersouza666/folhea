@@ -103,6 +103,7 @@ class BackendResourceTest {
         RestAssured.requestSpecification = new RequestSpecBuilder()
                 .addHeader("Origin", "http://localhost:8081")
                 .addHeader("X-CSRF-Token", csrf)
+                .addCookie("__Host-folhea_csrf", csrf)
                 .addCookie(SessionCookiePolicy.NAME, ticket)
                 .build();
     }
@@ -143,7 +144,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -157,7 +158,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -173,7 +174,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -190,7 +191,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -204,7 +205,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -270,7 +271,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -325,7 +326,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "America/Sao_Paulo")
     })
@@ -350,7 +351,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -390,7 +391,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -432,7 +433,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -451,7 +452,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -477,7 +478,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -505,7 +506,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -532,7 +533,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -561,7 +562,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -579,7 +580,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE)
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE)
     void deletionRevokesTheOidcReferenceInsteadOfTheIndependentCsrfTicket() {
         String reference = SessionCookiePolicy.newTicket(new SecureRandom());
         tokenStateStore.save(reference, new io.quarkus.oidc.AuthorizationCodeTokens("id", "access", "refresh"), java.time.Duration.ofMinutes(5));
@@ -589,7 +590,7 @@ class BackendResourceTest {
         RestAssured.requestSpecification = null;
         RestAssured.requestSpecification = new RequestSpecBuilder()
                 .addHeader("Origin", "http://localhost:8081").build();
-        given().cookie("q_session_Default_folhea", reference).cookie(SessionCookiePolicy.NAME, ticket)
+        given().cookie("q_session_Default_folhea", reference).cookie(SessionCookiePolicy.NAME, ticket).cookie("__Host-folhea_csrf", csrf)
                 .header("X-CSRF-Token", csrf).contentType(ContentType.JSON).body("{\"confirm\":true}")
                 .when().delete("/api/v1/me").then().statusCode(204)
                 .cookie("q_session_Default_folhea", equalTo(""));
@@ -601,22 +602,26 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE)
-    void providerFailureKeepsTheAccountAndAllowsDeletionRetry() {
-        org.mockito.Mockito.doThrow(new KeycloakAdminClient.ProvisioningException(KeycloakAdminClient.Failure.UNAVAILABLE))
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE)
+    void providerFailureRetainsDataButBlocksAccessAndRecoveryNeedsNoNewLogin() throws Exception {
+        org.mockito.Mockito.doThrow(new KeycloakAdminClient.AdminUnavailableException())
                 .when(keycloak).deleteAccount(ALICE);
-        given().contentType(ContentType.JSON).body("{\"confirm\":true}").when().delete("/api/v1/me")
-                .then().statusCode(503).contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/account-deletion-unavailable"));
-        given().when().get("/api/v1/me").then().statusCode(200);
-        given().when().get("/api/v1/books").then().statusCode(200).body("size()", equalTo(1));
+        given().contentType(ContentType.JSON).body("{\"confirm\":true}").delete("/api/v1/me")
+                .then().statusCode(503).contentType("application/problem+json");
+        assertNotNull(findUserBySubject(ALICE));
+        assertEquals(1, countBooksForSubject(ALICE));
+        given().get("/api/v1/me").then().statusCode(401);
+        given().get("/api/v1/books").then().statusCode(401);
+        given().redirects().follow(false).get("/auth/callback").then().statusCode(401);
         org.mockito.Mockito.doNothing().when(keycloak).deleteAccount(ALICE);
-        given().contentType(ContentType.JSON).body("{\"confirm\":true}").when().delete("/api/v1/me")
-                .then().statusCode(204);
+        makeDeletionDue();
+        recovery.retryPending();
+        assertNull(findUserBySubject(ALICE));
+        assertEquals(0, pendingDeletionCount());
     }
 
     @Test
-    @TestSecurity(user = ALICE)
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE)
     void csrfCleanupFailureCannotRollBackAnAccountAlreadyDeletedInTheProvider() throws Exception {
         String ticket = seededSessionTicket;
         String csrf = csrfTokens.getOrIssue(ticket);
@@ -645,13 +650,13 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE)
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE)
     void localFlushFailureRetainsTheIntentAndRecoveryCompletesWithoutLogin() throws Exception {
         verifyLocalDeletionRecovery(false);
     }
 
     @Test
-    @TestSecurity(user = ALICE)
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE)
     void localCommitFailureRetainsTheIntentAndRecoveryCompletesWithoutLogin() throws Exception {
         verifyLocalDeletionRecovery(true);
     }
@@ -712,10 +717,6 @@ class BackendResourceTest {
         assertNotNull(findUserBySubject(BOB));
         assertEquals(0, pendingDeletionCount());
         assertCompactedMarker();
-        org.mockito.Mockito.when(keycloak.provision(org.mockito.ArgumentMatchers.eq("alice@example.test"),
-                org.mockito.ArgumentMatchers.anyString())).thenReturn(new KeycloakAdminClient.ProvisionedUser("alice-new-subject"));
-        given().contentType(ContentType.JSON).body("{\"email\":\"alice@example.test\",\"password\":\"test-only-password\"}")
-                .when().post("/api/v1/registration").then().statusCode(201);
     }
 
     private long pendingDeletionCount() throws Exception {
@@ -748,19 +749,98 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE)
-    void analyticsAcceptsOnlyDeclaredEventsAndCategoricalOrNumericProperties() {
-        given().contentType(ContentType.JSON).body("{\"event\":\"card_shared\",\"properties\":{\"method\":\"native\",\"card_count\":1}}")
-                .when().post("/api/v1/analytics/events").then().statusCode(202);
-        for (String payload : new String[]{
-                "{\"event\":\"unknown\"}",
-                "{\"event\":\"book_created\",\"properties\":{\"title\":\"secret\"}}",
-                "{\"event\":\"book_created\",\"properties\":{\"source\":\"secret-book\"}}",
-                "{\"event\":\"book_created\",\"properties\":{\"pages\":\"private\"}}",
-                "{\"event\":\"book_created\",\"properties\":{\"pages\":1.5}}"}) {
-            given().contentType(ContentType.JSON).body(payload).when().post("/api/v1/analytics/events")
-                    .then().statusCode(400).contentType("application/problem+json");
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE)
+    void analyticsIsPausedAndCannotReceiveProductEvents() {
+        given().contentType(ContentType.JSON).body("{}").post("/api/v1/analytics/events")
+                .then().statusCode(org.hamcrest.Matchers.isOneOf(404, 405));
+    }
+
+    @Test
+    void oldPasswordRegistrationPathsAreAbsent() {
+        for (String path : new String[]{"/api/v1/registration", "/api/v1/auth/register", "/api/v1/register"}) {
+            given().redirects().follow(false).contentType(ContentType.JSON).body("{}")
+                    .post(path).then().statusCode(org.hamcrest.Matchers.isOneOf(404, 405));
         }
+    }
+
+    @Test
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE,
+            attributes = @SecurityAttribute(key = "test.auth-time", value = "missing"))
+    void freshTokenIatWithoutProviderAuthTimeCannotAuthorizeDeletion() throws Exception {
+        given().contentType(ContentType.JSON).body("{\"confirm\":true}").delete("/api/v1/me")
+                .then().statusCode(401).body("type", equalTo("https://folhea.com.br/problems/recent-authentication-required"));
+        assertNotNull(findUserBySubject(ALICE)); assertEquals(0,pendingDeletionCount());
+        org.mockito.Mockito.verifyNoInteractions(keycloak);
+    }
+
+    @Test
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE,
+            attributes = @SecurityAttribute(key = "test.auth-time", value = "future"))
+    void futureProviderAuthTimeCannotAuthorizeDeletion() throws Exception {
+        given().contentType(ContentType.JSON).body("{\"confirm\":true}").delete("/api/v1/me")
+                .then().statusCode(401).body("type", equalTo("https://folhea.com.br/problems/recent-authentication-required"));
+        assertNotNull(findUserBySubject(ALICE)); assertEquals(0,pendingDeletionCount());
+        org.mockito.Mockito.verifyNoInteractions(keycloak);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "{\"confirm\":\"true\"}", "{\"confirm\":1}", "{\"confirm\":\"false\"}", "{\"confirm\":false}", "{}"
+    })
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE)
+    void deletionConfirmationMustBeALiteralJsonBoolean(String payload) throws Exception {
+        given().contentType(ContentType.JSON).body(payload).delete("/api/v1/me")
+                .then().statusCode(400).contentType("application/problem+json");
+        assertNotNull(findUserBySubject(ALICE)); assertEquals(0,pendingDeletionCount());
+        org.mockito.Mockito.verifyNoInteractions(keycloak);
+    }
+
+    @Test
+    void delegatedCredentialsHaveNoColumnsInTheApplicationDatabase() throws Exception {
+        try (var connection = dataSource.getConnection(); var query = connection.createStatement();
+             var rows = query.executeQuery("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='folhea_user' AND column_name IN ('password_hash','login_identifier')")) {
+            rows.next();
+            assertEquals(0, rows.getInt(1));
+        }
+    }
+
+    @Test
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE)
+    void csrfEndpointIssuesReadableSecureCookieMatchingTheHeaderValue() {
+        var response = given().get("/api/v1/csrf").then().statusCode(200).extract().response();
+        var cookie = response.getDetailedCookie("__Host-folhea_csrf");
+        assertNotNull(cookie);
+        assertEquals(response.jsonPath().getString("token"), cookie.getValue());
+        org.junit.jupiter.api.Assertions.assertTrue(cookie.isSecured());
+        org.junit.jupiter.api.Assertions.assertFalse(cookie.isHttpOnly());
+        assertEquals("/", cookie.getPath());
+        assertEquals("Lax", cookie.getSameSite());
+    }
+
+    @Test
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE)
+    void csrfHeaderMustMatchTheReadableCookieAsWellAsTheServerBinding() {
+        RestAssured.requestSpecification = null;
+        var token = csrfTokens.getOrIssue(seededSessionTicket);
+        for (boolean includeCookie : new boolean[]{false, true}) {
+            var request = given().header("Origin", "http://localhost:8081")
+                    .cookie(SessionCookiePolicy.NAME, seededSessionTicket).header("X-CSRF-Token", token);
+            if (includeCookie) request.cookie("__Host-folhea_csrf", "different-token");
+            request.contentType(ContentType.JSON).body("{\"timezone\":\"UTC\"}")
+                    .patch("/api/v1/me").then().statusCode(403).contentType("application/problem+json");
+        }
+    }
+
+    @Test
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE,
+            attributes = @SecurityAttribute(key = "test.auth-time", value = "stale"))
+    void deletingAnAccountRequiresRecentOidcAuthenticationBeforeAnyIntentOrProviderCall() throws Exception {
+        given().contentType(ContentType.JSON).body("{\"confirm\":true}").delete("/api/v1/me")
+                .then().statusCode(401).contentType("application/problem+json")
+                .body("type", equalTo("https://folhea.com.br/problems/recent-authentication-required"));
+        assertNotNull(findUserBySubject(ALICE));
+        assertEquals(0, pendingDeletionCount());
+        org.mockito.Mockito.verifyNoInteractions(keycloak);
     }
 
     @Test
@@ -775,7 +855,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -802,7 +882,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -838,7 +918,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = BOB, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = BOB, attributes = {
             @SecurityAttribute(key = "email", value = "bob@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -855,7 +935,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -870,7 +950,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -888,7 +968,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {
             @SecurityAttribute(key = "email", value = "alice@example.test"),
             @SecurityAttribute(key = "zoneinfo", value = "UTC")
     })
@@ -900,7 +980,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
     void bookshelfMetricsUseAllHistoryEvenBeyondTheSessionPageAndYear() {
         seedLongStreak();
         given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
@@ -915,7 +995,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
     void invalidMultipartCoverNeverCreatesAPartialBook() {
         given().multiPart("book", "{\"title\":\"Atomic book\",\"totalPages\":300}", "application/json")
                 .multiPart("cover", "cover.png", new byte[]{1, 2, 3}, "image/png")
@@ -924,7 +1004,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
     void completeMetadataIsValidatedWithoutBreakingLegacyBooksOrRoundingEarlyCompletion() {
         given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
                 .body("edition", org.hamcrest.Matchers.nullValue()).body("cover", org.hamcrest.Matchers.nullValue())
@@ -954,7 +1034,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
     void calendarAverageIncludesIdleDaysAndFreezesAtFinishedOnWithoutDroppingLegacyDates() {
         UUID session = createSession(seededAliceBookId, TODAY.minusDays(4), 30, 0);
         given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
@@ -977,7 +1057,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
     void privateCoversAreAtomicPortableAndRemovedWithTheBook() throws Exception {
         byte[] png = testPng(20, 30);
         String id = given().multiPart("book", "{\"title\":\"Cover book\",\"totalPages\":120}", "application/json")
@@ -1003,7 +1083,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
     void imageDimensionsAndByteLimitsRejectBeforeCreatingAnyBook() throws Exception {
         for (byte[] invalid : new byte[][]{testPng(4097, 1), testPng(3000, 1500)}) {
             given().multiPart("book", "{\"title\":\"Too large\",\"totalPages\":1}", "application/json")
@@ -1054,7 +1134,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
     void coverCommitFailureRollsBackTheBookAndRetryCreatesOnlyOne() throws Exception {
         try (var c=dataSource.getConnection(); var statement=c.createStatement()) {
             statement.execute("CREATE FUNCTION test_cover_commit_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test-only commit failure' USING ERRCODE='23514'; END $$");
@@ -1078,7 +1158,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
     void multipartCoverMutationsPreserveCsrfOwnershipAndAccountCascade() throws Exception {
         given().header("X-CSRF-Token", "forged")
                 .multiPart("book", "{\"title\":\"Denied\",\"totalPages\":10}", "application/json")
@@ -1106,7 +1186,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
     void averageUsesAccountTimezoneCalendarRatherThanServerTimezone() {
         createSession(seededAliceBookId,TODAY.minusDays(3),12,0);
         given().when().get("/api/v1/books/{id}", seededAliceBookId).then().statusCode(200)
@@ -1119,7 +1199,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
     void aBookPageUsesBatchedQueriesInsteadOfOneQueryPerCoverOrHistory() {
         seedBookPage();
         var statistics=entityManager.getEntityManagerFactory().unwrap(org.hibernate.SessionFactory.class).getStatistics();
@@ -1137,7 +1217,7 @@ class BackendResourceTest {
     void seedBookPage() { UUID owner=findUserBySubject(ALICE).id;for(int i=0;i<39;i++)entityManager.persist(book(owner,"Batch "+i)); }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
     void jpegNormalizationRemovesMetadataAndMalformedDecodersCannotPersistImages() throws Exception {
         var out=new java.io.ByteArrayOutputStream();
         javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(20,30,java.awt.image.BufferedImage.TYPE_INT_RGB),"jpeg",out);
@@ -1164,7 +1244,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
     void minutesOnlyReadingSetsTheCalendarStartWithoutInventingPages() {
         createSession(seededAliceBookId,TODAY.minusDays(10),0,5);
         given().get("/api/v1/books/{id}",seededAliceBookId).then().statusCode(200)
@@ -1174,7 +1254,7 @@ class BackendResourceTest {
     }
 
     @Test
-    @TestSecurity(user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
+    @TestSecurity(augmentors = com.folhea.auth.TestOidcIdentity.class, user = ALICE, attributes = {@SecurityAttribute(key = "email", value = "alice@example.test")})
     void abortedImageExportClosesItsCursorAndRestoresThePooledConnection() throws Exception {
         var image=new java.awt.image.BufferedImage(256,256,java.awt.image.BufferedImage.TYPE_INT_RGB);
         var random=new java.util.Random(45);

@@ -33,9 +33,12 @@ import { PwaService } from '../../core/services/pwa.service';
         <h2 id="delete-dialog-title">Excluir conta permanentemente?</h2>
         <p id="delete-dialog-description">Esta ação apaga sua conta, livros e sessões de leitura. Não pode ser desfeita.</p>
         <label class="confirm-label"><input type="checkbox" [checked]="deleteConfirmed()" [disabled]="deleting()" (change)="deleteConfirmed.set($any($event.target).checked)" /> Entendo que todos os meus dados serão removidos.</label>
-        @if (privacyError()) { <p class="privacy-error" role="alert">{{ privacyError() }}</p> }<div class="dialog-actions">
+        @if (privacyError()) { <p class="privacy-error" role="alert">{{ privacyError() }}</p> }
+        @if (reauthenticationRequired()) { <a class="button button-primary" href="/auth/reauthenticate">Confirmar minha identidade</a> }
+        @if (deletionPending()) { <a class="button" routerLink="/">Voltar ao início</a> }
+        <div class="dialog-actions">
           <button class="button" type="button" (click)="closeDeleteDialog()" [disabled]="deleting()">Cancelar</button>
-          <button class="button button-danger" type="submit" [disabled]="!deleteConfirmed() || deleting()">{{ deleting() ? 'Excluindo…' : 'Excluir conta' }}</button>
+          <button class="button button-danger" type="submit" [disabled]="!deleteConfirmed() || deleting() || reauthenticationRequired() || deletionPending()">{{ deleting() ? 'Excluindo…' : 'Excluir conta' }}</button>
         </div>
       </form>
     </dialog>
@@ -57,6 +60,8 @@ export class SettingsComponent {
   readonly deleting = signal(false);
   readonly deleteConfirmed = signal(false);
   readonly privacyError = signal<string | null>(null);
+  readonly reauthenticationRequired = signal(false);
+  readonly deletionPending = signal(false);
   @ViewChild('deleteDialog', { static: true }) private deleteDialog?: ElementRef<HTMLDialogElement>;
 
   async saveTimezone(event: Event): Promise<void> {
@@ -95,6 +100,7 @@ export class SettingsComponent {
   openDeleteDialog(): void {
     this.deleteDialogOpen.set(true);
     this.deleteConfirmed.set(false);
+    this.reauthenticationRequired.set(false);
     this.privacyError.set(null);
     this.deleteDialog?.nativeElement.showModal();
   }
@@ -108,14 +114,25 @@ export class SettingsComponent {
 
   async confirmDelete(event: Event): Promise<void> {
     event.preventDefault();
-    if (!this.deleteConfirmed() || this.deleting()) return;
+    if (!this.deleteConfirmed() || this.deleting() || this.reauthenticationRequired() || this.deletionPending()) return;
     this.deleting.set(true);
     this.privacyError.set(null);
     try {
       await this.auth.deleteAccount();
-    } catch {
+    } catch (error) {
       this.deleting.set(false);
-      this.privacyError.set('Não foi possível excluir sua conta. Seus dados foram preservados. Tente novamente.');
+      const type = typeof error === 'object' && error !== null && 'error' in error
+        ? (error.error as { type?: string } | null)?.type : undefined;
+      if (type === 'https://folhea.com.br/problems/recent-authentication-required') {
+        this.reauthenticationRequired.set(true);
+        this.deleteConfirmed.set(false);
+        this.privacyError.set('Confirme sua identidade na tela de acesso e, ao voltar, confirme novamente a exclusão.');
+      } else if (type === 'https://folhea.com.br/problems/account-deletion-pending') {
+        this.deletionPending.set(true);
+        this.privacyError.set('Sua solicitação de exclusão foi confirmada e continuará automaticamente. O acesso à conta foi encerrado.');
+      } else {
+        this.privacyError.set('A exclusão não foi confirmada. Tente novamente.');
+      }
     }
   }
 }

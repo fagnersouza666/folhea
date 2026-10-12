@@ -36,7 +36,7 @@ import java.util.UUID;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 @Tag(name = "Reading sessions")
-@SecurityRequirement(name = "bearerAuth")
+@SecurityRequirement(name = "cookieAuth")
 public class ReadingSessionResource {
     private static final int MAX_PAGES = 10_000;
     private static final int MAX_MINUTES = 24 * 60;

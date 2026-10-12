@@ -1,11 +1,4 @@
-import { HttpClient } from '@angular/common/http';
-import { Injectable, InjectionToken, inject } from '@angular/core';
-import { EMPTY, catchError } from 'rxjs';
-
-export const ANALYTICS_ENDPOINT = new InjectionToken<string>('ANALYTICS_ENDPOINT', {
-  providedIn: 'root',
-  factory: () => '/api/v1/analytics/events'
-});
+import { Injectable } from '@angular/core';
 
 export const PRODUCT_EVENTS = [
   'account_created',
@@ -46,21 +39,10 @@ export function safeAnalyticsProperties(properties: AnalyticsProperties = {}): R
   }, {});
 }
 
+/** AUTH-01 pauses product analytics until its purpose and measurements are approved. */
 @Injectable({ providedIn: 'root' })
 export class AnalyticsService {
-  private readonly http = inject(HttpClient);
-  private readonly endpoint = inject(ANALYTICS_ENDPOINT);
-
   track(event: ProductEvent, properties: AnalyticsProperties = {}): void {
-    if (typeof window === 'undefined') return;
-
-    this.http.post(this.endpoint, {
-      event,
-      occurredAt: new Date().toISOString(),
-      properties: safeAnalyticsProperties(properties)
-    }, {
-      withCredentials: true,
-      headers: { Accept: 'application/json' }
-    }).pipe(catchError(() => EMPTY)).subscribe();
+    void event; void properties;
   }
 }

@@ -28,14 +28,6 @@ public class UserEntity {
     @Column(length = 320)
     public String email;
 
-    /** Legacy identifier retained for duplicate detection; new credentials belong to Keycloak. */
-    @Column(name = "login_identifier", length = 320)
-    public String loginIdentifier;
-
-    /** Legacy schema column; Keycloak-backed registration never populates it. */
-    @Column(name = "password_hash", length = 255)
-    public String passwordHash;
-
     @NotNull
     @Column(nullable = false, length = 80)
     public String timezone;

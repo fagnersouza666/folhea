@@ -27,7 +27,7 @@ public class BffSessionCookieFilter {
         if (path != null && path.startsWith("/")) path = path.substring(1);
         if (path == null) return Uni.createFrom().voidItem();
         Cookie current = request.getCookies().get(sessionCookies.name());
-        if (path.equals("auth/callback") || path.equals("auth/login")) {
+        if (path.equals("auth/callback") || path.equals("auth/login") || path.equals("auth/register")) {
             // Global response filters also run for authentication failures and
             // challenges. Resubscribing to the rejected lazy identity there
             // restarts the REST failure pipeline recursively. Only the
@@ -46,8 +46,9 @@ public class BffSessionCookieFilter {
                 return onWorker(() -> {
                     String next = SessionCookiePolicy.newTicket(random);
                     if (current != null && SessionCookiePolicy.isValidTicket(current.getValue())) csrfTokens.revoke(current.getValue());
-                    csrfTokens.getOrIssue(next);
+                    String csrf = csrfTokens.getOrIssue(next);
                     response.getHeaders().add(HttpHeaders.SET_COOKIE, sessionCookies.issue(next));
+                    response.getHeaders().add(HttpHeaders.SET_COOKIE, CsrfCookiePolicy.issue(csrf));
                 });
             });
         }
@@ -55,6 +56,7 @@ public class BffSessionCookieFilter {
             return onWorker(() -> {
                 if (current != null) csrfTokens.revoke(current.getValue());
                 response.getHeaders().add(HttpHeaders.SET_COOKIE, sessionCookies.clear());
+                response.getHeaders().add(HttpHeaders.SET_COOKIE, CsrfCookiePolicy.clear());
             });
         }
         return Uni.createFrom().voidItem();

@@ -80,8 +80,6 @@ async function handleApi(route: Route, state: MockState): Promise<void> {
   }
   if (method === 'PATCH' && path === '/api/v1/me') { state.timezone = JSON.parse(request.postData() ?? '{}').timezone; return json(route, 200, { id: 'demo-user', email: 'reader@example.com', timezone: state.timezone }); }
   if (method === 'GET' && path === '/api/v1/csrf') return json(route, 200, { token: 'e2e-csrf-token' });
-  if (method === 'POST' && path === '/api/v1/analytics/events') return route.fulfill({ status: 202 });
-  if (method === 'POST' && path === '/api/v1/registration') return json(route, 201, { id: 'created-user', email: 'new@example.test' });
   if (method === 'GET' && path === '/api/v1/dashboard') {
     const current = state.books.find((book) => book.status === 'READING');
     return json(route, 200, {
@@ -196,7 +194,6 @@ export async function signIn(page: Page): Promise<void> {
   await page.route('**/auth/login', (route) => route.fulfill({ status: 302, headers: { location: '/app/inicio' } }));
   await page.goto('/');
   await page.getByRole('link', { name: /começar agora/i }).click();
-  await page.getByRole('button', { name: /entrar/i }).click();
   await expect(page).toHaveURL(/\/app\/inicio$/);
   await expect(page.getByText('Olá, leitor.')).toBeVisible();
 }

@@ -5,13 +5,10 @@ import { AuthService } from '../auth/auth.service';
 import { CsrfService } from './csrf.service';
 
 const mutationMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const publicRegistrationPaths = new Set(['/api/v1/registration', '/api/v1/auth/register', '/api/v1/register']);
 
 export const csrfInterceptor: HttpInterceptorFn = (request, next) => {
   if (!request.url.startsWith('/api/')) return next(request);
   const withCredentials = request.clone({ withCredentials: true });
-  // Registration is public and does not have an authenticated CSRF token yet.
-  if (request.method === 'POST' && publicRegistrationPaths.has(request.url)) return next(withCredentials);
   const auth = inject(AuthService);
   if (!mutationMethods.has(request.method) || request.url === '/api/v1/csrf') {
     return next(withCredentials).pipe(catchError((error: unknown) => handleAuthError(request, error, auth)));
@@ -36,9 +33,10 @@ export const csrfInterceptor: HttpInterceptorFn = (request, next) => {
   );
 };
 
-function handleAuthError(request: { url: string }, error: unknown, auth: AuthService) {
-  if (error instanceof HttpErrorResponse && error.status === 401 && request.url !== '/api/v1/me') {
-    if (auth.initialized() && auth.isAuthenticated()) auth.signOut();
+function handleAuthError(request: { url: string; method?: string }, error: unknown, auth: AuthService) {
+  if (error instanceof HttpErrorResponse && error.status === 401 && !(request.url === '/api/v1/me' && request.method === 'GET')) {
+    if (error.error?.type === 'https://folhea.com.br/problems/recent-authentication-required') return throwError(() => error);
+    if (auth.initialized() && auth.isAuthenticated()) auth.sessionExpired();
   }
   return throwError(() => error);
 }

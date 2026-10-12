@@ -51,13 +51,25 @@ export class AuthService {
     if (isPlatformBrowser(this.platformId)) window.location.assign('/auth/logout');
   }
 
+  sessionExpired(): void {
+    this.userState.set(null); this.initializedState.set(true); this.csrf.clear();
+    if (isPlatformBrowser(this.platformId)) window.location.assign('/entrar');
+  }
+
   async updateTimezone(timezone: string): Promise<void> {
     const user = await firstValueFrom(this.api.updateMe(timezone));
     this.userState.set(user);
   }
 
   async deleteAccount(): Promise<void> {
-    await firstValueFrom(this.api.deleteAccount());
+    try { await firstValueFrom(this.api.deleteAccount()); }
+    catch (error) {
+      if (error instanceof Object && 'status' in error && error.status === 503
+          && 'error' in error && (error.error as { type?: string } | null)?.type === 'https://folhea.com.br/problems/account-deletion-pending') {
+        this.userState.set(null); this.initializedState.set(true); this.csrf.clear();
+      }
+      throw error;
+    }
     // DELETE already removes the identity and revokes the BFF session.
     this.userState.set(null);
     this.initializedState.set(true);

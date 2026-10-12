@@ -41,7 +41,7 @@ import java.time.ZoneId;
 @Authenticated
 @Produces(MediaType.APPLICATION_JSON)
 @Tag(name = "User")
-@SecurityRequirement(name = "bearerAuth")
+@SecurityRequirement(name = "cookieAuth")
 public class UserResource {
     private static final Logger LOG = Logger.getLogger(UserResource.class);
 
@@ -52,6 +52,7 @@ public class UserResource {
     @Inject SessionCookieSettings sessionCookies;
     @Inject OidcSessionCookieSettings oidcCookies;
     @Inject AccountDeletionService deletions;
+    @Inject com.folhea.auth.RecentAuthentication recentAuthentication;
     @Inject AccountExportService exports;
 
     @GET
@@ -98,10 +99,18 @@ public class UserResource {
                     "Confirmação necessária",
                     "Envie {\"confirm\": true} para excluir a conta.");
         }
+        recentAuthentication.require();
         UserEntity user = currentUser.get();
-        deletions.delete(user, ticket(headers, sessionCookies.name()), ticket(headers, oidcCookies.name()));
+        try {
+            deletions.delete(user, ticket(headers, sessionCookies.name()), ticket(headers, oidcCookies.name()));
+        } catch (ProblemException problem) {
+            if (!problem.type().endsWith("/account-deletion-pending")) throw problem;
+            return Response.fromResponse(com.folhea.shared.ProblemResponses.build(problem.status(), problem.type(),
+                    problem.title(), problem.getMessage()))
+                    .cookie(sessionCookies.clear(), oidcCookies.clear(), com.folhea.security.CsrfCookiePolicy.clear()).build();
+        }
         LOG.info("Account deleted");
-        return Response.noContent().cookie(sessionCookies.clear(), oidcCookies.clear()).build();
+        return Response.noContent().cookie(sessionCookies.clear(), oidcCookies.clear(), com.folhea.security.CsrfCookiePolicy.clear()).build();
     }
 
     private static String ticket(HttpHeaders headers, String name) {

@@ -4,9 +4,7 @@ Aplicação Angular 22: páginas públicas SSG e área privada CSR, com navegaç
 
 ## Executar e validar
 
-Na pasta `frontend`, execute `npm ci`, `npm start` e acesse `http://localhost:4200`. O proxy local encaminha `/api` e `/auth` ao BFF. O cadastro usa `POST /api/v1/registration`; entrar redireciona ao Keycloak pelo BFF. Google e recuperação de senha são opções do IdP quando configuradas.
-
-O cadastro anônimo envia o POST público diretamente, sem buscar `/csrf`, que exige autenticação. O interceptor limita essa exceção ao método POST nos caminhos exatos `/api/v1/registration` e nos aliases de compatibilidade `/api/v1/auth/register` e `/api/v1/register`. As mutações de livros, sessões, conta e analytics continuam exigindo token CSRF. A regressão de cadastro da suíte crítica simula `/me` e `/csrf` com 401 antes do login para não mascarar esse contrato público.
+Na pasta `frontend`, execute `npm ci`, `npm start` e acesse `http://localhost:4200`. O proxy local encaminha `/api` e `/auth` ao BFF. Cadastro e login navegam para `/auth/register` e `/auth/login`, com credenciais apenas na tela padrão do Keycloak. Não há POST público de senha. Todas as mutações de API usam CSRF; analytics está pausado. A suíte crítica simula API e redirects, e não equivale ao aceite com IdP real.
 
 ```bash
 npm run lint
@@ -61,3 +59,7 @@ O foco por teclado usa anel verde com faixa clara, para ser distinguível em sup
 Dependências diretas foram conferidas em metadados estáveis do [registry oficial npm](https://registry.npmjs.org/@angular%2fcore) em 11/10/2026: Angular/CLI 22.2.2, TypeScript 6.0.3 (faixa suportada pelo compiler-cli), Playwright 1.64.0 e Vitest 5.0.3. Versões estão fixadas no `package.json` e `package-lock.json`. Os engines oficiais de Angular/core/CLI/build são `^22.22.3 || ^24.15.0 || >=26.0.0`; o builder aceita TypeScript `>=6.0 <6.1`. O Node 26 usado nos checks atende a essa faixa.
 
 O build/servidor de desenvolvimento usa `@angular/build` 22.2.2 com esbuild/Vite, seguindo a [migração oficial do Angular](https://angular.dev/tools/cli/build-system-migration). O pacote legado `@angular-devkit/build-angular` não é necessário neste projeto e sua árvore Webpack foi removida. Isso elimina a cadeia de seis alertas `high` de desenvolvimento relacionada ao [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), sem downgrade ou override de pacote vulnerável. Audite a árvore completa com `npm audit` e a classificação de dependências de produção com `npm audit --omit=dev`; mantenha o lockfile ao integrar. O runtime publicado é estático no Caddy, mas o audit inclui também ferramentas de desenvolvimento.
+
+### AUTH-01
+
+Cadastro e login navegam para `/auth/register` e `/auth/login`; não há formulário de senha ou POST de cadastro no Angular. Os CTAs públicos usam redirect completo para o BFF. Analytics está pausado e não transmite eventos. O CSRF é lido de `__Host-folhea_csrf` por mutação; GET `/csrf` emite o cookie quando necessário, sem ler cookies HttpOnly ou guardar tokens de acesso/refresh. Um 401 privado encerra o espelho local e leva à entrada. A exceção `recent-authentication-required` preserva a sessão e oferece reautenticação (`prompt=login`), exigindo nova confirmação da exclusão. `account-deletion-pending` informa conclusão durável automática, sem oferecer novo DELETE ou prometer preservação da conta. Testes Angular/Playwright com API simulada não comprovam um login real no IdP.

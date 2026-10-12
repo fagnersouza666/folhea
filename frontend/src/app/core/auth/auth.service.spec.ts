@@ -44,7 +44,7 @@ describe('AuthService account deletion state', () => {
     http.expectOne('/api/v1/csrf').flush({ token: 'new-session-token' });
   });
 
-  it('preserves the user and cached CSRF token after 503 so deletion can be retried', async () => {
+  it('preserves the user after an unconfirmed 503 and obtains the current CSRF value', async () => {
     const deletion = auth.deleteAccount();
     const failure = expect(deletion).rejects.toMatchObject({ status: 503 });
     http.expectOne('/api/v1/me').flush({ detail: 'Identidade indisponível' }, { status: 503, statusText: 'Service Unavailable' });
@@ -53,7 +53,12 @@ describe('AuthService account deletion state', () => {
     expect(auth.isAuthenticated()).toBe(true);
     let token: string | undefined;
     csrf.getToken().subscribe(value => { token = value; });
-    http.expectNone('/api/v1/csrf');
+    http.expectOne('/api/v1/csrf').flush({ token: 'current-session-token' });
     expect(token).toBe('current-session-token');
+  });
+  it('clears the local identity after a durably accepted pending deletion', async () => {
+    const deletion = auth.deleteAccount(); const failure = expect(deletion).rejects.toMatchObject({ status: 503 });
+    http.expectOne('/api/v1/me').flush({ type: 'https://folhea.com.br/problems/account-deletion-pending' }, { status: 503, statusText: 'Pending' });
+    await failure; expect(auth.user()).toBeNull(); expect(auth.isAuthenticated()).toBe(false);
   });
 });

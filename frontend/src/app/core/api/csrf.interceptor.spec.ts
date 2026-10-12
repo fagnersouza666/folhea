@@ -5,81 +5,49 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../auth/auth.service';
 import { csrfInterceptor } from './csrf.interceptor';
 
-describe('csrfInterceptor', () => {
-  let http: HttpClient;
-  let httpMock: HttpTestingController;
-  let signOutSpy: ReturnType<typeof vi.fn>;
-
+describe('csrfInterceptor AUTH-01', () => {
+  let http: HttpClient; let control: HttpTestingController; let expired: ReturnType<typeof vi.fn>;
   beforeEach(() => {
-    signOutSpy = vi.fn();
-    TestBed.configureTestingModule({
-      providers: [
-        provideHttpClient(withInterceptors([csrfInterceptor])),
-        provideHttpClientTesting(),
-        {
-          provide: AuthService,
-          useValue: {
-            initialized: () => true,
-            isAuthenticated: () => true,
-            signOut: signOutSpy
-          }
-        }
-      ]
-    });
-    http = TestBed.inject(HttpClient);
-    httpMock = TestBed.inject(HttpTestingController);
+    expired = vi.fn();
+    TestBed.configureTestingModule({ providers: [provideHttpClient(withInterceptors([csrfInterceptor])), provideHttpClientTesting(),
+      { provide: AuthService, useValue: { initialized: () => true, isAuthenticated: () => true, sessionExpired: expired } }] });
+    http = TestBed.inject(HttpClient); control = TestBed.inject(HttpTestingController);
   });
-
-  afterEach(() => {
-    httpMock.verify();
-    TestBed.resetTestingModule();
-  });
-
-  it('does not sign out on 401 from /api/v1/me during restore', () => {
-    http.get('/api/v1/me', { withCredentials: true }).subscribe({ error: () => undefined });
-    httpMock.expectOne('/api/v1/me').flush('unauthorized', { status: 401, statusText: 'Unauthorized' });
-    expect(signOutSpy).not.toHaveBeenCalled();
-  });
-
-  it('signs out on 401 from authenticated API calls', () => {
-    http.get('/api/v1/books', { withCredentials: true }).subscribe({ error: () => undefined });
-    httpMock.expectOne('/api/v1/books').flush('unauthorized', { status: 401, statusText: 'Unauthorized' });
-    expect(signOutSpy).toHaveBeenCalled();
-  });
-
-  it.each(['/api/v1/registration', '/api/v1/auth/register', '/api/v1/register'])('allows only public POST registration at %s without fetching CSRF', (path) => {
-    http.post(path, { email: 'reader@example.test', password: 'test-only' }).subscribe();
-    httpMock.expectNone('/api/v1/csrf');
-    const request = httpMock.expectOne(path);
-    expect(request.request.method).toBe('POST');
-    expect(request.request.headers.has('X-CSRF-Token')).toBe(false);
-    request.flush({ id: 'created' }, { status: 201, statusText: 'Created' });
-  });
-
-  it.each(['/api/v1/books', '/api/v1/sessions', '/api/v1/me', '/api/v1/analytics/events', '/api/v1/registration/other'])('keeps CSRF protection on private mutation %s', (path) => {
-    http.post(path, {}).subscribe();
-    httpMock.expectNone(path);
-    httpMock.expectOne('/api/v1/csrf').flush({ token: 'test-csrf' });
-    const request = httpMock.expectOne(path);
+  afterEach(() => { control.verify(); vi.restoreAllMocks(); TestBed.resetTestingModule(); });
+  it.each(['POST', 'PUT', 'PATCH', 'DELETE'])('requires the current CSRF value for %s', method => {
+    http.request(method, '/api/v1/books', { body: {} }).subscribe();
+    control.expectOne('/api/v1/csrf').flush({ token: 'current-csrf' });
+    const request = control.expectOne('/api/v1/books');
     expect(request.request.withCredentials).toBe(true);
-    expect(request.request.headers.get('X-CSRF-Token')).toBe('test-csrf');
-    request.flush({});
+    expect(request.request.headers.get('X-CSRF-Token')).toBe('current-csrf'); request.flush({});
   });
-
-  it('does not exempt a different mutation method on a registration path', () => {
-    http.patch('/api/v1/registration', {}).subscribe();
-    httpMock.expectOne('/api/v1/csrf').flush({ token: 'test-csrf' });
-    const request = httpMock.expectOne('/api/v1/registration');
-    expect(request.request.headers.get('X-CSRF-Token')).toBe('test-csrf');
-    request.flush({});
+  it.each(['/api/v1/registration', '/api/v1/auth/register', '/api/v1/register'])('has no public password mutation exception for %s', path => {
+    http.post(path, {}).subscribe({ error: () => undefined });
+    control.expectOne('/api/v1/csrf').flush({ token: 'current-csrf' });
+    const request = control.expectOne(path); expect(request.request.headers.get('X-CSRF-Token')).toBe('current-csrf');
+    request.flush({}, { status: 404, statusText: 'Not Found' });
   });
-
-  it('surfaces public registration errors without requesting CSRF or signing out', () => {
-    let status = 0;
-    http.post('/api/v1/registration', {}).subscribe({ error: error => status = error.status });
-    httpMock.expectOne('/api/v1/registration').flush({}, { status: 403, statusText: 'Forbidden' });
-    httpMock.expectNone('/api/v1/csrf');
-    expect(status).toBe(403);
-    expect(signOutSpy).not.toHaveBeenCalled();
+  it('sends the readable cookie value and observes a new value after rotation', () => {
+    const cookie = vi.spyOn(document, 'cookie', 'get').mockReturnValue('__Host-folhea_csrf=first');
+    http.post('/api/v1/books', {}).subscribe(); control.expectOne('/api/v1/books').flush({});
+    cookie.mockReturnValue('__Host-folhea_csrf=rotated');
+    http.patch('/api/v1/books/book', {}).subscribe();
+    const request = control.expectOne('/api/v1/books/book');
+    expect(request.request.headers.get('X-CSRF-Token')).toBe('rotated'); request.flush({});
+    control.expectNone('/api/v1/csrf');
+  });
+  it('does not navigate on an anonymous /me restore', () => {
+    http.get('/api/v1/me').subscribe({ error: () => undefined });
+    control.expectOne('/api/v1/me').flush({}, { status: 401, statusText: 'Unauthorized' }); expect(expired).not.toHaveBeenCalled();
+  });
+  it('returns a private 401 to the entry page without initiating logout', () => {
+    http.get('/api/v1/books').subscribe({ error: () => undefined });
+    control.expectOne('/api/v1/books').flush({}, { status: 401, statusText: 'Unauthorized' }); expect(expired).toHaveBeenCalledOnce();
+  });
+  it('preserves the current session when deletion needs recent authentication', () => {
+    http.delete('/api/v1/me', { body: { confirm: true } }).subscribe({ error: () => undefined });
+    control.expectOne('/api/v1/csrf').flush({ token: 'current-csrf' });
+    control.expectOne('/api/v1/me').flush({ type: 'https://folhea.com.br/problems/recent-authentication-required' }, { status: 401, statusText: 'Unauthorized' });
+    expect(expired).not.toHaveBeenCalled();
   });
 });

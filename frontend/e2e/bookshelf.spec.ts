@@ -77,7 +77,8 @@ test.describe('estante e capas — API/BFF simulados, arquivo e Canvas reais', (
     await page.getByRole('button', { name: 'Salvar alterações' }).click(); await expect(page.getByAltText('Capa de O Hobbit')).toBeVisible();
     const firstVersion = mockApi.books[0].cover?.version;
     await page.locator('#detail-book-cover-camera').setInputFiles(cover); await expect(page.getByAltText('Prévia da capa escolhida')).toBeVisible();
-    await page.getByRole('button', { name: 'Salvar alterações' }).click(); expect(mockApi.books[0].cover?.version).not.toBe(firstVersion);
+    await page.getByRole('button', { name: 'Salvar alterações' }).click();
+    await expect.poll(() => mockApi.books[0].cover?.version).not.toBe(firstVersion);
     await page.route('**/api/v1/books/hobbit/cover?*', route => route.fulfill({ status: 404 })); await page.reload();
     await expect(page.getByText('Capa indisponível', { exact: true })).toBeVisible();
     await page.unroute('**/api/v1/books/hobbit/cover?*'); await page.getByRole('button', { name: 'Tentar capa novamente' }).click();

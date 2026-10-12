@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class BffAuthResourceTest {
     private final BffAuthResource resource = new BffAuthResource();
+    { resource.currentUser = org.mockito.Mockito.mock(com.folhea.identity.CurrentUser.class); }
 
     @Test
     void loginAndCallbackAreExplicitAuthorizationCodeEntryPoints() throws Exception {

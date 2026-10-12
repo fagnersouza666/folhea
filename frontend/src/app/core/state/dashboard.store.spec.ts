@@ -92,7 +92,7 @@ describe('DashboardStore', () => {
       createdAt: '2026-09-06T00:00:00.000Z',
       updatedAt: '2026-09-06T00:00:00.000Z'
     });
-    httpMock.expectOne('/api/v1/analytics/events').flush(null, { status: 202, statusText: 'Accepted' });
+    httpMock.expectNone('/api/v1/analytics/events');
     expect(store.selectableBooks().length).toBe(1);
     httpMock.expectOne('/api/v1/books?limit=100&offset=0').flush(store.books());
   });
@@ -246,7 +246,7 @@ describe('DashboardStore', () => {
     httpMock.expectOne('/api/v1/dashboard').flush({ currentStreakDays: 101, currentBook: null, week: { pages: 500, minutes: 200, booksFinished: 2 } });
     httpMock.expectOne((req) => req.url === '/api/v1/stats').flush({ currentStreakDays: 101, period: { from: store.today(), to: store.today() }, pages: 500, minutes: 200, booksFinished: 2 });
     expectSessionsRequest([readingSession]);
-    httpMock.expectOne('/api/v1/analytics/events').flush(null, { status: 202, statusText: 'Accepted' });
+    httpMock.expectNone('/api/v1/analytics/events');
     expect(store.stats()?.currentStreakDays).toBe(101);
     expect(store.dashboard()?.week.pages).toBe(500);
   });
@@ -350,7 +350,7 @@ describe('DashboardStore', () => {
     httpMock.expectOne('/api/v1/dashboard').flush({ currentStreakDays: 1, currentBook: null, week: { pages: 512, minutes: 25, booksFinished: 0 } });
     httpMock.expectOne(request => request.url === '/api/v1/stats').flush({ period: { from: store.today(), to: store.today() }, pages: 512, minutes: 25, booksFinished: 0, currentStreakDays: 1 });
     expectSessionsRequest([readingSession]);
-    httpMock.expectOne('/api/v1/analytics/events').flush(null, { status: 202, statusText: 'Accepted' });
+    httpMock.expectNone('/api/v1/analytics/events');
   }
 
   it('refreshes the saved book from the server after POST and keeps the reading if metrics fail', () => {

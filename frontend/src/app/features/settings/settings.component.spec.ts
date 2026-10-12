@@ -121,7 +121,7 @@ describe('SettingsComponent', () => {
     expect(signOut).not.toHaveBeenCalled();
     expect(fixture.componentInstance.deleting()).toBe(false);
     expect(fixture.nativeElement.querySelector('dialog').open).toBe(true);
-    expect(fixture.nativeElement.querySelector('dialog [role="alert"]').textContent).toContain('Seus dados foram preservados');
+    expect(fixture.nativeElement.querySelector('dialog [role="alert"]').textContent).toContain('A exclusão não foi confirmada');
     expect(fixture.nativeElement.querySelector('dialog button[type="submit"]').disabled).toBe(false);
   });
 
@@ -135,4 +135,21 @@ describe('SettingsComponent', () => {
     expect(fixture.componentInstance.timezoneMessage()).toContain('atualizado');
   });
 
+  it('requires IdP reauthentication without automatically repeating the deletion', async () => {
+    authDeleteAccount.mockRejectedValueOnce({ status: 401, error: { type: 'https://folhea.com.br/problems/recent-authentication-required' } });
+    const fixture = TestBed.createComponent(SettingsComponent); fixture.detectChanges();
+    fixture.componentInstance.openDeleteDialog(); fixture.componentInstance.deleteConfirmed.set(true);
+    await fixture.componentInstance.confirmDelete(new Event('submit')); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('a[href="/auth/reauthenticate"]')).not.toBeNull();
+    expect(authDeleteAccount).toHaveBeenCalledOnce();
+    expect(signOut).not.toHaveBeenCalled();
+  });
+  it('explains a durable pending deletion without promising a preserved account or offering another delete', async () => {
+    authDeleteAccount.mockRejectedValueOnce({ status: 503, error: { type: 'https://folhea.com.br/problems/account-deletion-pending' } });
+    const fixture = TestBed.createComponent(SettingsComponent); fixture.detectChanges();
+    fixture.componentInstance.openDeleteDialog(); fixture.componentInstance.deleteConfirmed.set(true);
+    await fixture.componentInstance.confirmDelete(new Event('submit')); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('dialog [role="alert"]').textContent).toContain('solicitação');
+    expect(fixture.nativeElement.querySelector('dialog button[type="submit"]').disabled).toBe(true);
+  });
 });

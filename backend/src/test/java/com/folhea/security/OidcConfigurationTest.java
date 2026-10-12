@@ -15,7 +15,7 @@ class OidcConfigurationTest {
 
     @Test
     void authorizationCodeFlowUsesPublicBrowserEndpointsAndPrivateBackchannel() {
-        assertEquals("hybrid", CONFIG.getProperty("quarkus.oidc.application-type"));
+        assertEquals("web-app", CONFIG.getProperty("quarkus.oidc.application-type"));
         assertEquals("${OIDC_AUTH_SERVER_URL:http://localhost:8180/realms/folhea}", CONFIG.getProperty("quarkus.oidc.auth-server-url"));
         assertEquals("${OIDC_PUBLIC_AUTHORIZATION_URL:https://folhea.com.br/realms/folhea/protocol/openid-connect/auth}",
                 CONFIG.getProperty("quarkus.oidc.authorization-path"));

@@ -1,28 +1,17 @@
 import { signIn, test, expect, TODAY } from './fixtures';
 
 test.describe('jornadas pela interface — API e login BFF simulados', () => {
-  test('landing, cadastro acessível e entrada', async ({ page, mockApi }) => {
+  test('landing e cadastro navegam ao IdP sem coletar senha no Folhea', async ({ page, mockApi }) => {
     void mockApi;
-    // Public registration must work before login. An anonymous CSRF request is rejected by the BFF.
-    const csrfRequests: string[] = [];
-    page.on('request', request => { if (request.url().endsWith('/api/v1/csrf')) csrfRequests.push(request.url()); });
-    await page.route('**/api/v1/me', route => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }));
-    await page.route('**/api/v1/csrf', route => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }));
-    await page.goto('/');
-    await expect(page).toHaveTitle(/Folhea/);
-    await expect(page.getByRole('heading', { name: 'Cada página conta.' })).toBeVisible();
+    const passwordPosts: string[] = [];
+    page.on('request', request => { if (request.method() === 'POST' && /\/api\/v1\/(registration|auth\/register|register)$/.test(new URL(request.url()).pathname)) passwordPosts.push(request.url()); });
+    await page.route('**/auth/register', route => route.fulfill({ status: 200, contentType: 'text/html', body: '<h1>Cadastro do provedor simulado</h1>' }));
     await page.goto('/cadastro');
-    await page.getByRole('button', { name: /criar conta/i }).click();
-    await expect(page.locator('#registration-email')).toHaveAttribute('aria-invalid', 'true');
-    await page.getByLabel('E-mail', { exact: false }).fill('new@example.test');
-    await page.getByLabel('Senha', { exact: false }).fill('Folhea-Teste-2026');
-    const registration = page.waitForResponse(response => response.url().endsWith('/api/v1/registration') && response.request().method() === 'POST');
-    await page.getByRole('button', { name: /criar conta/i }).click();
-    expect((await registration).status()).toBe(201);
-    await expect(page.getByText('Cadastro concluído.', { exact: false })).toBeVisible();
-    expect(csrfRequests).toEqual([]);
-    await page.unroute('**/api/v1/me');
-    await page.unroute('**/api/v1/csrf');
+    await expect(page.locator('input[type="password"], #registration-email')).toHaveCount(0);
+    await page.getByRole('link', { name: /criar conta/i }).click();
+    await expect(page).toHaveURL(/\/auth\/register$/);
+    await expect(page.getByRole('heading', { name: 'Cadastro do provedor simulado' })).toBeVisible();
+    expect(passwordPosts).toEqual([]);
     await signIn(page);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow');
   });
@@ -345,7 +334,7 @@ test.describe('jornadas pela interface — API e login BFF simulados', () => {
     await expect(dialog).toBeVisible();
     await dialog.getByRole('checkbox').check();
     await dialog.getByRole('button', { name: 'Excluir conta', exact: true }).click();
-    await expect(dialog.getByRole('alert')).toContainText('Seus dados foram preservados');
+    await expect(dialog.getByRole('alert')).toContainText('A exclusão não foi confirmada');
     await expect(dialog.getByRole('button', { name: 'Excluir conta', exact: true })).toBeEnabled();
     await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click();
     await expect(dialog).not.toBeVisible();

@@ -18,7 +18,7 @@ import java.time.LocalDate;
 @Authenticated
 @Produces(MediaType.APPLICATION_JSON)
 @Tag(name = "Statistics")
-@SecurityRequirement(name = "bearerAuth")
+@SecurityRequirement(name = "cookieAuth")
 public class StatisticsResource {
     @Inject CurrentUser currentUser;
     @Inject StatisticsService statistics;
