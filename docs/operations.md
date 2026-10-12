@@ -454,10 +454,19 @@ A prévia usa a política `img-src` já restrita à própria origem, `data:` e `
 O Caddy permite envelope **3MiB** apenas para `multipart/form-data` em
 `POST /api/v1/books` e `PATCH /api/v1/books/{id}`. Outras rotas, métodos e
 requisições JSON preservam o limite de **64KiB (65.536 bytes)** da borda. O backend mantém as
-validações independentes: parte JSON até 8KiB; capa JPEG/PNG até 2MiB; lados até
-4096 e total até 4.194.304 pixels, também limitando a imagem recodificada. Os
-bytes da imagem ficam fora de respostas/listas de livros. Cadastro e edição
-multipart são atômicos: falha de capa não deixa cadastro parcial.
+validações independentes: parte JSON até 8KiB; entrada de imagem até
+**1.000.000 bytes**, **16.384 pixels por lado** e **24.000.000 pixels** tanto no
+multipart quanto no PUTRAW. Excesso de bytes retorna413; excesso de dimensões ou
+pixels retorna400 com o mesmo detail nos dois caminhos. Os formatos existentes
+são preservados: JPEG/PNG no multipart, JPEG/PNG/WebP no PUT. A saída normalizada
+é JPEG sem EXIF, até1.000.000 bytes e1.600 pixels por lado. Os bytes ficam fora
+de respostas/listas de livros. Cadastro e edição multipart são atômicos: falha
+de capa não deixa cadastro parcial.
+
+A V010 usa um algoritmo privado e congelado no pacote de migração, sem depender
+do normalizador HTTP atual. Conserva os limites antigos do backfill e o checksum
+Java NULL já aplicado; V001..V009 permanecem intactas. A mudança dos limites HTTP
+não redefine a conversão de capas antigas e não cria uma V011.
 
 O gate `node scripts/ci/tests/test-api-body-limits.mjs` usa Caddy real e um
 upstream que conta somente bytes sintéticos para conferir esses limites e
@@ -509,24 +518,62 @@ reutilize a identidade, o perfil do navegador ou os volumes de usuários reais.
 
 ### Aceite opt-in da estante em staging isolado
 
-O helper `scripts/ci/e2e-bookshelf-real.mjs` recusa a origem canônica e usa somente
-`https://127.0.0.1:9444`. A fase `bootstrap` requer a stack anterior V7 em volumes
-novos: cria uma conta própria por cadastro/login reais e dados legados; `accept`
-usa a stack V8, testa Canvas/multipart, métricas, ownership, export e cascatas.
-As fases `covers`/`finish` permitem continuar probes já comprovados sem recriar
-a identidade; `upload-failure` usa offline real do navegador, não resposta fake.
-`legacy-ui` verifica seleção de livro fora dos primeiros 100. `baseline` compara
-PG/GET/export e grava somente hashes/metadados em `E2E_REAL_BASELINE_FILE`.
-`persistence` compara o export e a capa após restart. Use
-`E2E_REAL_CREDENTIAL_FILE` apontando para um JSON privado fora do checkout
-(diretório 0700/arquivo 0600). Nunca use uma conta do usuário nesses testes.
-O observer do helper mede somente `File.size` no `FormData` real da UI; mantém a
-serialização nativa e não simula respostas de API, BFF ou IdP. Ele evita a medida
-incompleta de arquivos que Chromium expõe em `postDataBuffer` quando há SW.
+Execute o **arquivo do repositório** `scripts/ci/e2e-bookshelf-real.mjs` contra uma
+stack atual, nova e exclusiva: `https://127.0.0.3:9446`, projeto
+`folhea-fix02`, HTTP9083, volumes/rede/segredos/CA próprios. O script recusa outras
+origens, incluindo as stacks já existentes em localhost:9443,
+127.0.0.1:9444 e 127.0.0.2:9445. Cookies host-only não são isolados por porta.
+Não reutilize credenciais, contas, perfil de navegador ou volumes de usuários.
 
-No overlay privado de staging, configure `default_sni 127.0.0.1` no bloco global
-do Caddy: clientes TLS que acessam um IP não enviam SNI. Conserve a CA e os
-volumes exclusivos do staging. Não altere a origem/CA/cookies da stack canônica.
+A stack deve estar saudável com as imagens construídas da fonte que será
+verificada; o backend aplica as migrações do zero pelo Flyway/JVM. O aceite não
+marca migrações no banco nem simula migrações Java por psql. Comparações de
+migração de capas legadas pertencem ao teste Flyway real, não às antigas fases
+V7/V8 do helper, agora aposentadas.
+
+Na raiz do checkout, com dependências do frontend e Chromium do Playwright já
+instalados, rode este comando (caminhos sem valores secretos):
+
+```bash
+mkdir -p "$HOME/.config/folhea/fix02-stage/acceptance"
+chmod 700 "$HOME/.config/folhea/fix02-stage/acceptance"
+E2E_REAL_URL=https://127.0.0.3:9446 \
+E2E_REAL_CREDENTIAL_FILE="$HOME/.config/folhea/fix02-stage/acceptance/accounts.json" \
+node scripts/ci/e2e-bookshelf-real.mjs accept
+```
+
+O script gera as credenciais das próprias fixtures em memória e as guarda somente
+nesse arquivo privado 0600, fora do Git. Não usa email/senha de operador. Cada
+execução concluída exclui suas duas contas e livros/fotos pelo fluxo normal;
+para executar novamente, forneça **outro nome de arquivo privado**, preservando
+os registros anteriores. Falha na execução ou no cleanup termina com EXIT1 e
+uma categoria/etapa sanitizada. EXIT0 e o último PASS comprovam o arquivo inteiro,
+não apenas uma fase de um harness auxiliar.
+
+Cadastro abre `/auth/register` e preenche email/senha/confirmação somente no
+formulário do Keycloak; login real abre `/auth/login`. Cookies de sessão/binding
+continuam HttpOnly; `__Host-folhea_csrf` é legível, Secure/Lax e seu valor é usado
+no header das mutações. A exclusão das fixtures faz novo login real para atender
+`auth_time` recente, sem contornar o guard. Quotas de produção são preservadas:
+as mutações são espaçadas e respostas429 obedecem Retry-After com retry limitado.
+
+A verificação usa somente os campos oficiais **top-level** do livro:
+`pagesRead`, `averagePagesPerReadingDay` e `progressPercent`. Inclui null sem
+leituras com páginas, minutos-only fora do denominador, 75 páginas em duas datas
+=37,5, sessões na mesma data, edição/exclusão, floor/cap100 e ausência de
+finalização automática. Não usa média por dias corridos nem fallback de stats.
+Cadastro de livro/foto pela UI usa o contrato atual POSTJSON seguido de PUTRAW;
+verifica capa privada, propriedade404, CSRF403, outro login, bytes persistidos
+iguais no GET/export, export byte-estável sem métricas dinâmicas,390/1440 sem
+overflow e nenhuma API no cache do service worker. Não intercepta/responde
+requisições HTTP/IdP, forja cookies, grava traces ou screenshots.
+
+O contexto Chromium aceita apenas o certificado local da stack isolada durante
+o teste (`ignoreHTTPSErrors`); não muda trust/perfil de navegador do usuário.
+No overlay privado, configure `default_sni 127.0.0.3` no bloco global do Caddy:
+clientes TLS que acessam um IP não enviam SNI. Preserve a CA e os volumes dessa
+stack; não altere origem/CA/cookies das outras instalações. A validação TLS do
+operador deve usar a CA pública própria, não o bypass usado pelo contexto de teste.
 
 ### Startup do gate Caddy na CI
 
