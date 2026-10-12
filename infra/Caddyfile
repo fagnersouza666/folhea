@@ -88,17 +88,11 @@
 					header_up X-Forwarded-Proto {scheme}
 					@photo-cacheable status 200 304
 					handle_response @photo-cacheable {
-						header Cache-Control "private, no-cache, max-age=0, must-revalidate"
-						copy_response_headers {
-							exclude Cache-Control
-						}
+						header >Cache-Control "private, no-cache, max-age=0, must-revalidate"
 						copy_response
 					}
 					handle_response {
-						header Cache-Control "no-store"
-						copy_response_headers {
-							exclude Cache-Control
-						}
+						header >Cache-Control "no-store"
 						copy_response
 					}
 				}
@@ -115,7 +109,10 @@
 					header_up X-Forwarded-For {remote_host}
 					header_up X-Forwarded-Host {hostport}
 					header_up X-Forwarded-Proto {scheme}
-					header_down Cache-Control "no-store"
+					handle_response {
+						header >Cache-Control "no-store"
+						copy_response
+					}
 				}
 			}
 		}
@@ -159,7 +156,7 @@
 	@private path /app /app/* /entrar /cadastro
 	handle @private {
 		header X-Robots-Tag "noindex, nofollow"
-		header Cache-Control "no-store"
+		header >Cache-Control "no-store"
 		rewrite * /index.csr.html
 		file_server
 	}

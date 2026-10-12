@@ -480,6 +480,9 @@ Somente `GET` de foto com status `200` ou `304` usa
 o ETag, status e corpo do backend; `401`, `404` e outros erros continuam
 `no-store`. A propriedade do livro deve ser verificada pelo backend antes de
 avaliar `If-None-Match`, inclusive quando duas contas tenham a mesma imagem.
+O cabeçalho é definido no envio da resposta, após os headers do upstream, e a
+resposta é copiada uma única vez, evitando duplicar `Cache-Control` ou headers
+de tamanho do corpo.
 As APIs continuam excluídas do service worker: cache privado com revalidação
 HTTP não autoriza armazenamento offline da foto no PWA.
 
