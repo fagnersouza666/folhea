@@ -1,6 +1,6 @@
 # FIX-02: Pendências depois da FIX-01 (PR pequeno, não trava o deploy)
 
-Status: aguardando aprovação do Mestre
+Status: aprovada pelo Mestre em 12/10/2026
 Origem: revisões do DevQuarkus dos PRs #49 a #52 e decisões do Diretor e do Arquiteto (12/10/2026)
 
 ## 1. V010 sem depender do código da aplicação

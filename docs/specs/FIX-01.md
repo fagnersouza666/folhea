@@ -1,6 +1,6 @@
 # FIX-01: Correções antes do deploy da 0.6.0
 
-Status: aguardando aprovação do Mestre
+Status: implementada no PR #52 (12/10/2026); testes de 400 (total 0 e sem dados do livro) movidos para o PR da V010
 Origem: revisão do DevQuarkus dos PRs #49, #50 e #51 e prioridade do Diretor (12/10/2026)
 Trava: aceite da LIVRO-02 e da SESSAO-01
 
@@ -8,13 +8,14 @@ Trava: aceite da LIVRO-02 e da SESSAO-01
 
 Situação: em `BookResource.java:73`, o `createMultipart` devolve 400 com "Informe o total de páginas do livro." quando `totalPages` não vem. Pela spec, o campo é opcional.
 
-Correção: remover essa checagem. As outras validações continuam iguais (título obrigatório e `validateMetadata`, que valida `totalPages` só quando ele vem).
+Correção: tirar só a condição `request.totalPages() == null`. A linha passa a ser `if (request == null) invalid(...)`, para continuar barrando o envio sem os dados do livro. As outras validações continuam iguais (título obrigatório e `validateMetadata`, que valida `totalPages` só quando ele vem).
 
 Critérios de aceite:
 1. Um POST multipart com título e foto, sem `totalPages`, cria o livro (201) com `totalPages` nulo.
 2. Esse livro não mostra percentual.
 3. Um POST multipart com `totalPages` inválido (0, negativo ou acima do limite) continua dando 400.
-4. Existe um teste automatizado para o caso 1.
+4. Um POST multipart sem a parte de dados do livro continua dando 400.
+5. Existem testes automatizados para os casos 1 (201), 3 com `totalPages` = 0 (400) e 4 (400).
 
 ## 2. Bug: duas médias de páginas por dia (SESSAO-01)
 
