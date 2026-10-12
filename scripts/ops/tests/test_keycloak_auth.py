@@ -1,7 +1,13 @@
 import copy
 import importlib.util
+import json
+import os
 import pathlib
+import secrets
+import subprocess
+import tempfile
 import unittest
+from unittest.mock import patch
 
 module_file = pathlib.Path(__file__).parents[1] / "keycloak-auth.py"
 spec = importlib.util.spec_from_file_location("keycloak_auth", module_file)
@@ -95,6 +101,48 @@ class ReconcileAuthTest(unittest.TestCase):
         with self.assertRaises(auth.OpsFailure):
             auth.reconcile(request)
         self.assertEqual(transport.writes, [])
+
+
+class ComposeCredentialsTest(unittest.TestCase):
+    def compare_effective(self, value, expected, environment=None):
+        with tempfile.TemporaryDirectory(prefix="folhea-auth-env-") as temporary:
+            root = pathlib.Path(temporary)
+            env_file = root / "fixture.env"
+            env_file.write_text("KEYCLOAK_ADMIN_USERNAME=admin-fixture\n" + value)
+            env_file.chmod(0o600)
+            compose_file = root / "compose.json"
+            compose_file.write_text(json.dumps({"name": "folhea-auth-env-test", "services": {"keycloak": {
+                "image": "unused-fixture", "environment": {
+                    "KC_BOOTSTRAP_ADMIN_USERNAME": "${KEYCLOAK_ADMIN_USERNAME}",
+                    "KC_BOOTSTRAP_ADMIN_PASSWORD": "${KEYCLOAK_ADMIN_PASSWORD}",
+                }}}}))
+            compose_file.chmod(0o600)
+            compose = ["docker", "compose", "--env-file", str(env_file), "-f", str(compose_file)]
+            fixture_environment = {key: value for key, value in os.environ.items()
+                                   if key not in ("KEYCLOAK_ADMIN_USERNAME", "KEYCLOAK_ADMIN_PASSWORD", "ADMIN_SECRET")}
+            fixture_environment.update(environment or {})
+            with patch.dict(os.environ, fixture_environment, clear=True):
+                # Real Compose resolution; no container or secret output.
+                result = subprocess.run(compose + ["config", "--format", "json"], check=True,
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                effective = json.loads(result.stdout)["services"]["keycloak"]["environment"]
+                self.assertTrue(effective["KC_BOOTSTRAP_ADMIN_PASSWORD"] == expected,
+                                "Compose must resolve the private fixture correctly")
+                self.assertTrue(auth.resolved_admin_credentials(compose) == effective,
+                                "Operational credentials must match effective Compose values")
+
+    def test_literal_hash_matches_real_compose(self):
+        value = secrets.token_urlsafe(12) + "#" + secrets.token_urlsafe(12)
+        self.compare_effective("KEYCLOAK_ADMIN_PASSWORD=" + value + "\n", value)
+
+    def test_env_file_interpolation_matches_real_compose(self):
+        value = secrets.token_urlsafe(24)
+        self.compare_effective("ADMIN_SECRET=" + value + "\nKEYCLOAK_ADMIN_PASSWORD=${ADMIN_SECRET}\n", value)
+
+    def test_shell_precedence_matches_real_compose(self):
+        file_value, shell_value = secrets.token_urlsafe(24), secrets.token_urlsafe(24)
+        self.compare_effective("KEYCLOAK_ADMIN_PASSWORD=" + file_value + "\n", shell_value,
+                               {"KEYCLOAK_ADMIN_PASSWORD": shell_value})
 
 
 if __name__ == "__main__":

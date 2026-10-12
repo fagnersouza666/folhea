@@ -3,8 +3,6 @@ import argparse
 import http.client
 import io
 import json
-import pathlib
-import shlex
 import subprocess
 import urllib.parse
 
@@ -60,7 +58,8 @@ class SocketFile:
 
 
 class PrivateAdmin:
-    def __init__(self, compose, env):
+    def __init__(self, compose):
+        env = resolved_admin_credentials(compose)
         result = subprocess.run(compose + ["ps", "-q", "keycloak"], check=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         container = result.stdout.decode().strip()
@@ -70,8 +69,8 @@ class PrivateAdmin:
         self.token = None
         credentials = urllib.parse.urlencode({
             "grant_type": "password", "client_id": "admin-cli",
-            "username": env["KEYCLOAK_ADMIN_USERNAME"],
-            "password": env["KEYCLOAK_ADMIN_PASSWORD"],
+            "username": env["KC_BOOTSTRAP_ADMIN_USERNAME"],
+            "password": env["KC_BOOTSTRAP_ADMIN_PASSWORD"],
         }).encode()
         issued = self.request("POST", "/realms/master/protocol/openid-connect/token",
                               credentials, "application/x-www-form-urlencoded")
@@ -102,18 +101,17 @@ class PrivateAdmin:
         return json.loads(payload) if payload else None
 
 
-def load_env(path):
-    result = {}
-    for line in pathlib.Path(path).read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        key, separator, raw = line.partition("=")
-        if separator:
-            # Parse quoted values without evaluating shell commands or expansion.
-            tokens = shlex.split(raw, comments=True)
-            result[key] = " ".join(tokens)
-    return result
+def resolved_admin_credentials(compose):
+    # Compose owns dotenv syntax/interpolation and shell precedence. Capture its
+    # resolved model only in memory; never print config, env, stderr or secrets.
+    process = subprocess.run(compose + ["config", "--format", "json"], check=True,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    environment = json.loads(process.stdout)["services"]["keycloak"]["environment"]
+    credentials = {key: environment.get(key) for key in
+                   ("KC_BOOTSTRAP_ADMIN_USERNAME", "KC_BOOTSTRAP_ADMIN_PASSWORD")}
+    if any(not isinstance(value, str) or not value for value in credentials.values()):
+        raise OpsFailure("effective-operational-admin-credentials-missing")
+    return credentials
 
 
 def main():
@@ -122,7 +120,7 @@ def main():
     parser.add_argument("--compose-file", required=True)
     args = parser.parse_args()
     try:
-        admin = PrivateAdmin(["docker", "compose", "--env-file", args.env_file, "-f", args.compose_file], load_env(args.env_file))
+        admin = PrivateAdmin(["docker", "compose", "--env-file", args.env_file, "-f", args.compose_file])
         changed = reconcile(admin.request)
         print("AUTH-01 reconciled; effective configuration verified; changed resources=" + str(changed))
     except OpsFailure as error:

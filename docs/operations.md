@@ -167,6 +167,11 @@ administrador operacional configurado no arquivo privado, não o cliente de
 serviço de exclusão. O launcher não aplica essa alteração automaticamente.
 Nunca remova volumes nem delete/reimporte o realm com override para aplicar
 configuração. Secrets não são girados por esse procedimento.
+As credenciais operacionais são obtidas do modelo efetivo de
+`docker compose config --format json`, capturado somente em memória. Isso mantém
+a sintaxe de `.env`, interpolação `${VAR}` e precedência do ambiente do Compose
+sem avaliar o arquivo como shell nem imprimir configuração ou credenciais
+([Docker: interpolação](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/)).
 
 O perfil de usuário v1 mantém e-mail obrigatório e nomes opcionais. Isso evita
 que o Keycloak exija nome/sobrenome após o cadastro e-mail/senha do produto.
