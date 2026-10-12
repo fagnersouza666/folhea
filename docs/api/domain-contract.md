@@ -81,7 +81,9 @@ exclui suas sessões por cascade e recalcula as métricas.
 Sessões aceitam páginas, minutos ou ambos: JSON inteiro, valores não negativos,
 ao menos um positivo. Campos omitidos na criação equivalem a zero; PATCH
 preserva campos omitidos. Máximos por sessão: 10.000 páginas e 1.440 minutos.
-Frações e strings numéricas retornam 400. Regras de progresso também são
+Null explícito em qualquer campo da sessão, frações, strings numéricas e
+booleanos no lugar de números retornam 400; omissão não equivale a null.
+Regras de progresso também são
 verificadas pela entidade e por constraints PostgreSQL.
 Falhas de desserialização seguem `application/problem+json` em todos os perfis,
 sem reproduzir valores enviados ou detalhes internos do Jackson.
@@ -101,6 +103,31 @@ registros e usar `GET /sessions/{id}` para abrir edição após reload ou por
 link de um registro fora da página atual. Estatísticas e streak continuam
 calculados pelo backend sobre os respectivos períodos/histórico global,
 independentemente das páginas carregadas no cliente.
+
+## SESSAO-01 — progresso por dia de leitura
+
+Todas as respostas de livro incluem os campos **top-level** `pagesRead` (soma
+inteira de páginas), `averagePagesPerReadingDay` (uma casa decimal HALF_UP,
+ou null sem dias com páginas) e `progressPercent` (inteiro para baixo, limitado
+a100, ou null sem total). O denominador da média é o número de datas distintas
+com `pages > 0` do próprio livro; duas sessões no mesmo dia contam uma data,
+e dias somente de minutos não entram. Por exemplo, 30+45 páginas em dois dias
+resultam em75/37.5; no mesmo dia, em75/75.0. 2999/3000 mostra99%, nunca100
+antecipadamente. A soma bruta permanece mesmo acima do total e não finaliza
+livros automaticamente.
+
+Uma consulta agregada por usuário e conjunto de livros cobre TODO o histórico,
+inclusive registros fora das páginas de100 ou anteriores a366dias. Uma segunda
+consulta busca metadados das fotos, sem carregar seus bytes nem executar uma
+consulta por livro. Os índices e constraints existentes de V001..V010 são
+preservados; esta mudança não exige migração. Criar/editar/excluir uma sessão
+e transferi-la para outro livro repercutem na próxima consulta dos dois livros.
+
+A UI usa somente esses campos oficiais, com loading/erro/retry sem restaurar
+valores antigos. O `stats` legado de dias corridos continua compatível na API,
+mas não serve de fallback para as métricas SESSAO-01. Estatísticas globais,
+streak e cards mantêm seus contratos. Exportação conserva apenas metadados
+persistidos, sem estes campos calculados nem `stats`/hoje.
 
 ## Estante e compatibilidade do contrato V008
 
@@ -132,10 +159,12 @@ GET `/books/{id}/cover` é alias autenticado com no-store; DELETE é compatível
 e idempotente. A UI nova usa /photo; nada vira URL pública. V010 migra bytes
 para book_photo e esvazia book_cover, preservando rollback e recuperação V007.
 
+Por compatibilidade com clientes anteriores, o campo legado
 `stats={pagesRead,totalPages,percent,averagePagesPerDay,firstDate,referenceDate,
 elapsedDays}` é calculado no backend por usuário+livro, com SUM(pages) e MIN(data)
 de TODO histórico próprio. A listagem agrega em lote os livros de sua página,
-sem limitar sessões a100/366dias e sem N+1. Sem sessões: pagesRead/avg/days=0,
+sem limitar sessões a100/366dias e sem N+1. A UI atual usa os campos top-level
+descritos em SESSAO-01. Sem sessões: pagesRead/avg/days=0,
 firstDate=null. Sem total, percent=null. Percentual truncado em duas casas
 (DOWN), limitado a100:299999/300000=99.99 e100 somente se soma>=total.
 Releituras conservam a soma bruta; reduzir o total não apaga leituras nem finaliza.

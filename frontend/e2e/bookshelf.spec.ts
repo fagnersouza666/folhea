@@ -32,18 +32,18 @@ test.describe('estante e capas — API/BFF simulados, arquivo e Canvas reais', (
     await page.getByRole('button', { name: /^registrar leitura/i }).click();
     await page.getByRole('link', { name: 'Concluir', exact: true }).click();
     await page.getByRole('link', { name: 'Livros', exact: true }).click();
-    await expect(row.locator('.percent')).toHaveText('3,33%'); await expect(row.locator('.daily-average')).toContainText('5 páginas/dia');
+    await expect(row.locator('.percent')).toHaveText('3%'); await expect(row.locator('.daily-average')).toContainText('10 páginas por dia de leitura');
     await page.getByRole('link', { name: 'Progresso', exact: true }).click();
     await page.getByRole('link', { name: /editar leitura/i }).click(); await page.getByLabel('Páginas').fill('20');
     await page.getByRole('button', { name: 'Salvar registro' }).click(); await page.getByRole('link', { name: 'Livros', exact: true }).click();
-    await expect(row.locator('.percent')).toHaveText('6,66%'); await expect(row.locator('.daily-average')).toContainText('10 páginas/dia');
+    await expect(row.locator('.percent')).toHaveText('6%'); await expect(row.locator('.daily-average')).toContainText('20 páginas por dia de leitura');
     await page.getByRole('link', { name: 'Progresso', exact: true }).click(); await page.getByRole('link', { name: /editar leitura/i }).click();
     page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Excluir esta sessão' }).click();
     await page.getByRole('link', { name: 'Livros', exact: true }).click(); await expect(row.locator('.percent')).toHaveText('0%');
-    await expect(row.locator('.daily-average')).toContainText('0 páginas/dia');
+    await expect(row.locator('.average-hint')).toContainText('Sem leituras com páginas');
   });
 
-  test('mantém legado e histórico completo, precisão menor que100 e média até a finalização manual', async ({ page, mockApi }) => {
+  test('mantém legado e histórico completo, progresso inteiro menor que100 e média por dia mesmo após finalização', async ({ page, mockApi }) => {
     mockApi.sessions = Array.from({ length: 150 }, (_, i) => ({ id: 's-' + i, bookId: 'hobbit', userId: 'demo-user', readingDate: '2026-09-01', pages: 20, minutes: 0 }));
     mockApi.sessions[0].pages = 19;
     await signIn(page); await page.getByRole('link', { name: 'Livros', exact: true }).click();
@@ -51,10 +51,10 @@ test.describe('estante e capas — API/BFF simulados, arquivo e Canvas reais', (
     await expect(row.locator('[role="progressbar"]')).toHaveCount(0); await row.getByRole('link', { name: /informe o total/i }).click();
     await expect(page.getByLabel('Total de páginas')).toHaveValue(''); await page.getByLabel('Total de páginas').fill('3000');
     await page.getByLabel('Edição').fill('Legado completo'); await page.getByRole('button', { name: 'Salvar alterações' }).click();
-    await expect(page.locator('.percent')).toHaveText('99,96%'); await expect(page.locator('.daily-average')).toContainText('499,83');
+    await expect(page.locator('.percent')).toHaveText('99%'); await expect(page.locator('.daily-average')).toContainText('2.999');
     await page.getByLabel('Data da finalização').fill('2026-09-03'); await page.getByRole('button', { name: 'Marcar como finalizado' }).click();
-    await expect(page.locator('.daily-average')).toContainText('999,67'); await expect(page.getByRole('button', { name: 'Reabrir livro' })).toBeVisible();
-    await page.getByRole('button', { name: 'Reabrir livro' }).click(); await expect(page.locator('.daily-average')).toContainText('499,83');
+    await expect(page.locator('.daily-average')).toContainText('2.999'); await expect(page.getByRole('button', { name: 'Reabrir livro' })).toBeVisible();
+    await page.getByRole('button', { name: 'Reabrir livro' }).click(); await expect(page.locator('.daily-average')).toContainText('2.999');
     expect(mockApi.sessions).toHaveLength(150);
   });
 
