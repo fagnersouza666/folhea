@@ -131,6 +131,7 @@ for (const [realm,label] of [[devRealm,'dev'],[prodRealm,'prod']]) {
   assert.deepEqual(userProfile.attributes.find(attribute => attribute.name === 'email')?.required, {roles:['user']});
   assert.equal(realm.defaultLocale, 'pt-BR');
   assert.equal(realm.registrationAllowed, true, `${label}: registration belongs to Keycloak`);
+  assert.equal(realm.registrationEmailAsUsername, true, `${label}: email supplies the IdP username`);
   assert.ok(!realm.loginTheme, `${label}: retain Keycloak's default theme`);
   assert.equal(realm.adminEventsEnabled, true, `${label}: administrative actions must be audited`);
   assert.equal(realm.adminEventsDetailsEnabled, false, `${label}: omit private representations`);

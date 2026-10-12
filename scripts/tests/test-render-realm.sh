@@ -21,6 +21,7 @@ try {
     assert.ok(bff.redirectUris.includes(env.OIDC_PUBLIC_ORIGIN+'/auth/callback'));
     assert.equal(admin.fullScopeAllowed,false);assert.equal(admin.standardFlowEnabled,false);
     assert.equal(realm.registrationAllowed,true,profile+': Keycloak owns self-registration');
+    assert.equal(realm.registrationEmailAsUsername,true,profile+': email supplies the IdP username');
     assert.ok(!realm.loginTheme,profile+': retain the provider default login theme');
     assert.equal(realm.adminEventsEnabled,true,profile+': administrative deletion must be audited');
     assert.equal(realm.adminEventsDetailsEnabled,false,profile+': omit private request representations from audit');

@@ -115,5 +115,6 @@
   ],
   "defaultLocale": "pt-BR",
   "adminEventsEnabled": true,
-  "adminEventsDetailsEnabled": false
+  "adminEventsDetailsEnabled": false,
+  "registrationEmailAsUsername": true
 }

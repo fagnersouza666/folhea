@@ -136,7 +136,9 @@ password grant ou fluxo de login. Seu secret é diferente do cliente BFF e o
 atributo `access.token.lifespan` limita cada token de serviço a 300 segundos.
 O backend também rejeita respostas de token com TTL fora de 1..300 segundos.
 Não use esse cliente no cadastro: a senha vai diretamente ao Keycloak.
-Os templates habilitam `registrationAllowed`, mantêm o tema padrão do IdP e
+Os templates habilitam `registrationAllowed` e `registrationEmailAsUsername`: o
+Keycloak usa o e-mail como identificador, sem um username adicional no Angular.
+Mantêm o tema padrão do IdP e
 ligam `adminEventsEnabled`, com `adminEventsDetailsEnabled=false` para guardar
 as ações administrativas sem persistir os corpos privados das requisições
 ([Keycloak: tokens e auditoria](https://www.keycloak.org/docs/latest/server_admin/index.html)).
