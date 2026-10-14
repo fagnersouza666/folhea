@@ -8,7 +8,7 @@ Tirar do repositório e da configuração todo resto de `folhea.com.br` e `folhe
 ## Contexto
 - O Mestre decidiu em 13/10/2026 usar `https://folhea.app` como ambiente de trabalho e teste.
 - O Arquiteto encontrou `folhea.com.br` em `application.properties`, nos problem types, no SEO e nos textos legais.
-- `oi@folhea.com.br` aparece na política de privacidade e nos termos. O domínio é de outra empresa, o que é risco de LGPD.
+- O contato anterior em domínio de terceiros aparece na política de privacidade e nos termos. O domínio é de outra empresa, o que é risco de LGPD.
 - O repo é público: nenhum domínio, IP ou dado de infraestrutura fixo no código além do domínio público do produto.
 
 ## Escopo, em duas entregas

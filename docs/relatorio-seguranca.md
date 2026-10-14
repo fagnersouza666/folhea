@@ -49,7 +49,7 @@ image: quay.io/keycloak/keycloak:26.3.3
 
 **Impacto:** Comprometimento de qualquer conta que exista no realm Folhea, com sessão OIDC válida no BFF e acesso aos livros/sessões da vítima.
 
-**Se não corrigido:** Um atacante externo redefine a senha de `oi@folhea.com.br` ou de um usuário real, entra por `/auth/login` e lê/apaga o histórico de leitura. Incidente LGPD (acesso não autorizado a e-mail e dados de uso).
+**Se não corrigido:** Um atacante externo redefine a senha do contato anterior em domínio de terceiros ou de um usuário real, entra por `/auth/login` e lê/apaga o histórico de leitura. Incidente LGPD (acesso não autorizado a e-mail e dados de uso).
 
 **Correção:**
 
