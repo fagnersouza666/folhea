@@ -59,7 +59,7 @@ services:
       redis: {condition: service_healthy}
     networks:
       edge:
-        ipv4_address: !reset null
+        ipv4_address: ${BACKEND_IPV4:?Explicit exclusive backend IPv4 required}
       postgres-external:
 
   caddy:

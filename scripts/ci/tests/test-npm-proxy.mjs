@@ -11,9 +11,15 @@ import { spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const scratch = await mkdtemp(join(tmpdir(), 'folhea-npm-edge-'));
 const name = `folhea-npm-edge-${process.pid}`;
 const image = process.env.CADDY_TEST_IMAGE ?? 'caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f';
+assert.ok(process.argv.length === 2 || (process.argv.length === 3 && process.argv[2] === '--ipam-only'), 'Only --ipam-only is supported');
+const ipam = spawnSync('python3', ['-B', join(root, 'scripts/ops/tests/test_npm_compose.py'), '--edge-ipam', image],
+  { encoding: 'utf8', timeout: 90000 });
+assert.equal(ipam.status, 0, `Real edge IP allocation: ${ipam.error?.message ?? ipam.stderr}`);
+process.stdout.write(ipam.stdout);
+if (process.argv[2] === '--ipam-only') process.exit(0);
+const scratch = await mkdtemp(join(tmpdir(), 'folhea-npm-edge-'));
 const photo = '/api/v1/books/10000000-0000-0000-0000-000000000001/photo';
 let upstreamCalls = 0;
 const upstream = createServer((req, res) => {
