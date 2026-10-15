@@ -58,12 +58,18 @@ def validate_model(config):
     require(len(subnets) == 1, "single-exclusive-edge-subnet-required")
     subnet = ipaddress.ip_network(subnets[0]["subnet"])
     require(subnet.version == 4, "ipv4-edge-subnet-required")
+    gateway = ipaddress.ip_address(subnets[0].get("gateway", str(subnet.network_address + 1)))
+    require(gateway in subnet and gateway not in (subnet.network_address, subnet.broadcast_address),
+            "usable-edge-gateway-required")
+    for service in ("backend", "caddy"):
+        address = services[service]["networks"]["edge"].get("ipv4_address")
+        require(isinstance(address, str) and bool(address), "explicit-edge-ip-required-" + service)
     assigned = set()
     for service in services.values():
         address = service["networks"].get("edge", {}).get("ipv4_address")
         if address:
             ip = ipaddress.ip_address(address)
-            require(ip in subnet and ip not in (subnet.network_address, subnet.broadcast_address),
+            require(ip in subnet and ip not in (subnet.network_address, subnet.broadcast_address, gateway),
                     "static-edge-ip-outside-usable-subnet")
             require(ip not in assigned, "duplicate-static-edge-ip")
             assigned.add(ip)

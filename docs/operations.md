@@ -674,18 +674,33 @@ Além das origens canônicas descritas acima, o arquivo privado deve declarar os
 metadados observados `NPM_PROXY_CONTAINER`, `NPM_PROXY_CONTAINER_ID`,
 `NPM_PROXY_IP`, `NPM_PROXY_NETWORK`, `EXTERNAL_PG_CONTAINER`,
 `EXTERNAL_PG_CONTAINER_ID`, `EXTERNAL_PG_IMAGE_ID`, `EXTERNAL_PG_HOST`,
-`EXTERNAL_PG_NETWORK`, `EDGE_SUBNET` e `CADDY_EDGE_IP`. Não adivinhar esses valores:
+`EXTERNAL_PG_NETWORK`, `EDGE_SUBNET`, `BACKEND_IPV4` e `CADDY_EDGE_IP`. Não adivinhar esses valores:
 a engine confere container, imagem, saúde, rede e o peer único do proxy antes de
 alterar recursos Folhea. O BFF confia somente no IPv4 dedicado do Caddy; o Caddy
 valida Host e peer, reconstrói HTTPS canônico e encaminha o IP de cliente conforme
 o contrato NPM, preservando limites, cache privado e endpoints administrativos
 externos 404.
 
-O backend usa endereço dinâmico na rede edge, preservando o alias `backend-edge`;
-o perfil externo remove o IPv4 estático herdado do standalone. O endereço fixo
-do Caddy e qualquer outro IPv4 estático devem pertencer à faixa utilizável da
-sub-rede exclusiva, sem duplicação. O guard rejeita o modelo antes de iniciar
-serviços se esse vínculo ou o alias estiver incorreto.
+Backend e Caddy usam IPv4 explícitos na rede edge, preservando o alias
+`backend-edge`. `BACKEND_IPV4` é obrigatório neste perfil, sem usar o fallback
+standalone; ambos os endereços devem pertencer à faixa utilizável de
+`EDGE_SUBNET`, sem duplicação. O guard rejeita backend ou Caddy dinâmico, IP
+fora da faixa, gateway reservado, duplicação ou alias incorreto antes de iniciar serviços.
+
+Isso evita que um backend criado primeiro receba por alocação dinâmica o endereço
+reservado ao Caddy: declarar o IP estático de um serviço no Compose não o reserva
+antecipadamente para outros containers. Ao atualizar uma instalação existente,
+confira os dois IPs próprios já usados e mantenha-os; não recrie a rede nem altere
+endereços de outros sistemas para satisfazer o guard.
+
+O gate `scripts/ci/tests/test-npm-proxy.mjs` também cria uma rede interna e dois
+containers descartáveis limitados, com a imagem Caddy já construída: inicia
+primeiro o backend sintético e depois o Caddy, usando os endereços do perfil
+Compose renderizado. Ambos devem iniciar com IPs distintos, e o `finally` remove
+somente esses recursos. Para rodar apenas essa regressão, sem repetir os testes
+HTTP: `CADDY_TEST_IMAGE=sha256:<ID completo> node scripts/ci/tests/test-npm-proxy.mjs --ipam-only`.
+O processo executado nesses containers é apenas `sleep`; esse gate verifica
+alocação de rede e não substitui os aceites HTTP, backend ou autenticação.
 
 O banco compartilhado continua PostgreSQL **16.13**, sem novo serviço, volume,
 publicação de porta ou ciclo de vida Folhea. Os pares exclusivos são
