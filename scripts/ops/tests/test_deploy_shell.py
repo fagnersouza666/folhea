@@ -139,6 +139,17 @@ with open(os.environ['CALL_LOG'], 'a') as log:
         self.assertEqual(result.returncode, 2)
         self.assertEqual(self.calls(), [])
 
+    def test_git_status_failure_stops_head_plan_and_execution_before_external_action(self):
+        invalid_status_config = {'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'status.relativePaths',
+                                 'GIT_CONFIG_VALUE_0': 'invalid-boolean'}
+        for action in [self.target + ['--output', str(self.output)], self.stage(), self.activate()]:
+            with self.subTest(action=action):
+                self.log.unlink(missing_ok=True)
+                result = self.call(action, invalid_status_config)
+                self.assertIn('bad boolean config value', result.stderr)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(self.calls(), [])
+
     def test_stage_orders_preflight_prepare_transfer_and_never_reviews_or_activates(self):
         result = self.call(self.stage())
         self.assert_ok(result)

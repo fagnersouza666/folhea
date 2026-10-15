@@ -115,10 +115,12 @@ engine=$repo/scripts/ops/deploy-folhea.py
 head=$(git -C "$repo" rev-parse --verify HEAD) || die 'HEAD commitado é obrigatório.'
 source_sha=${source_sha:-$head}
 ensure_source() {
+  local checkout_status
   [[ $(git -C "$repo" rev-parse --show-toplevel) == "$repo" ]] || die 'script fora da raiz Git esperada.'
   git -C "$repo" ls-files --error-unmatch -- scripts/ops/deploy-folhea.py >/dev/null || die 'engine precisa estar versionada.'
   [[ $(git -C "$repo" rev-parse --verify HEAD) == "$source_sha" ]] || die 'checkout difere do source; selecione a revisão em um checkout próprio.'
-  [[ -z $(GIT_OPTIONAL_LOCKS=0 git -C "$repo" status --porcelain) ]] || die 'HEAD precisa estar limpo e commitado, inclusive sem arquivos novos.'
+  checkout_status=$(GIT_OPTIONAL_LOCKS=0 git -C "$repo" status --porcelain) || die 'não foi possível verificar o estado do checkout; nenhuma ação será executada.'
+  [[ -z $checkout_status ]] || die 'HEAD precisa estar limpo e commitado, inclusive sem arquivos novos.'
 }
 ensure_source
 if ((execute == 0)); then print_plan; exit 0; fi
