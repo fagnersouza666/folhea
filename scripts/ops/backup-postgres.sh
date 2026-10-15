@@ -138,7 +138,7 @@ trap cleanup EXIT
 
 temporary_artifact="$(mktemp "$BACKUP_DIR/.folhea-backup.XXXXXX")"
 ops_log "Starting PostgreSQL backup"
-"${COMPOSE[@]}" exec -T "$POSTGRES_SERVICE" pg_dump \
+ops_postgres_exec pg_dump \
   --format=custom \
   --no-owner \
   --no-privileges \

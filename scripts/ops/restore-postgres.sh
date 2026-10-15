@@ -128,11 +128,11 @@ validate_backup_format() {
   case "$BACKUP_FILE" in
     *.gz)
       gzip -dc -- "$BACKUP_FILE" |
-        "${COMPOSE[@]}" exec -T "$POSTGRES_SERVICE" pg_restore --list >/dev/null
+        ops_postgres_exec pg_restore --list >/dev/null
       ;;
     *)
       cat -- "$BACKUP_FILE" |
-        "${COMPOSE[@]}" exec -T "$POSTGRES_SERVICE" pg_restore --list >/dev/null
+        ops_postgres_exec pg_restore --list >/dev/null
       ;;
   esac
 }
@@ -145,7 +145,7 @@ ops_log "Starting PostgreSQL restore into target $RESTORE_TARGET"
 case "$BACKUP_FILE" in
   *.gz)
     gzip -dc -- "$BACKUP_FILE" |
-      "${COMPOSE[@]}" exec -T "$POSTGRES_SERVICE" pg_restore \
+      ops_postgres_exec pg_restore \
         --exit-on-error \
         --clean \
         --if-exists \
@@ -157,7 +157,7 @@ case "$BACKUP_FILE" in
     ;;
   *)
     cat -- "$BACKUP_FILE" |
-      "${COMPOSE[@]}" exec -T "$POSTGRES_SERVICE" pg_restore \
+      ops_postgres_exec pg_restore \
         --exit-on-error \
         --clean \
         --if-exists \

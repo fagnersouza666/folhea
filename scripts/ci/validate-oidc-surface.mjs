@@ -35,7 +35,9 @@ assert.ok(caddyStart >= 0 && caddyEnd > caddyStart, 'Compose service caddy is mi
 const caddyService = compose.slice(caddyStart, caddyEnd);
 const oidcPublicMatcher = caddy.match(/\n\s*@oidc-public path ([^\n]+)/)?.[1] ?? '';
 
-requireText(compose, 'quay.io/keycloak/keycloak:26.8.0@sha256:', 'Keycloak patched image');
+const keycloakImage = 'quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244';
+requireText(compose, keycloakImage, 'Keycloak patched image');
+requireText(read('infra/Dockerfile'), `FROM ${keycloakImage} AS keycloak-runtime`, 'Keycloak optimized build uses the same pinned image');
 requireText(compose, 'OIDC_AUTH_SERVER_URL: http://keycloak:8080/realms/folhea', 'Compose back-channel');
 requireText(compose, 'OIDC_PUBLIC_AUTHORIZATION_URL: ${OIDC_PUBLIC_AUTHORIZATION_URL:?', 'Compose public authorization URL');
 requireText(compose, 'OIDC_PUBLIC_LOGOUT_URL: ${OIDC_PUBLIC_LOGOUT_URL:?', 'Compose public logout URL');

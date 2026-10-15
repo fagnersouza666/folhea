@@ -285,12 +285,16 @@ jobs:
       - run: docker build --file infra/Dockerfile --tag folhea:ci .
       - run: docker build --file infra/Dockerfile --target caddy-runtime --tag folhea:caddy-ci .
       - name: Validate built Caddy binary and modules
+        id: caddy-proof
         timeout-minutes: 2
-        run: python3 -B scripts/ci/tests/test-caddy-build.py --image folhea:caddy-ci
+        run: |
+          image_id="$(docker image inspect --format '{{.Id}}' folhea:caddy-ci)"
+          python3 -B scripts/ci/tests/test-caddy-build.py --image "$image_id"
+          printf 'image=%s\n' "$image_id" >> "$GITHUB_OUTPUT"
       - name: Validate private HTTP edge behind NPM on built Caddy
         timeout-minutes: 2
         env:
-          CADDY_TEST_IMAGE: folhea:caddy-ci
+          CADDY_TEST_IMAGE: ${{ steps.caddy-proof.outputs.image }}
         run: node scripts/ci/tests/test-npm-proxy.mjs
       - run: docker build --file infra/Dockerfile --target keycloak-runtime --tag folhea:keycloak-ci .
       - name: Validate production Compose configuration

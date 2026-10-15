@@ -18,6 +18,6 @@ ops_validate_positive_integer "$window_days" window_days
 (( window_days <= 3660 )) || ops_die 'window_days must be at most 3660'
 for name in POSTGRES_SERVICE DB_NAME DB_USERNAME; do ops_validate_name "${!name}" "$name"; done
 ops_init_compose
-"${COMPOSE[@]}" exec -T "$POSTGRES_SERVICE" psql --no-password --quiet --tuples-only --no-align \
+ops_postgres_exec psql --no-password --quiet --tuples-only --no-align \
   --set=ON_ERROR_STOP=1 --set="window_days=$window_days" --username "$DB_USERNAME" --dbname "$DB_NAME" \
   --file=/dev/stdin < "$SCRIPT_DIR/product-metrics.sql"

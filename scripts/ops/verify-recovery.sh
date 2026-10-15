@@ -130,12 +130,12 @@ if [[ -n "$RECOVERY_REPORT_FILE" ]]; then
 fi
 
 ops_log "Checking PostgreSQL readiness"
-"${COMPOSE[@]}" exec -T "$POSTGRES_SERVICE" pg_isready \
+ops_postgres_exec pg_isready \
   --username="$DB_USERNAME" --dbname="$DB_NAME" >/dev/null 2>&1 ||
   ops_die "PostgreSQL readiness check failed"
 
 query_output=""
-if ! query_output="$("${COMPOSE[@]}" exec -T "$POSTGRES_SERVICE" psql \
+if ! query_output="$(ops_postgres_exec psql \
   --no-password \
   --quiet \
   --tuples-only \
