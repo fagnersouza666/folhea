@@ -7,8 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SecurityPolicyTest {
     private final SecurityPolicy policy = new SecurityPolicy(
-            "https://folhea.com.br",
-            "https://folhea.com.br,https://preview.folhea.com.br");
+            "https://reader.example",
+            "https://reader.example,https://preview.reader.example");
 
     @Test void defaultPolicyUsesTheLocalHttpOrigin() {
         SecurityPolicy defaults = new SecurityPolicy();
@@ -18,19 +18,19 @@ class SecurityPolicyTest {
     }
 
     @Test void acceptsOnlyAllowlistedOrigins() {
-        assertTrue(policy.isAllowedOrigin("https://folhea.com.br"));
-        assertTrue(policy.isAllowedOrigin("https://preview.folhea.com.br/"));
+        assertTrue(policy.isAllowedOrigin("https://reader.example"));
+        assertTrue(policy.isAllowedOrigin("https://preview.reader.example/"));
         assertFalse(policy.isAllowedOrigin("https://evil.example"));
-        assertFalse(policy.isAllowedOrigin("https://folhea.com.br.evil.example"));
-        assertFalse(policy.isAllowedOrigin("https://folhea.com.br/app"));
+        assertFalse(policy.isAllowedOrigin("https://reader.example.evil.example"));
+        assertFalse(policy.isAllowedOrigin("https://reader.example/app"));
         assertFalse(policy.isAllowedOrigin("null"));
     }
 
     @Test void hostMustMatchCanonicalHostAndPort() {
-        assertTrue(policy.isAllowedHost("folhea.com.br"));
-        assertTrue(policy.isAllowedHost("preview.folhea.com.br"));
+        assertTrue(policy.isAllowedHost("reader.example"));
+        assertTrue(policy.isAllowedHost("preview.reader.example"));
         assertFalse(policy.isAllowedHost("evil.example"));
-        assertFalse(policy.isAllowedHost("folhea.com.br.evil.example"));
-        assertFalse(policy.isAllowedHost("folhea.com.br:8443"));
+        assertFalse(policy.isAllowedHost("reader.example.evil.example"));
+        assertFalse(policy.isAllowedHost("reader.example:8443"));
     }
 }

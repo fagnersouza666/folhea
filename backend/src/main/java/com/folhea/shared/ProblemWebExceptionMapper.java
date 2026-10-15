@@ -12,11 +12,11 @@ public class ProblemWebExceptionMapper implements ExceptionMapper<jakarta.ws.rs.
         int status = exception.getResponse() == null ? 500 : exception.getResponse().getStatus();
         if (status < 400 || status >= 600) status = 500;
         String type = switch (status) {
-            case 400 -> "https://folhea.com.br/problems/invalid-request";
-            case 401 -> "https://folhea.com.br/problems/unauthorized";
-            case 403 -> "https://folhea.com.br/problems/forbidden";
-            case 415 -> "https://folhea.com.br/problems/unsupported-content-type";
-            default -> "https://folhea.com.br/problems/http-error";
+            case 400 -> ProblemTypes.INVALID_REQUEST;
+            case 401 -> ProblemTypes.UNAUTHORIZED;
+            case 403 -> ProblemTypes.FORBIDDEN;
+            case 415 -> ProblemTypes.UNSUPPORTED_CONTENT_TYPE;
+            default -> ProblemTypes.HTTP_ERROR;
         };
         String title = switch (status) {
             case 400 -> "Requisição inválida";

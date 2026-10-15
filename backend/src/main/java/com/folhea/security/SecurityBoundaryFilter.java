@@ -1,5 +1,6 @@
 package com.folhea.security;
 
+import com.folhea.shared.ProblemTypes;
 import com.folhea.shared.ProblemResponses;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.Priority;
@@ -41,14 +42,14 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
         if (!isApiRequest(context)) return;
 
         if (!policy.isAllowedHost(firstHeader(context, "X-Forwarded-Host", HttpHeaders.HOST))) {
-            abort(context, 403, "https://folhea.com.br/problems/invalid-host", "Origem não permitida", "O host da requisição não é confiável.");
+            abort(context, 403, ProblemTypes.INVALID_HOST, "Origem não permitida", "O host da requisição não é confiável.");
             return;
         }
         // API callers must never be sent to the browser login flow. The
         // browser starts OIDC explicitly at /auth/login; an API request with
         // no authenticated identity gets the machine-readable contract.
         if ((identity == null || identity.isAnonymous())) {
-            abort(context, 401, "https://folhea.com.br/problems/unauthorized", "Não autenticado", "É necessário autenticar-se.");
+            abort(context, 401, ProblemTypes.UNAUTHORIZED, "Não autenticado", "É necessário autenticar-se.");
             return;
         }
 
@@ -56,7 +57,7 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
         if (!isMutation(method)) return;
 
         if (!validOrigin(context)) {
-            abort(context, 403, "https://folhea.com.br/problems/csrf-origin", "Origem não permitida", "A requisição deve vir da origem canônica.");
+            abort(context, 403, ProblemTypes.CSRF_ORIGIN, "Origem não permitida", "A requisição deve vir da origem canônica.");
             return;
         }
         MediaType mediaType = context.getMediaType();
@@ -65,11 +66,11 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
         boolean bookMultipart = isBookMultipart(context, mediaType);
         boolean rawPhoto = isRawPhoto(context);
         if (!json && !bodyless && !bookMultipart && !rawPhoto && !isEmptyFinishForm(context, mediaType)) {
-            abort(context, 415, "https://folhea.com.br/problems/unsupported-content-type", "Tipo de conteúdo não suportado", "Mutações autenticadas aceitam somente application/json.");
+            abort(context, 415, ProblemTypes.UNSUPPORTED_CONTENT_TYPE, "Tipo de conteúdo não suportado", "Mutações autenticadas aceitam somente application/json.");
             return;
         }
         if (!validCsrf(context)) {
-            abort(context, 403, "https://folhea.com.br/problems/csrf-invalid", "Token CSRF inválido", "O token CSRF está ausente, expirado ou não pertence à sessão.");
+            abort(context, 403, ProblemTypes.CSRF_INVALID, "Token CSRF inválido", "O token CSRF está ausente, expirado ou não pertence à sessão.");
             return;
         }
         if (!bookMultipart) limitBody(context, rawPhoto ? com.folhea.book.BookPhotoNormalizer.MAX_BYTES : maxJsonBodyBytes, rawPhoto);
@@ -114,7 +115,7 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
     private void limitBody(ContainerRequestContext context, long limit, boolean photo) {
         int declaredLength = context.getLength();
         if (declaredLength > limit) {
-            abort(context, 413, "https://folhea.com.br/problems/body-too-large", "Corpo muito grande", photo ? "A foto excede 1.000.000 bytes." : "O corpo JSON excede o limite de 64 KiB.");
+            abort(context, 413, ProblemTypes.BODY_TOO_LARGE, "Corpo muito grande", photo ? "A foto excede 1.000.000 bytes." : "O corpo JSON excede o limite de 64 KiB.");
             return;
         }
         if (declaredLength == 0 || !context.hasEntity()) return;
@@ -128,14 +129,14 @@ public class SecurityBoundaryFilter implements ContainerRequestFilter {
             while ((read = input.read(chunk)) != -1) {
                 total += read;
                 if (total > limit) {
-                    abort(context, 413, "https://folhea.com.br/problems/body-too-large", "Corpo muito grande", photo ? "A foto excede 1.000.000 bytes." : "O corpo JSON excede o limite de 64 KiB.");
+                    abort(context, 413, ProblemTypes.BODY_TOO_LARGE, "Corpo muito grande", photo ? "A foto excede 1.000.000 bytes." : "O corpo JSON excede o limite de 64 KiB.");
                     return;
                 }
                 body.write(chunk, 0, read);
             }
             context.setEntityStream(new ByteArrayInputStream(body.toByteArray()));
         } catch (IOException ignored) {
-            abort(context, 400, "https://folhea.com.br/problems/invalid-request", "Requisição inválida", "Não foi possível ler o corpo da requisição.");
+            abort(context, 400, ProblemTypes.INVALID_REQUEST, "Requisição inválida", "Não foi possível ler o corpo da requisição.");
         }
     }
 

@@ -13,7 +13,7 @@ public class ConstraintViolationMapper implements ExceptionMapper<ConstraintViol
                 .map(v -> v.getMessage())
                 .findFirst()
                 .orElse("Dados inválidos.");
-        return ProblemResponses.build(400, "https://folhea.com.br/problems/validation",
+        return ProblemResponses.build(400, ProblemTypes.VALIDATION,
                 "Requisição inválida", detail);
     }
 }

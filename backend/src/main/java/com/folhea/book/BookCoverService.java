@@ -1,5 +1,6 @@
 package com.folhea.book;
 
+import com.folhea.shared.ProblemTypes;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.folhea.shared.ProblemException;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -29,7 +30,7 @@ public class BookCoverService {
         if (part == null) return null;
         String mime = part.getHeaders().getFirst("Content-Type");
         if (!"image/png".equalsIgnoreCase(mime) && !"image/jpeg".equalsIgnoreCase(mime)) {
-            throw new ProblemException(415, "https://folhea.com.br/problems/unsupported-cover", "Formato não suportado", "Use uma capa JPEG ou PNG.");
+            throw new ProblemException(415, ProblemTypes.UNSUPPORTED_COVER, "Formato não suportado", "Use uma capa JPEG ou PNG.");
         }
         byte[] data = bytes(part, MAX_BYTES);
         try {
@@ -77,10 +78,10 @@ public class BookCoverService {
         }
     }
     private static void invalid() {
-        throw new ProblemException(400, "https://folhea.com.br/problems/invalid-cover", "Capa inválida", "Informe uma imagem JPEG/PNG válida de até 1.000.000 bytes, 16.384 pixels por lado e 24.000.000 pixels no total.");
+        throw new ProblemException(400, ProblemTypes.INVALID_COVER, "Capa inválida", "Informe uma imagem JPEG/PNG válida de até 1.000.000 bytes, 16.384 pixels por lado e 24.000.000 pixels no total.");
     }
     private static void tooLarge() {
-        throw new ProblemException(413, "https://folhea.com.br/problems/cover-too-large", "Capa muito grande", "A imagem ou os metadados excedem o limite permitido.");
+        throw new ProblemException(413, ProblemTypes.COVER_TOO_LARGE, "Capa muito grande", "A imagem ou os metadados excedem o limite permitido.");
     }
     public record Normalized(byte[] data, String mediaType, int width, int height) { }
 }

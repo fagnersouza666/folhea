@@ -1,5 +1,6 @@
 package com.folhea.book;
 
+import com.folhea.shared.ProblemTypes;
 import com.folhea.shared.ProblemException;
 import java.awt.Color;
 import java.awt.RenderingHints;
@@ -30,7 +31,7 @@ public final class BookPhotoNormalizer {
         final long maxPixels = MAX_INPUT_PIXELS;
         final int maxSide = MAX_INPUT_SIDE;
         if (source == null || source.length == 0) throw invalid();
-        if (source.length > inputLimit) throw new ProblemException(413, "https://folhea.com.br/problems/photo-too-large", "Foto muito grande", "A foto excede o limite permitido.");
+        if (source.length > inputLimit) throw new ProblemException(413, ProblemTypes.PHOTO_TOO_LARGE, "Foto muito grande", "A foto excede o limite permitido.");
         String type = mime == null ? "" : mime.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
         boolean signature = switch (type) {
             case "image/jpeg" -> source.length >= 3 && (source[0] & 255) == 255 && (source[1] & 255) == 216 && (source[2] & 255) == 255;
@@ -48,7 +49,7 @@ public final class BookPhotoNormalizer {
                 int width = reader.getWidth(0), height = reader.getHeight(0);
                 if (width < 1 || height < 1) throw invalid();
                 if (width > maxSide || height > maxSide || (long)width * height > maxPixels) {
-                    throw new ProblemException(400, "https://folhea.com.br/problems/photo-dimensions", "Dimensões inválidas", "A imagem deve ter no máximo 16.384 pixels por lado e 24.000.000 pixels no total.");
+                    throw new ProblemException(400, ProblemTypes.PHOTO_DIMENSIONS, "Dimensões inválidas", "A imagem deve ter no máximo 16.384 pixels por lado e 24.000.000 pixels no total.");
                 }
                 BufferedImage decoded = reader.read(0);
                 if (decoded == null) throw invalid();
@@ -97,7 +98,7 @@ public final class BookPhotoNormalizer {
         for (int i = 0; i < value.length(); i++) if (bytes[offset + i] != value.charAt(i)) return false;
         return true;
     }
-    private static ProblemException invalid() { return new ProblemException(415, "https://folhea.com.br/problems/unsupported-photo", "Foto inválida", "Escolha uma imagem JPEG, PNG ou WebP válida de até 24 megapixels."); }
+    private static ProblemException invalid() { return new ProblemException(415, ProblemTypes.UNSUPPORTED_PHOTO, "Foto inválida", "Escolha uma imagem JPEG, PNG ou WebP válida de até 24 megapixels."); }
     private static final class BoundedOutput extends OutputStream {
         final ByteArrayOutputStream bytes = new ByteArrayOutputStream(); boolean exceeded;
         @Override public void write(int value) throws IOException { check(1); bytes.write(value); }

@@ -69,7 +69,7 @@ public class NotAuthorizedExceptionMapper implements ExceptionMapper<NotAuthoriz
     }
 
     private static Response unauthorizedResponse() {
-        return ProblemResponses.build(401, "https://folhea.com.br/problems/unauthorized",
+        return ProblemResponses.build(401, ProblemTypes.UNAUTHORIZED,
                 "Não autenticado", "É necessário autenticar-se.");
     }
 }

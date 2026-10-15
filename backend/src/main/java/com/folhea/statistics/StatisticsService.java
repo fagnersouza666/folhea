@@ -1,5 +1,6 @@
 package com.folhea.statistics;
 
+import com.folhea.shared.ProblemTypes;
 import com.folhea.book.BookEntity;
 import com.folhea.book.BookRepository;
 import com.folhea.book.BookStatus;
@@ -27,7 +28,7 @@ public class StatisticsService {
     public StatsResponse stats(UserEntity user, LocalDate from, LocalDate to, String periodName) {
         if ((from == null) != (to == null) || (from != null && from.isAfter(to))) {
             throw new com.folhea.shared.ProblemException(400,
-                    "https://folhea.com.br/problems/invalid-period", "Período inválido",
+                    ProblemTypes.INVALID_PERIOD, "Período inválido",
                     "Informe um período com datas válidas.");
         }
         LocalDate today = today(user);
@@ -73,7 +74,7 @@ public class StatisticsService {
         }
         if (from != null || to != null) {
             throw new com.folhea.shared.ProblemException(400,
-                    "https://folhea.com.br/problems/invalid-period", "Período inválido",
+                    ProblemTypes.INVALID_PERIOD, "Período inválido",
                     "Escolha um período predefinido ou informe from e to, não ambos.");
         }
         return switch (periodName.trim().toLowerCase(Locale.ROOT)) {
@@ -87,7 +88,7 @@ public class StatisticsService {
                 yield new PeriodSelection(first == null ? today : first, today, true);
             }
             default -> throw new com.folhea.shared.ProblemException(400,
-                    "https://folhea.com.br/problems/invalid-period", "Período inválido",
+                    ProblemTypes.INVALID_PERIOD, "Período inválido",
                     "Use today, 7, 30 ou all.");
         };
     }

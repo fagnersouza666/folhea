@@ -1,5 +1,6 @@
 package com.folhea.book;
 
+import com.folhea.shared.ProblemTypes;
 import com.folhea.shared.ProblemException;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -32,5 +33,5 @@ public class BookPhotoService {
         removeLegacy(bookId); em.flush();
     }
     private void removeLegacy(UUID id) { em.createQuery("DELETE FROM BookCoverEntity c WHERE c.bookId=:id").setParameter("id", id).executeUpdate(); }
-    public static ProblemException notFound() { return new ProblemException(404, "https://folhea.com.br/problems/photo-not-found", "Foto não encontrada", "Não há uma foto para este livro."); }
+    public static ProblemException notFound() { return new ProblemException(404, ProblemTypes.PHOTO_NOT_FOUND, "Foto não encontrada", "Não há uma foto para este livro."); }
 }

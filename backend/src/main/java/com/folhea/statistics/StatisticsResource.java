@@ -1,5 +1,6 @@
 package com.folhea.statistics;
 
+import com.folhea.shared.ProblemTypes;
 import com.folhea.identity.CurrentUser;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
@@ -30,10 +31,10 @@ public class StatisticsResource {
                                                  @QueryParam("period") String period,
                                                  @QueryParam("range") String range) {
         if ((from == null) != (to == null) || (from != null && from.isAfter(to))) {
-            throw new com.folhea.shared.ProblemException(400, "https://folhea.com.br/problems/invalid-period", "Período inválido", "Informe um período com datas válidas.");
+            throw new com.folhea.shared.ProblemException(400, ProblemTypes.INVALID_PERIOD, "Período inválido", "Informe um período com datas válidas.");
         }
         if (period != null && range != null && !period.equalsIgnoreCase(range)) {
-            throw new com.folhea.shared.ProblemException(400, "https://folhea.com.br/problems/invalid-period", "Período inválido", "Informe apenas um período.");
+            throw new com.folhea.shared.ProblemException(400, ProblemTypes.INVALID_PERIOD, "Período inválido", "Informe apenas um período.");
         }
         return statistics.stats(currentUser.get(), from, to, period != null ? period : range);
     }

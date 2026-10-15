@@ -1,5 +1,6 @@
 package com.folhea.identity;
 
+import com.folhea.shared.ProblemTypes;
 import com.folhea.shared.ProblemException;
 import com.folhea.user.UserEntity;
 import com.folhea.user.UserRepository;
@@ -24,19 +25,19 @@ public class CurrentUser {
     @Transactional
     public UserEntity get() {
         if (securityIdentity == null || securityIdentity.isAnonymous()) {
-            throw new ProblemException(401, "https://folhea.com.br/problems/unauthorized", "Não autenticado", "É necessário autenticar-se.");
+            throw new ProblemException(401, ProblemTypes.UNAUTHORIZED, "Não autenticado", "É necessário autenticar-se.");
         }
         if (securityIdentity.getPrincipal() == null || securityIdentity.getPrincipal().getName() == null
                 || securityIdentity.getPrincipal().getName().isBlank()) {
-            throw new ProblemException(401, "https://folhea.com.br/problems/unauthorized", "Não autenticado", "A identidade autenticada não possui subject.");
+            throw new ProblemException(401, ProblemTypes.UNAUTHORIZED, "Não autenticado", "A identidade autenticada não possui subject.");
         }
         String subject = securityIdentity.getPrincipal() instanceof JsonWebToken jwt
                 ? jwt.getSubject() : securityIdentity.getPrincipal().getName();
         if (subject == null || subject.isBlank()) {
-            throw new ProblemException(401, "https://folhea.com.br/problems/unauthorized", "Não autenticado", "A identidade autenticada não possui subject.");
+            throw new ProblemException(401, ProblemTypes.UNAUTHORIZED, "Não autenticado", "A identidade autenticada não possui subject.");
         }
         if (deletions.isDeleted(subject) || tokenStateStore.isSubjectRevoked(subject)) {
-            throw new ProblemException(401, "https://folhea.com.br/problems/unauthorized", "Não autenticado", "A sessão foi encerrada.");
+            throw new ProblemException(401, ProblemTypes.UNAUTHORIZED, "Não autenticado", "A sessão foi encerrada.");
         }
         String email = claim("email");
         UserEntity user = users.findByIdentitySubject(subject);
@@ -47,12 +48,12 @@ public class CurrentUser {
             user = users.findByIdentitySubject(subject);
             if (user == null) {
                 // An email collision cannot authorize or rebind another subject.
-                throw new ProblemException(401, "https://folhea.com.br/problems/unauthorized", "Não autenticado", "Não foi possível vincular a identidade autenticada.");
+                throw new ProblemException(401, ProblemTypes.UNAUTHORIZED, "Não autenticado", "Não foi possível vincular a identidade autenticada.");
             }
             if (deletions.isDeleted(subject)) {
                 // A deletion may commit between the first marker check and INSERT.
                 // Roll back any concurrent reprovisioning instead of retaining it.
-                throw new ProblemException(401, "https://folhea.com.br/problems/unauthorized", "Não autenticado", "A sessão foi encerrada.");
+                throw new ProblemException(401, ProblemTypes.UNAUTHORIZED, "Não autenticado", "A sessão foi encerrada.");
             }
         } else {
             // Claims are the source of truth for identity metadata. Do not replace

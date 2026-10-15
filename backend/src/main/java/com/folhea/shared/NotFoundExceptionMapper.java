@@ -9,7 +9,7 @@ import jakarta.ws.rs.ext.Provider;
 public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundException> {
     @Override
     public Response toResponse(NotFoundException exception) {
-        return ProblemResponses.build(404, "https://folhea.com.br/problems/not-found",
+        return ProblemResponses.build(404, ProblemTypes.NOT_FOUND,
                 "Recurso não encontrado", "O recurso solicitado não existe.");
     }
 }

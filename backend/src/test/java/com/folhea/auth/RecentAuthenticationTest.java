@@ -1,6 +1,7 @@
 package com.folhea.auth;
 
 import com.folhea.shared.ProblemException;
+import com.folhea.shared.ProblemTypes;
 import io.quarkus.oidc.IdTokenCredential;
 import io.quarkus.oidc.runtime.OidcJwtCallerPrincipal;
 import io.quarkus.security.runtime.QuarkusSecurityIdentity;
@@ -22,7 +23,7 @@ class RecentAuthenticationTest {
     void refreshedIatCannotReplaceMissingOldFutureOrMalformedAuthTime() {
         for (Object time : new Object[]{null, NOW-301, NOW+1, "2026-10-12", Long.MAX_VALUE, -1, NOW-1.5}) {
             var failure = assertThrows(ProblemException.class, () -> guard(time, true, false).require());
-            assertEquals(401, failure.status()); assertTrue(failure.type().endsWith("/recent-authentication-required"));
+            assertEquals(401, failure.status()); assertEquals(ProblemTypes.RECENT_AUTHENTICATION_REQUIRED, failure.type());
         }
     }
     @Test

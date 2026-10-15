@@ -9,7 +9,7 @@ import jakarta.ws.rs.ext.Provider;
 public class JsonProcessingExceptionMapper implements ExceptionMapper<JsonProcessingException> {
     @Override
     public Response toResponse(JsonProcessingException exception) {
-        return ProblemResponses.build(400, "https://folhea.com.br/problems/invalid-json",
+        return ProblemResponses.build(400, ProblemTypes.INVALID_JSON,
                 "JSON inválido", "O corpo da requisição não contém um JSON válido.");
     }
 }

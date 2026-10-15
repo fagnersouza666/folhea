@@ -9,7 +9,7 @@ import jakarta.ws.rs.ext.Provider;
 public class ProcessingExceptionMapper implements ExceptionMapper<ProcessingException> {
     @Override
     public Response toResponse(ProcessingException exception) {
-        return ProblemResponses.build(400, "https://folhea.com.br/problems/invalid-request",
+        return ProblemResponses.build(400, ProblemTypes.INVALID_REQUEST,
                 "Requisição inválida", "A requisição não pôde ser processada.");
     }
 }
