@@ -22,6 +22,10 @@ O campo `type` é uma URI relativa `/problems/slug`, definida no catálogo
 contrato e verificados no CI. Comparações são exatas; URLs absolutas e aliases
 de origens anteriores não são aceitos. Essa identificação não muda `status`,
 `title`, `detail`, as políticas de CSRF ou os fluxos OIDC.
+O schema OpenAPI de `type` declara `format: uri-reference`, com exemplo obtido
+da constante gerada. A regressão usa o scanner SmallRye real sobre o DTO para
+não anunciar formato absoluto para esses IDs relativos; isso não publica uma
+nova rota OpenAPI na borda.
 
 ## Conta e datas
 

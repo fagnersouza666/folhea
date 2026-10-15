@@ -255,4 +255,4 @@ relatórios de teste, relatório Playwright e artefato SEO por 14 dias; esses
 artefatos são a evidência da aprovação.
 
 Build frontend/CI: Node26.12.0 estável e TypeScript6.0.3, compatíveis com
-Angular22.2.2. O runtime do frontend é estático no Caddy e não contém Node.
+Angular22.2.3. O runtime do frontend é estático no Caddy e não contém Node.
