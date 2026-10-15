@@ -272,5 +272,317 @@ with open(os.environ['CALL_LOG'], 'a') as log:
                 self.assertEqual(self.calls(), [])
 
 
+class ProductionBridgeTest(unittest.TestCase):
+    """Execute the Python bridge locally against engine API fixtures, never Docker/SSH."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix='folhea-bridge-')
+        self.addCleanup(self.temporary.cleanup)
+        self.base = Path(self.temporary.name) / 'folhea'
+        self.base.mkdir(mode=0o700)
+        self.source, self.previous = 'a' * 40, 'b' * 40
+        self.release = self.base / 'releases' / self.source
+        ops = self.release / 'scripts/ops'
+        ops.mkdir(parents=True)
+        (self.base / 'releases' / self.previous).mkdir()
+        (self.base / 'current').symlink_to('releases/' + self.previous)
+        (self.base / 'production.env').write_text('fixture-not-a-real-secret')
+        (self.base / 'production.env').chmod(0o600)
+        for name in ['verify-recovery.sql', 'verify-recovery-keycloak.sql']:
+            (ops / name).write_bytes((ROOT / 'scripts/ops' / name).read_bytes())
+        (self.release / 'docker-compose.external-pg.yml').write_text('services: {}\n')
+        # Only the PostgreSQL process boundary is simulated. SQL text and the
+        # whitespace-normalizing comparison in verify-recovery.sh are real.
+        docker = self.base / 'docker-fixture'
+        docker.write_text(f'#!{sys.executable}\n' + '''
+import os, re, sys
+args = sys.argv[1:]
+if args[0] == 'inspect':
+    print('2' * 64 + '|sha256:' + '3' * 64 + '|true|healthy')
+elif 'pg_dump' in args and '--version' in args:
+    print('pg_dump (PostgreSQL) 16.13')
+elif 'pg_isready' in args:
+    pass
+elif 'psql' in args:
+    query = args[args.index('--command') + 1]
+    if os.environ['DB_NAME'] == 'folhea_keycloak':
+        messages = re.findall(r"SELECT\\s+'([^']+)';", query)
+        assert len(messages) == 1, 'Use the actual Keycloak SQL contract'
+        print('unexpected value' if os.environ.get('FIXTURE_BAD_RESULT') else messages[0])
+    else:
+        assert 'THEN 1 ELSE 0 END;' in query
+        print('1')
+else:
+    sys.exit(97)
+''')
+        docker.chmod(0o700)
+        # Reuse real private_dump/sha/lock/target/path APIs. Docker-facing APIs
+        # alone are fixture doubles; run() produces synthetic archive bytes.
+        (ops / 'deploy-folhea.py').write_text(f'''
+import importlib.util, json, os, shutil, subprocess
+from pathlib import Path
+spec=importlib.util.spec_from_file_location('real_engine', {str(ROOT / 'scripts/ops/deploy-folhea.py')!r})
+real=importlib.util.module_from_spec(spec); spec.loader.exec_module(real)
+real.ROOT=Path(__file__).resolve().parents[2]
+require=real.require
+sha=real.sha
+private_dump=real.private_dump
+own_lock=real.own_lock
+safe_environment=real.safe_environment
+configure_target=real.configure_target
+activation_paths=real.activation_paths
+pending_recovery=real.pending_recovery
+current_is=real.current_is
+images={{name:'sha256:'+'1'*64 for name in real.SERVICES}}
+def read_manifest(*args): return {{}}
+def runtime_images(*args): return images
+def inspected_peer(*args): return {{}}
+def inspected_database(*args): return {{'id':'2'*64,'image':'sha256:'+'3'*64}}
+def snapshot(*args): return images
+def external_preflight(*args): pass
+def compose(*args): return json.dumps({{'x-folhea-external-postgres':{{'container':'pg-fixture'}}, 'private':'stay-in-memory'}})
+class Guard:
+    def validate_model(self,*args): pass
+    def validate_peer(self,*args): pass
+    def validate_external_peer(self,*args): pass
+def load_guard(*args): return Guard()
+def run(command,env=None,**kwargs):
+    base=Path(real.REMOTE_ROOT)
+    with (base/'calls.jsonl').open('a') as out:
+        out.write(json.dumps({{'command':command,'database':env['DB_NAME'],'role':env['DB_USERNAME'],
+          'container':env['OPS_EXTERNAL_POSTGRES_CONTAINER'],'id':env['OPS_EXTERNAL_POSTGRES_CONTAINER_ID'],
+          'image':env['OPS_EXTERNAL_POSTGRES_IMAGE_ID']}})+'\\n')
+    if command[1].endswith('/backup-postgres.sh'):
+        destination=Path(command[command.index('--output-dir')+1])
+        copy=Path(command[command.index('--external-destination')+1].removeprefix('file://'))
+        artifact=destination/('folhea-'+env['DB_NAME']+'-20260101T000000Z.dump')
+        artifact.write_bytes(b'PGDMP-synthetic-fixture'); artifact.chmod(0o600)
+        sidecar=Path(str(artifact)+'.sha256')
+        sidecar.write_text(sha(artifact)+'  '+str(artifact)+'\\n'); sidecar.chmod(0o600)
+        shutil.copyfile(artifact,copy/artifact.name); (copy/artifact.name).chmod(0o600)
+        shutil.copyfile(sidecar,copy/sidecar.name); (copy/sidecar.name).chmod(0o600)
+        if os.environ.get('BRIDGE_FIXTURE_FAULT')=='missing-sidecar': sidecar.unlink()
+    elif command[1].endswith('/verify-recovery.sh'):
+        env=dict(env, DOCKER_BIN=str(base/'docker-fixture'))
+        if os.environ.get('BRIDGE_FIXTURE_FAULT')=='bad-keycloak-output':
+            env['FIXTURE_BAD_RESULT']='1'
+        result=subprocess.run(['bash', {str(ROOT / 'scripts/ops/verify-recovery.sh')!r}, *command[2:]],
+                              env=env, capture_output=True, text=True)
+        with (base/'guard-results.jsonl').open('a') as out:
+            out.write(json.dumps({{'database':env['DB_NAME'],'exit':result.returncode,'stderr':result.stderr}})+'\\n')
+        if result.returncode:
+            raise RuntimeError('real recovery guard rejected output')
+    return b''
+''')
+        self.bridge = WRAPPER.read_text().split("<<'PRODUCTION_PY'\n", 1)[1].split('\nPRODUCTION_PY', 1)[0]
+
+    def invoke(self, fault=None):
+        env = os.environ.copy()
+        if fault:
+            env['BRIDGE_FIXTURE_FAULT'] = fault
+        return subprocess.run([sys.executable, '-B', '-', 'backup', str(self.base), 'operator@server.example',
+                               'folhea-prod', '192.0.2.10', self.source, self.previous],
+                              input=self.bridge, env=env, text=True, capture_output=True, timeout=10)
+
+    def test_bridge_uses_two_existing_helpers_own_roles_and_observed_identity(self):
+        result = self.invoke()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        fields = result.stdout.splitlines()
+        self.assertEqual(len(fields), 5)
+        self.assertFalse(Path(fields[-1]).exists(), 'No review receipt before operator confirmation')
+        self.assertEqual(fields[2], __import__('hashlib').sha256(Path(fields[0]).read_bytes()).hexdigest())
+        calls = [json.loads(line) for line in (self.base / 'calls.jsonl').read_text().splitlines()]
+        self.assertEqual([(c['database'], c['role']) for c in calls],
+                         [('folhea', 'folhea_app')] * 2 + [('folhea_keycloak', 'folhea_keycloak')] * 2)
+        self.assertEqual([Path(c['command'][1]).name for c in calls],
+                         ['backup-postgres.sh', 'verify-recovery.sh'] * 2)
+        for call in calls:
+            self.assertEqual((call['container'], call['id'], call['image']),
+                             ('pg-fixture', '2' * 64, 'sha256:' + '3' * 64))
+        self.assertNotIn('stay-in-memory', result.stdout + result.stderr)
+
+    def test_missing_checksum_sidecar_refuses_backup_metadata_and_receipt(self):
+        result = self.invoke('missing-sidecar')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, '')
+        self.assertFalse((self.base / 'receipts').exists())
+
+    def test_real_recovery_helper_accepts_actual_app_and_keycloak_sql_outputs(self):
+        result = self.invoke()
+        guards = [json.loads(line) for line in (self.base / 'guard-results.jsonl').read_text().splitlines()]
+        self.assertEqual([(g['database'], g['exit']) for g in guards],
+                         [('folhea', 0), ('folhea_keycloak', 0)])
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_real_recovery_helper_still_rejects_wrong_keycloak_output(self):
+        result = self.invoke('bad-keycloak-output')
+        self.assertNotEqual(result.returncode, 0)
+        guards = [json.loads(line) for line in (self.base / 'guard-results.jsonl').read_text().splitlines()]
+        self.assertEqual(guards[-1]['database'], 'folhea_keycloak')
+        self.assertEqual(guards[-1]['exit'], 1)
+        self.assertIn('recovery SQL assertion returned an unexpected result', guards[-1]['stderr'])
+        self.assertEqual(result.stdout, '')
+
+
+class ProductionDeployTest(unittest.TestCase):
+    git = DeployShellTest.git
+    commit = DeployShellTest.commit
+    fake = DeployShellTest.fake
+    call = DeployShellTest.call
+    calls = DeployShellTest.calls
+    assert_ok = DeployShellTest.assert_ok
+
+    def setUp(self):
+        DeployShellTest.setUp(self)
+        self.config = self.base / 'deployment.json'
+        self.config.write_text(json.dumps({
+            'host': 'operator@server.example', 'remote_root': '/srv/folhea',
+            'project_name': 'folhea-prod', 'server_address': '192.0.2.10',
+            'output_parent': str(self.base / 'packages'),
+        }))
+        self.config.chmod(0o600)
+        # Config parsing is real stdlib Python. Only engine execution is a spy.
+        (self.bin / 'python3').write_text(f'#!{sys.executable}\n' + '''
+import json, os, subprocess, sys
+args = sys.argv[1:]
+if args[:2] == ['-B', '-']:
+    sys.exit(subprocess.run([sys.executable, *args], input=sys.stdin.buffer.read()).returncode)
+with open(os.environ['CALL_LOG'], 'a') as log:
+    log.write(json.dumps({'tool': 'python3', 'args': args}) + '\\n')
+phase = next((v for v in args if v in ['--dry-run', '--prepare', '--transfer']), '')
+if phase == '--prepare' and os.environ.get('DRIFT_PREPARE'):
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(args[1])))
+    subprocess.run(['git', '-C', repo, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test',
+                    'commit', '--allow-empty', '-qm', 'drift'], check=True)
+sys.exit(int(os.environ.get('FAIL_CODE', '29')) if phase == os.environ.get('FAIL_PHASE') else 0)
+''')
+        (self.bin / 'python3').chmod(0o755)
+        self.fake('ssh', '''
+import shlex
+remote = shlex.split(sys.argv[-1])
+if remote[:3] == ['python3', '-B', '-']:
+    mode = remote[3]
+    source = remote[8]
+    sys.stdin.read()  # Receive, never execute, the remote orchestration bridge.
+else:
+    mode = 'review' if '--record-backup-review' in remote else 'activate'
+if mode == os.environ.get('FAIL_REMOTE'):
+    sys.exit(41)
+if mode == 'inspect':
+    print('b' * 40)
+elif mode == 'backup':
+    print('/srv/folhea/backups/' + source + '-fixture/folhea-folhea-20260101T000000Z.dump')
+    print('/srv/folhea/backups/' + source + '-fixture/folhea-folhea_keycloak-20260101T000000Z.dump')
+    print('a' * 64)
+    print('b' * 64)
+    print('/srv/folhea/receipts/' + source + '-fixture.backup-review.json')
+''')
+
+    def production(self, *extra):
+        return ['--production', '--config', str(self.config), *extra]
+
+    def tty_call(self, args, answer='PUBLICAR\n', extra=None):
+        import pty
+        master, slave = pty.openpty()
+        self.addCleanup(os.close, master)
+        env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+        env.update(PATH=str(self.bin) + os.pathsep + os.environ.get('PATH', ''), CALL_LOG=str(self.log))
+        env.update(extra or {})
+        try:
+            proc = subprocess.Popen(['/bin/bash', str(self.wrapper), *args], cwd=self.base,
+                                    env=env, stdin=slave, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        finally:
+            os.close(slave)
+        os.write(master, answer.encode())
+        stdout, stderr = proc.communicate(timeout=15)
+        return subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr)
+
+    def actions(self):
+        result = []
+        for call in self.calls():
+            if call['tool'] == 'python3':
+                result.append(next(v for v in call['args'] if v in ['--dry-run', '--prepare', '--transfer']))
+            else:
+                remote = shlex.split(call['args'][-1])
+                result.append(remote[3] if remote[:3] == ['python3', '-B', '-'] else
+                              ('review' if '--record-backup-review' in remote else 'activate'))
+        return result
+
+    def test_production_dry_run_reads_config_without_tty_commands_or_writes(self):
+        before = set(self.base.rglob('*'))
+        index = (self.repo / '.git/index').read_bytes()
+        result = self.call(self.production('--dry-run'))
+        self.assert_ok(result)
+        self.assertIn('PLANO', result.stdout)
+        self.assertIn('backups', result.stdout)
+        self.assertEqual(self.calls(), [])
+        self.assertEqual(set(self.base.rglob('*')), before)
+        self.assertEqual((self.repo / '.git/index').read_bytes(), index)
+
+    def test_production_requires_tty_before_engine_prepare_or_ssh(self):
+        result = self.call(self.production())
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('terminal', result.stderr)
+        self.assertEqual(self.calls(), [])
+
+    def test_one_production_command_runs_backups_review_and_upgrade_after_confirmation(self):
+        result = self.tty_call(self.production())
+        self.assert_ok(result)
+        self.assertEqual(self.actions(), ['--dry-run', 'inspect', '--prepare', '--transfer', 'backup', 'review', 'activate'])
+        remotes = [shlex.split(c['args'][-1]) for c in self.calls() if c['tool'] == 'ssh']
+        for remote in remotes[-2:]:
+            self.assertIn(self.source, remote)
+            self.assertIn(self.current, remote)
+            self.assertIn('--schema-compatible-reviewed', remote)
+            self.assertIn('/srv/folhea/receipts/' + self.source + '-fixture.backup-review.json', remote)
+        review = remotes[-2]
+        self.assertIn('/srv/folhea/backups/' + self.source + '-fixture/folhea-folhea-20260101T000000Z.dump', review)
+        self.assertEqual(remotes[-1][remotes[-1].index('--installation') + 1], 'upgrade')
+        self.assertIn('PUBLICAR', result.stdout)
+
+    def test_cancelled_review_preserves_evidence_without_review_or_activation(self):
+        result = self.tty_call(self.production(), answer='NAO\n')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.actions(), ['--dry-run', 'inspect', '--prepare', '--transfer', 'backup'])
+        self.assertIn('backups', result.stdout)
+
+    def test_configuration_is_private_strict_data_not_shell(self):
+        self.config.chmod(0o644)
+        result = self.tty_call(self.production())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.calls(), [])
+        self.config.chmod(0o600)
+        values = json.loads(self.config.read_text())
+        values['password'] = 'fixture-value-must-not-be-printed'
+        self.config.write_text(json.dumps(values))
+        result = self.tty_call(self.production())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn(values['password'], result.stdout + result.stderr)
+        self.assertEqual(self.calls(), [])
+
+    def test_backup_or_record_failure_never_reaches_activate(self):
+        for phase, last in [('backup', 'backup'), ('review', 'review')]:
+            with self.subTest(phase=phase):
+                self.log.unlink(missing_ok=True)
+                result = self.tty_call(self.production(), extra={'FAIL_REMOTE': phase})
+                self.assertEqual(result.returncode, 41)
+                self.assertEqual(self.actions()[-1], last)
+                self.assertNotIn('activate', self.actions())
+
+    def test_prepare_failure_and_head_drift_do_not_transfer_or_backup(self):
+        result = self.tty_call(self.production(), extra={'FAIL_PHASE': '--prepare', 'FAIL_CODE': '29'})
+        self.assertEqual(result.returncode, 29)
+        self.assertEqual(self.actions(), ['--dry-run', 'inspect', '--prepare'])
+        self.log.unlink()
+        result = self.tty_call(self.production(), extra={'DRIFT_PREPARE': '1'})
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(self.actions(), ['--dry-run', 'inspect', '--prepare'])
+
+    def test_observed_current_must_match_optional_operator_pin(self):
+        result = self.tty_call(self.production('--expected-current', 'c' * 40))
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(self.actions(), ['--dry-run', 'inspect'])
+
+
 if __name__ == '__main__':
     unittest.main()

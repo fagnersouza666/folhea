@@ -1,0 +1,7 @@
+{
+  "host": "operator@server.example",
+  "remote_root": "/srv/folhea",
+  "project_name": "folhea-prod",
+  "server_address": "192.0.2.10",
+  "output_parent": "/absolute/private/folhea-packages"
+}
