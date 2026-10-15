@@ -4,8 +4,11 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Map;
 import java.util.Properties;
 
+import static com.folhea.security.PublicOriginConfigurationTest.configuration;
+import static com.folhea.security.PublicOriginConfigurationTest.value;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -15,17 +18,18 @@ class OidcConfigurationTest {
 
     @Test
     void authorizationCodeFlowUsesPublicBrowserEndpointsAndPrivateBackchannel() {
+        var resolved = configuration(null, Map.of());
         assertEquals("web-app", CONFIG.getProperty("quarkus.oidc.application-type"));
-        assertEquals("${OIDC_AUTH_SERVER_URL:http://localhost:8180/realms/folhea}", CONFIG.getProperty("quarkus.oidc.auth-server-url"));
-        assertEquals("${OIDC_PUBLIC_AUTHORIZATION_URL:https://folhea.com.br/realms/folhea/protocol/openid-connect/auth}",
-                CONFIG.getProperty("quarkus.oidc.authorization-path"));
+        assertEquals("http://localhost:8180/realms/folhea", value(resolved, "quarkus.oidc.auth-server-url"));
+        assertEquals("http://localhost/realms/folhea/protocol/openid-connect/auth",
+                value(resolved, "quarkus.oidc.authorization-path"));
         assertEquals("protocol/openid-connect/token", CONFIG.getProperty("quarkus.oidc.token-path"));
         assertEquals("protocol/openid-connect/certs", CONFIG.getProperty("quarkus.oidc.jwks-path"));
-        assertEquals("${OIDC_PUBLIC_LOGOUT_URL:https://folhea.com.br/realms/folhea/protocol/openid-connect/logout}",
-                CONFIG.getProperty("quarkus.oidc.end-session-path"));
+        assertEquals("http://localhost/realms/folhea/protocol/openid-connect/logout",
+                value(resolved, "quarkus.oidc.end-session-path"));
 
-        assertFalse(CONFIG.getProperty("quarkus.oidc.authorization-path").contains("keycloak:8080"));
-        assertFalse(CONFIG.getProperty("quarkus.oidc.end-session-path").contains("keycloak:8080"));
+        assertFalse(value(resolved, "quarkus.oidc.authorization-path").contains("keycloak:8080"));
+        assertFalse(value(resolved, "quarkus.oidc.end-session-path").contains("keycloak:8080"));
     }
 
     @Test
@@ -75,23 +79,22 @@ class OidcConfigurationTest {
         assertEquals("false", CONFIG.getProperty("%dev.quarkus.oidc.authentication.force-redirect-https-scheme"));
         assertEquals("false", CONFIG.getProperty("%dev.quarkus.oidc.authentication.cookie-force-secure"));
         assertEquals("false", CONFIG.getProperty("%dev.folhea.security.cookie-secure"));
-        assertEquals("http://localhost:8180/realms/folhea", CONFIG.getProperty("%dev.quarkus.oidc.token.issuer"));
+        var resolved = configuration("dev", Map.of());
+        assertEquals("http://localhost/realms/folhea", value(resolved, "quarkus.oidc.token.issuer"));
         assertEquals(
-                "http://localhost:8180/realms/folhea/protocol/openid-connect/auth",
-                CONFIG.getProperty("%dev.quarkus.oidc.authorization-path"));
-        assertTrue(CONFIG.getProperty("%dev.folhea.security.allowed-origins").contains("http://localhost:4200"));
-        assertTrue(CONFIG.getProperty("%dev.folhea.security.allowed-origins").contains("http://localhost:8080"));
+                "http://localhost/realms/folhea/protocol/openid-connect/auth",
+                value(resolved, "quarkus.oidc.authorization-path"));
+        assertEquals("http://localhost", value(resolved, "folhea.security.allowed-origins"));
     }
 
     @Test
     void tokenValidationRequiresPublicIssuerAudienceAzpAndSubject() {
-        assertEquals("${OIDC_TOKEN_ISSUER:https://folhea.com.br/realms/folhea}",
-                CONFIG.getProperty("quarkus.oidc.token.issuer"));
+        assertEquals("http://localhost/realms/folhea",
+                value(configuration(null, Map.of()), "quarkus.oidc.token.issuer"));
         assertEquals("folhea-api", CONFIG.getProperty("quarkus.oidc.token.audience"));
         assertEquals("folhea-api", CONFIG.getProperty("quarkus.oidc.token.required-claims.azp"));
         assertEquals("true", CONFIG.getProperty("quarkus.oidc.token.subject-required"));
         assertEquals("sub", CONFIG.getProperty("quarkus.oidc.token.principal-claim"));
-        assertTrue(CONFIG.getProperty("quarkus.oidc.token.issuer").contains("https://folhea.com.br/"));
     }
 
     private static Properties loadConfiguration() {

@@ -23,11 +23,11 @@ public class SecurityPolicy {
     private static final Set<String> ALLOWED_SCHEMES = Set.of("http", "https");
 
     @Inject
-    @ConfigProperty(name = "folhea.security.canonical-origin", defaultValue = "https://folhea.com.br")
+    @ConfigProperty(name = "folhea.security.canonical-origin", defaultValue = "http://localhost")
     String configuredCanonicalOrigin;
 
     @Inject
-    @ConfigProperty(name = "folhea.security.allowed-origins", defaultValue = "https://folhea.com.br")
+    @ConfigProperty(name = "folhea.security.allowed-origins", defaultValue = "http://localhost")
     String configuredAllowedOrigins;
 
     public boolean isAllowedOrigin(String candidate) {
@@ -89,7 +89,7 @@ public class SecurityPolicy {
     public SecurityPolicy() {
         // CDI populates the configured values. This constructor also keeps the
         // policy convenient to use in pure unit tests.
-        this("https://folhea.com.br", "https://folhea.com.br");
+        this("http://localhost", "http://localhost");
     }
 
     private URI parseOrigin(String value) {

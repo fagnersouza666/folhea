@@ -62,6 +62,42 @@ que o servidor de arquivos nunca intercepte as chamadas de autenticação.
    `%prod`. Defina `REDIS_PASSWORD` e `OIDC_CLIENT_SECRET` no secret store; o
    backend usa `REDIS_URL=redis://:<senha>@redis:6379` na rede privada.
 
+### Origem pública e contato (DOMINIO-01 Parte A)
+
+O domínio público é `PUBLIC_DOMAIN`. A origem principal é `PUBLIC_ORIGIN`;
+`OIDC_PUBLIC_ORIGIN` permite uma origem diferente para o IdP quando o
+desenvolvimento local usa portas distintas. Em produção, a origem
+compartilhada parte do domínio:
+
+```dotenv
+PUBLIC_DOMAIN=folhea.app
+PUBLIC_ORIGIN=https://${PUBLIC_DOMAIN}
+```
+
+O [`.env.example`](../.env.example) deriva `OIDC_PUBLIC_ORIGIN`, issuer,
+authorization/logout e `SECURITY_CANONICAL_ORIGIN`/`SECURITY_ALLOWED_ORIGINS`
+dessa origem. A stack Docker local usa explicitamente
+`PUBLIC_ORIGIN=https://${PUBLIC_DOMAIN}:${HTTPS_PORT}` para seu listener TLS;
+isso é diferente do desenvolvimento do backend sem edge, cujo padrão é
+`http://localhost`. Sem origem explícita, produção exige `PUBLIC_DOMAIN`.
+Overrides individuais existentes continuam válidos e não
+devem ser regravados se já apontam corretamente para a mesma origem.
+O [Compose faz a interpolação](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/):
+não execute o arquivo privado como um script nem publique `compose config`
+com valores de credenciais. Use `config --quiet` ou verificações em memória.
+
+CORS permanece desabilitado na operação de mesma origem. O back-channel
+`http://keycloak:8080/realms/folhea` permanece privado. Callback, web origins,+pós-logout e `frontendUrl` no export do realm usam o placeholder da origem
+pública; a importação de inicialização não reconcilia um realm já povoado.
+Se `frontendUrl` estiver ausente, aplique somente esse atributo pelo canal
+administrativo privado, preservando os demais atributos, usuários e segredos.
+Esta entrega não muda a política de cadastro.
+
+Privacidade, termos e Sobre compartilham `LEGAL_CONTACT_EMAIL`, definido como
+`contato@folhea.app`. O responsável confirmou em 14/10/2026 que a caixa existe
+e recebe mensagens; a aplicação não cria a caixa nem altera DNS de e-mail.
+Problem types e SEO pertencem à Parte B e não são alterados nesta entrega.
+
 ## Redis (store de sessão)
 
 O Redis persiste referências opacas de sessão OIDC, tokens CSRF e janelas de
@@ -195,6 +231,19 @@ e usa `frontend/proxy.conf.json` para encaminhar `/api` e `/auth` ao Quarkus em
 `http://localhost:8080`, com `X-Forwarded-Host: localhost:4200` para o redirect
 OIDC voltar à SPA. `/auth/login` não é página Angular; é o início OIDC do BFF.
 O realm de desenvolvimento inclui `http://localhost:4200/auth/callback`.
+
+Nesse modo sem edge, ajuste as duas origens no arquivo `.env` privado antes
+das linhas que derivam issuer, authorization/logout e origens de segurança:
+
+```dotenv
+PUBLIC_ORIGIN=http://localhost:4200
+OIDC_PUBLIC_ORIGIN=http://localhost:8180
+```
+
+Mantenha as demais derivações do `.env.example`; configurações individuais
+continuam sobrescrevendo os defaults. O perfil `%dev` não força mais as URLs
+públicas por cima de valores explícitos do ambiente. Não use esse arquivo de
+desenvolvimento no deploy HTTPS.
 
 O Postgres do Compose não publica `5432` no host. Se o `quarkus:dev` apontar
 para `localhost:5432`, ele pode autenticar no PostgreSQL do sistema e falhar

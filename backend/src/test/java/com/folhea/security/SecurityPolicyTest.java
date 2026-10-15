@@ -10,6 +10,13 @@ class SecurityPolicyTest {
             "https://folhea.com.br",
             "https://folhea.com.br,https://preview.folhea.com.br");
 
+    @Test void defaultPolicyUsesTheLocalHttpOrigin() {
+        SecurityPolicy defaults = new SecurityPolicy();
+        assertTrue(defaults.isAllowedOrigin("http://localhost"));
+        assertTrue(defaults.isAllowedHost("localhost"));
+        assertFalse(defaults.isAllowedOrigin("https://unconfigured.example"));
+    }
+
     @Test void acceptsOnlyAllowlistedOrigins() {
         assertTrue(policy.isAllowedOrigin("https://folhea.com.br"));
         assertTrue(policy.isAllowedOrigin("https://preview.folhea.com.br/"));

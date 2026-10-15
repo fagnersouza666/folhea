@@ -2,6 +2,10 @@
 
 Aplicação Angular 22: páginas públicas SSG e área privada CSR, com navegação web normal e instalação PWA opcional. O build de produção é estático; não requer Node como servidor. A versão do produto é controlada pela integração do monorepo.
 
+## Contato público
+
+O contato de Privacidade, Termos e Sobre vem da única constante `LEGAL_CONTACT_EMAIL`, em `src/app/public/legal-contact.ts`: `contato@folhea.app`. As três páginas exibem o endereço com link `mailto:`. O usuário confirmou em 14/10/2026 que a caixa existe e recebe mensagens; os testes verificam apenas conteúdo e destino dos links, sem enviar e-mail ou acessar a caixa.
+
 ## Executar e validar
 
 Na pasta `frontend`, execute `npm ci`, `npm start` e acesse `http://localhost:4200`. O proxy local encaminha `/api` e `/auth` ao BFF. Cadastro e login navegam para `/auth/register` e `/auth/login`, com credenciais apenas na tela padrão do Keycloak. Não há POST público de senha. Todas as mutações de API usam CSRF; analytics está pausado. A suíte crítica simula API e redirects, e não equivale ao aceite com IdP real.

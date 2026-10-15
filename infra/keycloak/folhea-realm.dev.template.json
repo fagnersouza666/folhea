@@ -2,6 +2,9 @@
   "realm": "folhea",
   "enabled": true,
   "displayName": "Folhea",
+  "attributes": {
+    "frontendUrl": "${OIDC_PUBLIC_ORIGIN}"
+  },
   "sslRequired": "external",
   "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 1800,

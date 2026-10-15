@@ -2,11 +2,13 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterLink, RouterLinkActive } from '@angular/router';
 import { SeoService } from '../core/services/seo.service';
+import { LEGAL_CONTACT_EMAIL } from './legal-contact';
 
 interface ContentBlock {
   title: string;
   text: string;
   items?: string[];
+  contactEmail?: string;
 }
 
 interface PublicPage {
@@ -50,7 +52,7 @@ export const publicPages: Record<string, PublicPage> = {
     blocks: [
       { title: 'Nosso princípio', text: 'Cada página conta. O que importa é criar um registro que incentive o próximo dia, sem transformar um momento de leitura em obrigação.' },
       { title: 'Feito para continuar', text: 'O produto combina um registro objetivo com uma visão acolhedora do progresso. Você escolhe o ritmo; o Folhea ajuda a perceber a constância.' },
-      { title: 'Fale com a gente', text: 'Encontrou um problema ou quer contar como está usando o Folhea? Envie uma mensagem para oi@folhea.com.br.' }
+      { title: 'Fale com a gente', text: 'Encontrou um problema ou quer contar como está usando o Folhea? Envie uma mensagem para', contactEmail: LEGAL_CONTACT_EMAIL }
     ]
   },
   privacidade: {
@@ -64,7 +66,7 @@ export const publicPages: Record<string, PublicPage> = {
       { title: '2. Como usamos os dados', text: 'Usamos essas informações para autenticar você, salvar seus registros, calcular métricas e melhorar a experiência do produto. Não usamos seus registros para publicidade personalizada.' },
       { title: '3. Seus registros pertencem a você', text: 'O Folhea não publica sua biblioteca ou seu histórico de leitura. Cards de conquista só são compartilhados quando você escolhe baixá-los ou usar o recurso de compartilhamento do seu dispositivo.' },
       { title: '4. Segurança e retenção', text: 'Aplicamos controles técnicos para reduzir riscos de acesso indevido e mantemos os dados enquanto sua conta for necessária para o serviço ou enquanto houver obrigação legal. Você pode baixar uma cópia dos seus dados ou excluir sua conta diretamente em Configurações; cópias de backup podem permanecer por um período limitado conforme nossa rotina operacional.' },
-      { title: '5. Seus direitos', text: 'Você pode pedir confirmação de tratamento, acesso, correção ou exclusão dos seus dados, além de esclarecer dúvidas sobre esta política. O acesso e a exportação estão disponíveis em Configurações; para outros pedidos, fale conosco pelo e-mail oi@folhea.com.br.' },
+      { title: '5. Seus direitos', text: 'Você pode pedir confirmação de tratamento, acesso, correção ou exclusão dos seus dados, além de esclarecer dúvidas sobre esta política. O acesso e a exportação estão disponíveis em Configurações; para outros pedidos, fale conosco pelo e-mail', contactEmail: LEGAL_CONTACT_EMAIL },
       { title: '6. Atualizações', text: 'Podemos atualizar esta política quando o produto ou a legislação mudar. A data no topo indica a versão mais recente.' }
     ]
   },
@@ -80,7 +82,7 @@ export const publicPages: Record<string, PublicPage> = {
       { title: '3. Seus conteúdos', text: 'Você mantém a responsabilidade pelos livros, textos e demais informações que registra. O uso do Folhea não transfere a propriedade desses dados para nós.' },
       { title: '4. Uso aceitável', text: 'Use o serviço de forma legítima, sem tentar interromper seu funcionamento, explorar vulnerabilidades, inserir conteúdo malicioso ou violar direitos de terceiros.' },
       { title: '5. Disponibilidade', text: 'Trabalhamos para manter o Folhea disponível e seguro, mas não prometemos funcionamento ininterrupto. Podemos realizar manutenção ou suspender uma operação para corrigir riscos.' },
-      { title: '6. Privacidade e contato', text: 'O tratamento de dados segue a Política de privacidade. Em caso de dúvida sobre estes termos, escreva para oi@folhea.com.br.' }
+      { title: '6. Privacidade e contato', text: 'O tratamento de dados segue a Política de privacidade. Em caso de dúvida sobre estes termos, escreva para', contactEmail: LEGAL_CONTACT_EMAIL }
     ]
   }
 };
@@ -110,7 +112,7 @@ export const publicPages: Record<string, PublicPage> = {
         @for (block of page.blocks; track block.title) {
           <article class="surface content-block">
             <h2>{{ block.title }}</h2>
-            <p>{{ block.text }}</p>
+            <p>{{ block.text }} @if (block.contactEmail) { <a class="text-link" [href]="'mailto:' + block.contactEmail">{{ block.contactEmail }}</a>. }</p>
             @if (block.items) {
               <ul>
                 @for (item of block.items; track item) { <li>{{ item }}</li> }

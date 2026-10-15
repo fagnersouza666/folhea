@@ -39,7 +39,7 @@ requireText(compose, 'quay.io/keycloak/keycloak:26.8.0@sha256:', 'Keycloak patch
 requireText(compose, 'OIDC_AUTH_SERVER_URL: http://keycloak:8080/realms/folhea', 'Compose back-channel');
 requireText(compose, 'OIDC_PUBLIC_AUTHORIZATION_URL: ${OIDC_PUBLIC_AUTHORIZATION_URL:?', 'Compose public authorization URL');
 requireText(compose, 'OIDC_PUBLIC_LOGOUT_URL: ${OIDC_PUBLIC_LOGOUT_URL:?', 'Compose public logout URL');
-requireText(compose, 'OIDC_TOKEN_ISSUER: ${OIDC_PUBLIC_ISSUER:?', 'Compose public issuer');
+requireText(compose, 'OIDC_TOKEN_ISSUER: ${OIDC_TOKEN_ISSUER:-${OIDC_PUBLIC_ISSUER:?', 'Compose public issuer and existing token issuer override');
 requireText(compose, 'OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?', 'Compose OIDC client secret');
 requireText(compose, 'KC_HOSTNAME: ${OIDC_PUBLIC_ORIGIN:?', 'Keycloak public hostname');
 requireText(compose, '["/bin/bash", "/opt/keycloak/render-realm.sh"]', 'Keycloak realm render entrypoint');
@@ -58,6 +58,11 @@ requireText(prodCompose, 'folhea-realm.prod.template.json', 'Production realm te
 assert.ok(!/\n\s+ports:/.test(keycloak), 'Keycloak must not publish host ports');
 requireText(caddyService, '      private:', 'Caddy must reach private Keycloak network');
 const backend = serviceBlock('backend', 'caddy');
+requireText(backend, 'PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-localhost}', 'BFF public domain');
+requireText(backend, 'PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-${OIDC_PUBLIC_ORIGIN:-https://${PUBLIC_DOMAIN:-localhost}}}',
+  'BFF application origin must preserve the existing provider-origin fallback');
+requireText(backend, 'OIDC_PUBLIC_ORIGIN: ${OIDC_PUBLIC_ORIGIN:?', 'BFF provider origin');
+requireText(backend, 'CORS_ORIGINS: ${CORS_ORIGINS:-', 'BFF CORS override');
 requireText(backend, '          - backend-edge', 'BFF needs an edge-only DNS alias');
 assert.ok(!backend.slice(backend.indexOf('      private:')).includes('backend-edge'), 'Edge alias must not exist on the private network');
 requireText(caddyService, 'API_UPSTREAM: ${API_UPSTREAM:-http://backend-edge:8080}', 'Caddy must use the trusted edge connection');
@@ -65,10 +70,15 @@ requireText(caddy, '@application-policy not path ' + oidcPublicMatcher, 'IdP the
 requireText(caddy, "header @application-policy Content-Security-Policy", 'Folhea retains its strict CSP');
 
 for (const publicValue of [
-  'OIDC_PUBLIC_ORIGIN=https://localhost:9443',
-  'OIDC_PUBLIC_ISSUER=https://localhost:9443/realms/folhea',
-  'OIDC_PUBLIC_AUTHORIZATION_URL=https://localhost:9443/realms/folhea/protocol/openid-connect/auth',
-  'OIDC_PUBLIC_LOGOUT_URL=https://localhost:9443/realms/folhea/protocol/openid-connect/logout',
+  'PUBLIC_DOMAIN=localhost',
+  'PUBLIC_ORIGIN=https://${PUBLIC_DOMAIN}:${HTTPS_PORT}',
+  'OIDC_PUBLIC_ORIGIN=${PUBLIC_ORIGIN}',
+  'OIDC_PUBLIC_ISSUER=${OIDC_PUBLIC_ORIGIN}/realms/folhea',
+  'OIDC_PUBLIC_AUTHORIZATION_URL=${OIDC_PUBLIC_ORIGIN}/realms/folhea/protocol/openid-connect/auth',
+  'OIDC_PUBLIC_LOGOUT_URL=${OIDC_PUBLIC_ORIGIN}/realms/folhea/protocol/openid-connect/logout',
+  'CORS_ORIGINS=${PUBLIC_ORIGIN}',
+  'SECURITY_CANONICAL_ORIGIN=${PUBLIC_ORIGIN}',
+  'SECURITY_ALLOWED_ORIGINS=${PUBLIC_ORIGIN}',
   'OIDC_CLIENT_SECRET=replace-with-a-long-random-oidc-client-secret'
 ]) requireText(env, publicValue, 'Local OIDC environment');
 
@@ -121,6 +131,7 @@ for (const origin of ['http://localhost:8080', 'http://localhost:4200', '${OIDC_
 }
 
 for (const [realm,label] of [[devRealm,'dev'],[prodRealm,'prod']]) {
+  assert.equal(realm.attributes?.frontendUrl,'${OIDC_PUBLIC_ORIGIN}', `${label}: realm frontend URL must be rendered from the provider origin`);
   const profileComponent = realm.components['org.keycloak.userprofile.UserProfileProvider'][0];
   assert.equal(profileComponent.providerId, 'declarative-user-profile');
   assert.deepEqual(JSON.parse(profileComponent.config['kc.user.profile.config'][0]), userProfile);
@@ -159,7 +170,10 @@ try {
         KEYCLOAK_REALM_TEMPLATE: path.join(root, `infra/keycloak/folhea-realm.${profile}.template.json`),
         KEYCLOAK_REALM_OUTPUT: output, FOLHEA_REALM_RENDER_ONLY: '1' }
     });
-    const client = JSON.parse(fs.readFileSync(output, 'utf8')).clients.find(c => c.clientId === 'folhea-api');
+    const renderedRealm = JSON.parse(fs.readFileSync(output, 'utf8'));
+    assert.equal(renderedRealm.attributes?.frontendUrl, 'https://localhost:9443',
+      `${profile}: rendered realm frontend URL must match the provider origin`);
+    const client = renderedRealm.clients.find(c => c.clientId === 'folhea-api');
     assert.deepEqual(client.attributes?.['post.logout.redirect.uris']?.split('##'), expected,
       `${profile}: rendered realm must authorize the exact post-logout return paths`);
   }
