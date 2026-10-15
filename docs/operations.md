@@ -312,6 +312,57 @@ O Quarkus expõe apenas na rede interna:
 O Caddy expõe `/healthz` para seu próprio healthcheck. O endpoint não substitui
 `/q/health/ready` no monitoramento do deploy.
 
+No standalone, o domínio atende `/healthz` em um `handle` antes do fallback
+estático; o listener interno `:81` mantém seu handler e redirecionamento.
+No perfil NPM, o health local continua disponível em loopback. A resposta pública
+é liberada somente após validar o peer NPM e o Host canônico, com corpo vazio,
+status 200 e `Cache-Control: no-store`, sem consultar backend ou Keycloak.
+Outros peers continuam 403, Host inválido 421 e endpoints administrativos e `/q`
+continuam 404. Rotas privadas `/app/*` mantêm o shell CSR; URLs públicas
+inexistentes mantêm o 404 real e a página de erro existentes.
+
+Depois do merge, checks da MAIN e aplicação da configuração na release própria,
+o operador configura as variáveis **não secretas** do repositório:
+
+```text
+PRODUCTION_HEALTH_URL=https://folhea.app
+PRODUCTION_HEALTH_PATHS=/healthz
+```
+
+O job `health-check` verifica a URL quando configurada mesmo sem hook. Isso não
+ativa o hook, não executa POST nem transforma health de borda em readiness de
+dependências. Preferir reexecutar somente esse job para comprovar a configuração,
+preservando os gates/deploy existentes. Escolher um run MAIN que já contenha
+FIX-03: reruns preservam o SHA/REF original. Obter o `databaseId` do job, não um
+número inferido da URL:
+
+```sh
+gh run view RUN_MAIN_FIX03 --json jobs \
+  --jq '.jobs[] | select(.name == "production health check") | .databaseId'
+gh api --method POST repos/OWNER/REPO/actions/jobs/DATABASE_ID/rerun
+```
+
+O endpoint oficial reexecuta o job e seus descendentes; este health é terminal
+no DAG atual e não requer reexecutar ancestors release/deploy. A documentação
+não garante explicitamente o frescor de variáveis alteradas entre run e rerun;
+confirmar pela execução efetiva, sem presumir. Não ativar hook ou disparar um
+workflow completo para contornar essa condição. Antes, conferir 200 direto com TLS normal
+e sem seguir redirects; o checker atual aceita 2xx e segue redirects, portanto
+seu EXIT0 isolado não é prova de 200 direto:
+
+```sh
+test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' https://folhea.app/healthz)" = 200
+HEALTHCHECK_URL=https://folhea.app HEALTHCHECK_PATHS=/healthz \
+  HEALTHCHECK_ATTEMPTS=1 node scripts/ci/health-check.mjs
+```
+
+O gate `test-caddy-health.mjs` exercita Caddy real e os handlers standalone/:81;
+`test-npm-proxy.mjs` cobre health público/local e rejeições de peer/Host, sem
+chamar upstream no health. O CI reutiliza a imagem Caddy já construída para ambos,
+sem novo build de produto. As portas dos testes são efêmeras em loopback; os
+containers próprios são limitados a 128 MiB e 0,5 CPU e removidos no finally. Esses
+gates locais não comprovam TLS público ou aplicação da configuração no servidor.
+
 ```bash
 docker compose --env-file .env ps
 docker compose --env-file .env logs --since=10m backend

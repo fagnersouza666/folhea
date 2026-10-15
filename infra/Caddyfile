@@ -26,7 +26,9 @@
 	# A small edge health endpoint lets Docker verify Caddy independently of
 	# the backend. Backend readiness is checked on the backend container.
 	@health path /healthz
-	respond @health 200
+	handle @health {
+		respond 200
+	}
 
 	# OpenAPI is disabled in production Quarkus and must not be reachable at the
 	# public edge even if misconfigured upstream.

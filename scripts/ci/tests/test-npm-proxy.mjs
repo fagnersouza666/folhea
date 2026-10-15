@@ -66,15 +66,15 @@ try {
   const source = await readFile(join(root, process.env.NPM_TEST_CADDYFILE ?? 'infra/Caddyfile.npm'), 'utf8');
   // Only the listener is relocated to an ephemeral local port. The shipped
   // boundary, routes and header policy are otherwise exercised unchanged.
-  const config = source.replace('http://:80 {', `http://:${port} {`)
-    .replace('{$PUBLIC_DOMAIN} {', `http://:${port} {`)
+  const config = source.replace('http://:80 {', `http://:${port} {\n\tbind 127.0.0.1`)
+    .replace('{$PUBLIC_DOMAIN} {', `http://:${port} {\n\tbind 127.0.0.1`)
     .replace('{\n', '{\n\tadmin off\n');
   await writeFile(join(scratch, 'Caddyfile'), config, { mode: 0o600 });
   await mkdir(join(scratch, 'static'));
   for (const [file, content] of [['index.html', '<h1>Public fixture</h1>'], ['index.csr.html', '<h1>Private fixture</h1>'], ['404.html', '<h1>Not found fixture</h1>']]) {
     await writeFile(join(scratch, 'static', file), content, { mode: 0o644 });
   }
-  const launched = spawnSync('docker', ['run', '--pull=never', '--detach', '--name', name,
+  const launched = spawnSync('docker', ['run', '--pull=never', '--detach', '--rm', '--name', name,
     '--label', `ao.session=${process.env.AO_SESSION_ID ?? 'manual'}`, '--memory=128m', '--cpus=0.5',
     '--network=host', '--volume', `${join(scratch, 'Caddyfile')}:/etc/caddy/Caddyfile:ro`,
     '--volume', `${join(scratch, 'static')}:/srv:ro`, '--env', 'PUBLIC_DOMAIN=folhea.app',
@@ -101,8 +101,20 @@ try {
   assert.equal((await request('/api/v1/me', { peer: '127.0.0.3' })).status, 403, 'Another shared-network peer must not reach Folhea');
   assert.equal((await request('/api/v1/me', { headers: { Host: 'attacker.example' } })).status, 421, 'Trusted peer still needs the canonical Host');
   assert.equal(upstreamCalls, before, 'Rejected peer/Host must not contact an upstream');
-  assert.equal((await request('/healthz', { peer: '127.0.0.1' })).status, 200, 'Docker health is loopback-only');
+  assert.equal((await request('/healthz', { peer: '127.0.0.1' })).status, 200, 'Loopback Docker health remains available');
   assert.equal((await request('/healthz', { peer: '127.0.0.3' })).status, 403, 'Health is not a shared-network bypass');
+  assert.equal((await request('/healthz', { headers: { Host: 'attacker.example' } })).status, 421, 'Public health must still validate Host');
+  const callsBeforeHealth = upstreamCalls;
+  const health = await request('/healthz');
+  assert.equal(health.status, 200, 'The trusted NPM peer must reach public edge health');
+  assert.equal(health.body.length, 0, 'Edge health must expose no application or dependency details');
+  assert.equal(health.headers['cache-control'], 'no-store');
+  assert.equal(health.headers.location, undefined);
+  assert.equal(upstreamCalls, callsBeforeHealth, 'Edge health must not call a backend or IdP');
+  for (const path of ['/unknown-own-route', '/healthz/extra']) {
+    const missing = await request(path);
+    assert.equal(missing.status, 404); assert.match(missing.body.toString(), /Not found fixture/);
+  }
   for (const path of ['/api/v1/me', photo, '/auth/callback', '/realms/folhea/protocol/openid-connect/auth']) {
     const response = await request(path, { headers: { Forwarded: 'proto=http;host=attacker.example',
       'X-Forwarded-Proto': 'http', 'X-Forwarded-Host': 'attacker.example', 'X-Forwarded-Port': '81',
@@ -121,7 +133,7 @@ try {
   for (const path of ['/admin/', '/realms/folhea/protocol/openid-connect/token', '/realms/folhea/protocol/openid-connect/certs', '/q/metrics', '/q/health/ready', '/api/openapi']) {
     assert.equal((await request(path)).status, 404, `${path} must stay outside the public surface`);
   }
-  for (const path of ['/app/inicio', '/entrar', '/cadastro']) {
+  for (const path of ['/app/inicio', '/app/unknown-own-route', '/entrar', '/cadastro']) {
     const response = await request(path);
     assert.equal(response.status, 200); assert.match(response.body.toString(), /Private fixture/);
     assert.equal(response.headers['cache-control'], 'no-store'); assert.match(response.headers['x-robots-tag'], /noindex/);

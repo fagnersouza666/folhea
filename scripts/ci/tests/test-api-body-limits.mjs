@@ -48,6 +48,7 @@ try {
   // Pull/create is bounded and completes before readiness starts. A detached
   // CLI cannot start late after cleanup and leave an awaited run process alive.
   const launched = spawnSync('docker', ['run', '--detach', '--rm', '--name', name, '--label', `ao.session=${process.env.AO_SESSION_ID ?? 'manual'}`,
+    '--memory=128m', '--cpus=0.5',
     '--network', 'host', '--volume', `${join(scratch, 'Caddyfile')}:/etc/caddy/Caddyfile:ro`,
     '--env', `PUBLIC_DOMAIN=${base}`, '--env', `OIDC_PUBLIC_ORIGIN=${base}`, '--env', `HTTP_SITE_ADDRESS=http://127.0.0.1:${httpPort}`,
     '--env', `API_UPSTREAM=http://127.0.0.1:${upstream.address().port}`, '--env', 'STATIC_ROOT=/srv', image],

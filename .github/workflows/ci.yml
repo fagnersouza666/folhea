@@ -304,6 +304,11 @@ jobs:
         env:
           CADDY_TEST_IMAGE: ${{ steps.caddy-proof.outputs.image }}
         run: node scripts/ci/tests/test-npm-proxy.mjs
+      - name: Validate standalone health and existing static/CSR routing
+        timeout-minutes: 2
+        env:
+          CADDY_TEST_IMAGE: ${{ steps.caddy-proof.outputs.image }}
+        run: node scripts/ci/tests/test-caddy-health.mjs
       - run: docker build --file infra/Dockerfile --target keycloak-runtime --tag folhea:keycloak-ci .
       - name: Validate production Compose configuration
         run: docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.example config --quiet
