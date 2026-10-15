@@ -233,8 +233,10 @@ try:
             output = Path(tempfile.mkdtemp(prefix=source + '-', dir=backups))
             copy = Path(tempfile.mkdtemp(prefix=source + '-copy-', dir=backups))
             paths = []
-            for name, db, role, sql in [('app', 'folhea', 'folhea_app', 'verify-recovery.sql'),
-                                       ('idp', 'folhea_keycloak', 'folhea_keycloak', 'verify-recovery-keycloak.sql')]:
+            for name, db, role, sql, expected_output in [
+                    ('app', 'folhea', 'folhea_app', 'verify-recovery.sql', '1'),
+                    ('idp', 'folhea_keycloak', 'folhea_keycloak', 'verify-recovery-keycloak.sql',
+                     'FolheaKeycloakmigrationmetadataready')]:
                 destination, copied_to = output / name, copy / name
                 destination.mkdir(mode=0o700)
                 copied_to.mkdir(mode=0o700)
@@ -254,6 +256,7 @@ try:
                             '--database', db, '--username', role], env=env, timeout=600)
                 module.run(['bash', str(release / 'scripts/ops/verify-recovery.sh'), '--skip-backend',
                             '--sql', (release / 'scripts/ops' / sql).read_text(),
+                            '--expected', expected_output,
                             '--database', db, '--username', role], env=env, timeout=120)
                 matches = list(destination.glob('folhea-' + db + '-*.dump'))
                 module.require(len(matches) == 1, 'one-real-own-backup-required')

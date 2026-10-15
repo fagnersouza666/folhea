@@ -288,12 +288,38 @@ class ProductionBridgeTest(unittest.TestCase):
         (self.base / 'current').symlink_to('releases/' + self.previous)
         (self.base / 'production.env').write_text('fixture-not-a-real-secret')
         (self.base / 'production.env').chmod(0o600)
-        (ops / 'verify-recovery.sql').write_text('SELECT 1;')
-        (ops / 'verify-recovery-keycloak.sql').write_text('SELECT 1;')
+        for name in ['verify-recovery.sql', 'verify-recovery-keycloak.sql']:
+            (ops / name).write_bytes((ROOT / 'scripts/ops' / name).read_bytes())
+        (self.release / 'docker-compose.external-pg.yml').write_text('services: {}\n')
+        # Only the PostgreSQL process boundary is simulated. SQL text and the
+        # whitespace-normalizing comparison in verify-recovery.sh are real.
+        docker = self.base / 'docker-fixture'
+        docker.write_text(f'#!{sys.executable}\n' + '''
+import os, re, sys
+args = sys.argv[1:]
+if args[0] == 'inspect':
+    print('2' * 64 + '|sha256:' + '3' * 64 + '|true|healthy')
+elif 'pg_dump' in args and '--version' in args:
+    print('pg_dump (PostgreSQL) 16.13')
+elif 'pg_isready' in args:
+    pass
+elif 'psql' in args:
+    query = args[args.index('--command') + 1]
+    if os.environ['DB_NAME'] == 'folhea_keycloak':
+        messages = re.findall(r"SELECT\\s+'([^']+)';", query)
+        assert len(messages) == 1, 'Use the actual Keycloak SQL contract'
+        print('unexpected value' if os.environ.get('FIXTURE_BAD_RESULT') else messages[0])
+    else:
+        assert 'THEN 1 ELSE 0 END;' in query
+        print('1')
+else:
+    sys.exit(97)
+''')
+        docker.chmod(0o700)
         # Reuse real private_dump/sha/lock/target/path APIs. Docker-facing APIs
         # alone are fixture doubles; run() produces synthetic archive bytes.
         (ops / 'deploy-folhea.py').write_text(f'''
-import importlib.util, json, os, shutil
+import importlib.util, json, os, shutil, subprocess
 from pathlib import Path
 spec=importlib.util.spec_from_file_location('real_engine', {str(ROOT / 'scripts/ops/deploy-folhea.py')!r})
 real=importlib.util.module_from_spec(spec); spec.loader.exec_module(real)
@@ -336,6 +362,16 @@ def run(command,env=None,**kwargs):
         shutil.copyfile(artifact,copy/artifact.name); (copy/artifact.name).chmod(0o600)
         shutil.copyfile(sidecar,copy/sidecar.name); (copy/sidecar.name).chmod(0o600)
         if os.environ.get('BRIDGE_FIXTURE_FAULT')=='missing-sidecar': sidecar.unlink()
+    elif command[1].endswith('/verify-recovery.sh'):
+        env=dict(env, DOCKER_BIN=str(base/'docker-fixture'))
+        if os.environ.get('BRIDGE_FIXTURE_FAULT')=='bad-keycloak-output':
+            env['FIXTURE_BAD_RESULT']='1'
+        result=subprocess.run(['bash', {str(ROOT / 'scripts/ops/verify-recovery.sh')!r}, *command[2:]],
+                              env=env, capture_output=True, text=True)
+        with (base/'guard-results.jsonl').open('a') as out:
+            out.write(json.dumps({{'database':env['DB_NAME'],'exit':result.returncode,'stderr':result.stderr}})+'\\n')
+        if result.returncode:
+            raise RuntimeError('real recovery guard rejected output')
     return b''
 ''')
         self.bridge = WRAPPER.read_text().split("<<'PRODUCTION_PY'\n", 1)[1].split('\nPRODUCTION_PY', 1)[0]
@@ -370,6 +406,22 @@ def run(command,env=None,**kwargs):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(result.stdout, '')
         self.assertFalse((self.base / 'receipts').exists())
+
+    def test_real_recovery_helper_accepts_actual_app_and_keycloak_sql_outputs(self):
+        result = self.invoke()
+        guards = [json.loads(line) for line in (self.base / 'guard-results.jsonl').read_text().splitlines()]
+        self.assertEqual([(g['database'], g['exit']) for g in guards],
+                         [('folhea', 0), ('folhea_keycloak', 0)])
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_real_recovery_helper_still_rejects_wrong_keycloak_output(self):
+        result = self.invoke('bad-keycloak-output')
+        self.assertNotEqual(result.returncode, 0)
+        guards = [json.loads(line) for line in (self.base / 'guard-results.jsonl').read_text().splitlines()]
+        self.assertEqual(guards[-1]['database'], 'folhea_keycloak')
+        self.assertEqual(guards[-1]['exit'], 1)
+        self.assertIn('recovery SQL assertion returned an unexpected result', guards[-1]['stderr'])
+        self.assertEqual(result.stdout, '')
 
 
 class ProductionDeployTest(unittest.TestCase):
