@@ -81,6 +81,11 @@ do override local. `localhost:5432` costuma ser o PostgreSQL do sistema. O mesmo
 override publica o Keycloak em `127.0.0.1:8180` e define `KC_HOSTNAME` para
 `http://localhost:8180`, para o clique em Entrar abrir o login OIDC sem Caddy.
 
+Para esse modo sem edge, configure `PUBLIC_ORIGIN=http://localhost:4200` e
+`OIDC_PUBLIC_ORIGIN=http://localhost:8180` no `.env` privado, mantendo os demais
+endpoints derivados como no exemplo. Esses valores também são respeitados
+em `%dev`; veja [a configuração de origem](docs/operations.md#origem-pública-e-contato-dominio-01-parte-a).
+
 O perfil `%dev` não define `folhea.clock.fixed-instant`; o relógio da aplicação
 é o UTC do sistema. Só o perfil `%test` fixa o instante para testes
 determinísticos.

@@ -63,6 +63,18 @@ class PublicDomainComposeTest(unittest.TestCase):
         services = self.model({"CORS_ORIGINS": origins})
         self.assertEqual(services["backend"]["environment"].get("CORS_ORIGINS"), origins)
 
+    def test_local_frontend_and_idp_can_use_distinct_origins(self):
+        services = self.model({"PUBLIC_ORIGIN": "http://localhost:4200",
+                               "OIDC_PUBLIC_ORIGIN": "http://localhost:8180"})
+        backend = services["backend"]["environment"]
+        self.assertEqual(backend["PUBLIC_ORIGIN"], "http://localhost:4200")
+        self.assertEqual(backend["SECURITY_CANONICAL_ORIGIN"], "http://localhost:4200")
+        self.assertEqual(backend["SECURITY_ALLOWED_ORIGINS"], "http://localhost:4200")
+        self.assertEqual(backend["OIDC_PUBLIC_ORIGIN"], "http://localhost:8180")
+        self.assertEqual(backend["OIDC_TOKEN_ISSUER"], "http://localhost:8180/realms/folhea")
+        self.assertEqual(services["keycloak"]["environment"]["KC_HOSTNAME"],
+                         "http://localhost:8180")
+
 
 if __name__ == "__main__":
     unittest.main()
