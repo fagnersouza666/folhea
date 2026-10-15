@@ -38,6 +38,7 @@ describe('public pages', () => {
     expect(contact?.textContent?.trim()).toBe('contato@folhea.app');
     expect(contact?.getAttribute('href')).toBe('mailto:contato@folhea.app');
     expect(contact?.parentElement?.textContent).toContain(' contato@folhea.app.');
-    expect(element?.textContent).not.toContain(['oi', 'folhea.com.br'].join('@'));
+    expect(Array.from(element?.querySelectorAll<HTMLAnchorElement>('main a[href^="mailto:"]') ?? [], link => link.getAttribute('href')))
+      .toEqual(['mailto:contato@folhea.app']);
   });
 });

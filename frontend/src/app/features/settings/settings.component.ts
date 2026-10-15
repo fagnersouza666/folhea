@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { PwaService } from '../../core/services/pwa.service';
+import { PROBLEM_TYPES } from '../../core/api/problem-types.generated';
 
 @Component({
   selector: 'folhea-settings',
@@ -123,11 +124,11 @@ export class SettingsComponent {
       this.deleting.set(false);
       const type = typeof error === 'object' && error !== null && 'error' in error
         ? (error.error as { type?: string } | null)?.type : undefined;
-      if (type === 'https://folhea.com.br/problems/recent-authentication-required') {
+      if (type === PROBLEM_TYPES.RECENT_AUTHENTICATION_REQUIRED) {
         this.reauthenticationRequired.set(true);
         this.deleteConfirmed.set(false);
         this.privacyError.set('Confirme sua identidade na tela de acesso e, ao voltar, confirme novamente a exclusão.');
-      } else if (type === 'https://folhea.com.br/problems/account-deletion-pending') {
+      } else if (type === PROBLEM_TYPES.ACCOUNT_DELETION_PENDING) {
         this.deletionPending.set(true);
         this.privacyError.set('Sua solicitação de exclusão foi confirmada e continuará automaticamente. O acesso à conta foi encerrado.');
       } else {

@@ -4,6 +4,7 @@ import { firstValueFrom, catchError, map, Observable, of, tap } from 'rxjs';
 import { CsrfService } from '../api/csrf.service';
 import { ApiClient } from '../api/api-client.service';
 import { User } from '../models/models';
+import { PROBLEM_TYPES } from '../api/problem-types.generated';
 
 /**
  * The browser never owns an access token. Authentication is represented by
@@ -65,7 +66,7 @@ export class AuthService {
     try { await firstValueFrom(this.api.deleteAccount()); }
     catch (error) {
       if (error instanceof Object && 'status' in error && error.status === 503
-          && 'error' in error && (error.error as { type?: string } | null)?.type === 'https://folhea.com.br/problems/account-deletion-pending') {
+          && 'error' in error && (error.error as { type?: string } | null)?.type === PROBLEM_TYPES.ACCOUNT_DELETION_PENDING) {
         this.userState.set(null); this.initializedState.set(true); this.csrf.clear();
       }
       throw error;

@@ -14,6 +14,7 @@ Na pasta `frontend`, execute `npm ci`, `npm start` e acesse `http://localhost:42
 npm run lint
 npm run typecheck
 npm run test:coverage
+npm run test:seo
 npm run build:ssg
 npm run validate:ssg
 npx playwright install chromium
@@ -59,6 +60,10 @@ O foco por teclado usa anel verde com faixa clara, para ser distinguível em sup
 
 ## SEO, PWA e dependências
 
+`shared/public-contract.json`, na raiz do monorepo, é a fonte única da origem pública e dos IDs relativos `/problems/...`. O gerador `node scripts/ci/generate-public-contract.mjs` mantém Java e `src/app/core/api/problem-types.generated.ts` sincronizados; `--check` apenas verifica, sem gravar. O frontend usa `PUBLIC_SITE_ORIGIN` no `SeoService` e `PROBLEM_TYPES` nos comparadores de reautenticação e exclusão. A comparação é exata, sem aliases de hosts anteriores ou busca de configuração em runtime. Erros de validação e falhas não confirmadas preservam o fluxo de retry e a sessão.
+
+Os templates em `scripts/seo/` geram `src/index.html`, `public/robots.txt` e `public/sitemap.xml` com a mesma origem do catálogo. `npm start`, `npm run build` e `npm run build:ssg` fazem essa geração antes do Angular. Os três outputs ficam versionados; edite os templates ou o contrato, regenere e inclua os resultados no commit. `npm run check:seo` detecta drift sem modificar arquivos, e `npm run validate:ssg` também exige essa sincronização. API, manifesto e assets da PWA mantêm caminhos relativos. Os validadores da raiz e do frontend leem o mesmo catálogo, sem precisar de um override de ambiente para validar o domínio do produto.
+
 `validate:ssg` verifica HTML inicial, conteúdo, metadados únicos, canonical, robots, sitemap, PNG social 1200 × 630, ícones PNG 192/512 e manifesto standalone. O shell indicado por `ngsw.json.index` deve constar no `hashTable` e nos assets `prefetch`; no build SSG, o Angular usa `/index.csr.html`, incluído explicitamente no cache para permitir a navegação offline. Isso não armazena dados da API nem permite registrar leituras sem conexão. CSS crítico inline é desativado para compatibilidade com CSP `script-src 'self'`; o stylesheet não depende de handler inline. HTTP 404/301/308 e desempenho real exigem o proxy completo.
 
 Dependências diretas foram conferidas em metadados estáveis do [registry oficial npm](https://registry.npmjs.org/@angular%2fcore) em 11/10/2026: Angular/CLI 22.2.2, TypeScript 6.0.3 (faixa suportada pelo compiler-cli), Playwright 1.64.0 e Vitest 5.0.3. Versões estão fixadas no `package.json` e `package-lock.json`. Os engines oficiais de Angular/core/CLI/build são `^22.22.3 || ^24.15.0 || >=26.0.0`; o builder aceita TypeScript `>=6.0 <6.1`. O Node 26 usado nos checks atende a essa faixa.
@@ -67,6 +72,8 @@ Na conferência de12/10/2026 para SESSAO-01, Angular22.2.2, Node26.11.1,
 Vitest5.0.3 e Playwright1.64.0 continuam atuais. TypeScript7.0.2 é a versão
 mais recente do registry, mas está fora da faixa oficial de Angular22.2.2;
 mantemos6.0.3, estável e compatível, sem forçar o peer dependency.
+
+Conferência de 15/10/2026 no [registry oficial npm](https://registry.npmjs.org/@angular%2fcore/latest): runtime Angular e compiler/compiler-cli **22.2.3**; CLI, builder e SSR **22.2.2**; Vitest e coverage-v8 **5.0.4**, PostCSS **8.5.30** e typescript-eslint **8.71.2**. O grupo Angular usa os peers exatos do mesmo patch, e CLI/build/SSR aceitam esse grupo. TypeScript permanece **6.0.3**, dentro de `>=6.0 <6.1`; a versão geral 7.0.2 continua incompatível com esses peers. Node **26.12.0** atende aos engines oficiais e é usado pela toolchain privada, sem mudar o PATH global. Os patches são fixados no package/lock sem `--force` ou `--legacy-peer-deps`.
 
 O build/servidor de desenvolvimento usa `@angular/build` 22.2.2 com esbuild/Vite, seguindo a [migração oficial do Angular](https://angular.dev/tools/cli/build-system-migration). O pacote legado `@angular-devkit/build-angular` não é necessário neste projeto e sua árvore Webpack foi removida. Isso elimina a cadeia de seis alertas `high` de desenvolvimento relacionada ao [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), sem downgrade ou override de pacote vulnerável. Audite a árvore completa com `npm audit` e a classificação de dependências de produção com `npm audit --omit=dev`; mantenha o lockfile ao integrar. O runtime publicado é estático no Caddy, mas o audit inclui também ferramentas de desenvolvimento.
 

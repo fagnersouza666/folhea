@@ -5,4 +5,4 @@ Disallow: /entrar
 Disallow: /login
 Disallow: /callback
 
-Sitemap: https://folhea.com.br/sitemap.xml
+Sitemap: https://folhea.app/sitemap.xml
