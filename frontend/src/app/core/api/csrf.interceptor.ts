@@ -3,6 +3,7 @@ import { inject } from '@angular/core';
 import { catchError, switchMap, throwError } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { CsrfService } from './csrf.service';
+import { PROBLEM_TYPES } from './problem-types.generated';
 
 const mutationMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -35,7 +36,7 @@ export const csrfInterceptor: HttpInterceptorFn = (request, next) => {
 
 function handleAuthError(request: { url: string; method?: string }, error: unknown, auth: AuthService) {
   if (error instanceof HttpErrorResponse && error.status === 401 && !(request.url === '/api/v1/me' && request.method === 'GET')) {
-    if (error.error?.type === 'https://folhea.com.br/problems/recent-authentication-required') return throwError(() => error);
+    if (error.error?.type === PROBLEM_TYPES.RECENT_AUTHENTICATION_REQUIRED) return throwError(() => error);
     if (auth.initialized() && auth.isAuthenticated()) auth.sessionExpired();
   }
   return throwError(() => error);

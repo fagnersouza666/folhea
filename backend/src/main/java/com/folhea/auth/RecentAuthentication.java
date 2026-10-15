@@ -1,5 +1,6 @@
 package com.folhea.auth;
 
+import com.folhea.shared.ProblemTypes;
 import com.folhea.shared.ProblemException;
 import io.quarkus.oidc.IdTokenCredential;
 import io.quarkus.security.identity.SecurityIdentity;
@@ -35,7 +36,7 @@ public class RecentAuthentication {
         }
         // Deliberately never fall back to iat, refresh time, attributes or local login.
         if (!recent) throw new ProblemException(401,
-                "https://folhea.com.br/problems/recent-authentication-required",
+                ProblemTypes.RECENT_AUTHENTICATION_REQUIRED,
                 "Confirme sua identidade", "Entre novamente pelo Keycloak para confirmar a exclusão da conta.");
     }
 }

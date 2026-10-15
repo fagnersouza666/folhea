@@ -1,5 +1,6 @@
 package com.folhea.api;
 
+import com.folhea.shared.ProblemTypes;
 import com.folhea.book.BookEntity;
 import com.folhea.book.BookStatus;
 import com.folhea.reading.ReadingSessionEntity;
@@ -124,7 +125,7 @@ class BackendResourceTest {
                 .then().statusCode(401)
                 .contentType("application/problem+json")
                 .header("Content-Type", equalTo("application/problem+json"))
-                .body("type", equalTo("https://folhea.com.br/problems/unauthorized"))
+                .body("type", equalTo(ProblemTypes.UNAUTHORIZED))
                 .body("status", equalTo(401));
     }
 
@@ -139,7 +140,7 @@ class BackendResourceTest {
                 .when().get("/api/v1/me")
                 .then().statusCode(401)
                 .contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/unauthorized"))
+                .body("type", equalTo(ProblemTypes.UNAUTHORIZED))
                 .body("status", equalTo(401));
     }
 
@@ -153,7 +154,7 @@ class BackendResourceTest {
                 .when().get("/api/v1/me")
                 .then().statusCode(403)
                 .contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/invalid-host"))
+                .body("type", equalTo(ProblemTypes.INVALID_HOST))
                 .body("status", equalTo(403));
     }
 
@@ -169,7 +170,7 @@ class BackendResourceTest {
                 .when().post("/api/v1/books")
                 .then().statusCode(403)
                 .contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/csrf-origin"))
+                .body("type", equalTo(ProblemTypes.CSRF_ORIGIN))
                 .body("status", equalTo(403));
     }
 
@@ -185,7 +186,7 @@ class BackendResourceTest {
                 .when().post("/api/v1/books")
                 .then().statusCode(403)
                 .contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/csrf-invalid"))
+                .body("type", equalTo(ProblemTypes.CSRF_INVALID))
                 .body("status", equalTo(403))
                 .body(not(containsString(forged)));
     }
@@ -200,7 +201,7 @@ class BackendResourceTest {
                 .when().post("/api/v1/books")
                 .then().statusCode(413)
                 .contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/body-too-large"))
+                .body("type", equalTo(ProblemTypes.BODY_TOO_LARGE))
                 .body("status", equalTo(413));
     }
 
@@ -243,7 +244,7 @@ class BackendResourceTest {
         given().contentType(ContentType.JSON).body("{not-json")
                 .when().post("/api/v1/books/{id}/finish", bookId)
                 .then().statusCode(400).contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/invalid-json"));
+                .body("type", equalTo(ProblemTypes.INVALID_JSON));
 
         given().when().delete("/api/v1/books/{id}/finish", bookId)
                 .then().statusCode(200).body("status", equalTo("READING"))
@@ -302,7 +303,7 @@ class BackendResourceTest {
                 .body("{\"bookId\":\"" + bookId + "\",\"readingDate\":\"" + TODAY + "\",\"pages\":0,\"minutes\":0}")
                 .when().post("/api/v1/sessions")
                 .then().statusCode(400).contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/invalid-reading-session"));
+                .body("type", equalTo(ProblemTypes.INVALID_READING_SESSION));
 
         given().contentType(ContentType.JSON)
                 .body("{\"readingDate\":\"" + TODAY + "\",\"pages\":1,\"minutes\":1}")
@@ -420,16 +421,16 @@ class BackendResourceTest {
 
         given().when().get("/api/v1/stats?from=" + TODAY + "&to=" + TODAY.minusDays(1))
                 .then().statusCode(400).contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/invalid-period"));
+                .body("type", equalTo(ProblemTypes.INVALID_PERIOD));
         given().when().get("/api/v1/stats?from=" + TODAY)
                 .then().statusCode(400).contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/invalid-period"));
+                .body("type", equalTo(ProblemTypes.INVALID_PERIOD));
         given().when().get("/api/v1/stats?period=7&from=" + TODAY.minusDays(6) + "&to=" + TODAY)
                 .then().statusCode(400).contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/invalid-period"));
+                .body("type", equalTo(ProblemTypes.INVALID_PERIOD));
         given().when().get("/api/v1/stats?period=unknown")
                 .then().statusCode(400).contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/invalid-period"));
+                .body("type", equalTo(ProblemTypes.INVALID_PERIOD));
     }
 
     @Test
@@ -607,7 +608,10 @@ class BackendResourceTest {
         org.mockito.Mockito.doThrow(new KeycloakAdminClient.AdminUnavailableException())
                 .when(keycloak).deleteAccount(ALICE);
         given().contentType(ContentType.JSON).body("{\"confirm\":true}").delete("/api/v1/me")
-                .then().statusCode(503).contentType("application/problem+json");
+                .then().statusCode(503).contentType("application/problem+json")
+                .body("type", equalTo(ProblemTypes.ACCOUNT_DELETION_PENDING))
+                .cookie(SessionCookiePolicy.NAME, equalTo(""))
+                .cookie("q_session_Default_folhea", equalTo(""));
         assertNotNull(findUserBySubject(ALICE));
         assertEquals(1, countBooksForSubject(ALICE));
         given().get("/api/v1/me").then().statusCode(401);
@@ -768,7 +772,7 @@ class BackendResourceTest {
             attributes = @SecurityAttribute(key = "test.auth-time", value = "missing"))
     void freshTokenIatWithoutProviderAuthTimeCannotAuthorizeDeletion() throws Exception {
         given().contentType(ContentType.JSON).body("{\"confirm\":true}").delete("/api/v1/me")
-                .then().statusCode(401).body("type", equalTo("https://folhea.com.br/problems/recent-authentication-required"));
+                .then().statusCode(401).body("type", equalTo(ProblemTypes.RECENT_AUTHENTICATION_REQUIRED));
         assertNotNull(findUserBySubject(ALICE)); assertEquals(0,pendingDeletionCount());
         org.mockito.Mockito.verifyNoInteractions(keycloak);
     }
@@ -778,7 +782,7 @@ class BackendResourceTest {
             attributes = @SecurityAttribute(key = "test.auth-time", value = "future"))
     void futureProviderAuthTimeCannotAuthorizeDeletion() throws Exception {
         given().contentType(ContentType.JSON).body("{\"confirm\":true}").delete("/api/v1/me")
-                .then().statusCode(401).body("type", equalTo("https://folhea.com.br/problems/recent-authentication-required"));
+                .then().statusCode(401).body("type", equalTo(ProblemTypes.RECENT_AUTHENTICATION_REQUIRED));
         assertNotNull(findUserBySubject(ALICE)); assertEquals(0,pendingDeletionCount());
         org.mockito.Mockito.verifyNoInteractions(keycloak);
     }
@@ -837,7 +841,7 @@ class BackendResourceTest {
     void deletingAnAccountRequiresRecentOidcAuthenticationBeforeAnyIntentOrProviderCall() throws Exception {
         given().contentType(ContentType.JSON).body("{\"confirm\":true}").delete("/api/v1/me")
                 .then().statusCode(401).contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/recent-authentication-required"));
+                .body("type", equalTo(ProblemTypes.RECENT_AUTHENTICATION_REQUIRED));
         assertNotNull(findUserBySubject(ALICE));
         assertEquals(0, pendingDeletionCount());
         org.mockito.Mockito.verifyNoInteractions(keycloak);
@@ -866,7 +870,7 @@ class BackendResourceTest {
 
         given().when().get("/api/v1/sessions?from=" + TODAY.minusDays(400) + "&to=" + TODAY)
                 .then().statusCode(400).contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/invalid-period"));
+                .body("type", equalTo(ProblemTypes.INVALID_PERIOD));
         given().when().get("/api/v1/sessions?from=" + TODAY + "&to=" + TODAY + "&limit=1&offset=1")
                 .then().statusCode(200).body("size()", equalTo(0));
         given().when().get("/api/v1/sessions?from=" + TODAY.minusDays(1) + "&to=" + TODAY + "&limit=1")
@@ -874,7 +878,7 @@ class BackendResourceTest {
 
         given().when().get("/api/v1/stats?from=" + TODAY.minusDays(400) + "&to=" + TODAY)
                 .then().statusCode(400).contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/invalid-period"));
+                .body("type", equalTo(ProblemTypes.INVALID_PERIOD));
 
         createBook("Extra");
         given().when().get("/api/v1/books?limit=1").then().statusCode(200).body("size()", equalTo(1));
@@ -909,7 +913,7 @@ class BackendResourceTest {
                         + "\",\"pages\":1,\"minutes\":1}")
                 .when().post("/api/v1/sessions")
                 .then().statusCode(404).contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/book-not-found"));
+                .body("type", equalTo(ProblemTypes.BOOK_NOT_FOUND));
 
         given().when().get("/api/v1/books").then().statusCode(200).body("size()", equalTo(1));
         given().when().get("/api/v1/sessions").then().statusCode(200).body("size()", equalTo(0));
@@ -976,7 +980,7 @@ class BackendResourceTest {
         given().contentType(ContentType.JSON).body("{\"confirm\":false}")
                 .when().delete("/api/v1/me")
                 .then().statusCode(400).contentType("application/problem+json")
-                .body("type", equalTo("https://folhea.com.br/problems/invalid-account-deletion"));
+                .body("type", equalTo(ProblemTypes.INVALID_ACCOUNT_DELETION));
     }
 
     @Test

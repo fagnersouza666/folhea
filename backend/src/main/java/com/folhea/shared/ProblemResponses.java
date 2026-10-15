@@ -23,7 +23,7 @@ public final class ProblemResponses {
 
     public static Response internalError() {
         return build(500,
-                "https://folhea.com.br/problems/internal-error",
+                ProblemTypes.INTERNAL_ERROR,
                 "Erro interno",
                 "Não foi possível concluir a operação.");
     }

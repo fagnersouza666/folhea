@@ -13,6 +13,7 @@ class ProblemResponseMapperTest {
                 .toResponse(new IllegalArgumentException("org.hibernate.internal detail"));
         var entity = (ProblemResponse) response.getEntity();
         assertEquals(400, entity.status());
+        assertEquals(ProblemTypes.INVALID_REQUEST, entity.type().toString());
         assertEquals("A requisição não atende ao contrato esperado.", entity.detail());
         assertFalse(entity.detail().contains("hibernate"));
     }
@@ -23,6 +24,7 @@ class ProblemResponseMapperTest {
                 .toResponse(new BadRequestException("internal validation detail"));
         var entity = (ProblemResponse) response.getEntity();
         assertEquals(400, entity.status());
+        assertEquals(ProblemTypes.INVALID_REQUEST, entity.type().toString());
         assertEquals("A requisição não atende ao contrato esperado.", entity.detail());
         assertFalse(entity.detail().contains("validation"));
     }

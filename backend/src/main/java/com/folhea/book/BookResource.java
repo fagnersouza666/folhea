@@ -1,5 +1,6 @@
 package com.folhea.book;
 
+import com.folhea.shared.ProblemTypes;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.folhea.identity.CurrentUser;
@@ -191,7 +192,7 @@ public class BookResource {
     public Response cover(@PathParam("id") UUID id) {
         BookEntity book = findOwned(id);
         BookCoverEntity image = covers.get(book.id);
-        if (image == null) throw new ProblemException(404, "https://folhea.com.br/problems/cover-not-found", "Capa não encontrada", "Não há uma capa para este livro.");
+        if (image == null) throw new ProblemException(404, ProblemTypes.COVER_NOT_FOUND, "Capa não encontrada", "Não há uma capa para este livro.");
         return Response.ok(image.data, image.mediaType).header("Cache-Control", "no-store")
                 .header("X-Content-Type-Options", "nosniff").build();
     }
@@ -210,7 +211,7 @@ public class BookResource {
     private BookEntity findOwned(UUID id) {
         if (id == null) invalid("Identificador de livro inválido.");
         BookEntity book = books.findOwned(currentUser.get().id, id);
-        if (book == null) throw new ProblemException(404, "https://folhea.com.br/problems/book-not-found", "Livro não encontrado", "Livro inexistente ou não pertencente ao usuário.");
+        if (book == null) throw new ProblemException(404, ProblemTypes.BOOK_NOT_FOUND, "Livro não encontrado", "Livro inexistente ou não pertencente ao usuário.");
         return book;
     }
 
@@ -219,7 +220,7 @@ public class BookResource {
         if (title != null && title.length() > 500) invalid("O título pode ter no máximo 500 caracteres.");
         if (author != null && author.length() > 500) invalid("O autor pode ter no máximo 500 caracteres.");
     }
-    private static void invalid(String detail) { throw new ProblemException(400, "https://folhea.com.br/problems/invalid-book", "Livro inválido", detail); }
+    private static void invalid(String detail) { throw new ProblemException(400, ProblemTypes.INVALID_BOOK, "Livro inválido", detail); }
 
     public record CreateBookRequest(
             @Schema(required = true, description = "Título não vazio do livro")

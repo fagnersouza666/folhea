@@ -59,7 +59,7 @@ Como a sessão usa cookie, toda operação `POST`, `PUT`, `PATCH` e `DELETE` exi
    ticket; o BFF expõe apenas o valor não secreto necessário para o Angular;
 2. header `X-CSRF-Token` igual ao token esperado; token no cookie não é a única
    defesa;
-3. `Origin` igual à origem canônica `https://folhea.com.br` (ou `Referer` com
+3. `Origin` igual à origem canônica `https://folhea.app` (ou `Referer` com
    mesma origem quando `Origin` não existir); ausência ou origem diferente é
    rejeitada;
 4. `Content-Type: application/json` e limite de corpo; não aceitar forms
@@ -73,9 +73,9 @@ outra sessão e com origem maliciosa.
 Frontend e API usam a mesma origem pública:
 
 ```text
-https://folhea.com.br/       # Angular/SSG/PWA
-https://folhea.com.br/api/*  # BFF/Quarkus via Caddy
-https://folhea.com.br/auth/* # OIDC BFF via Caddy
+https://folhea.app/       # Angular/SSG/PWA
+https://folhea.app/api/*  # BFF/Quarkus via Caddy
+https://folhea.app/auth/* # OIDC BFF via Caddy
 ```
 
 Em `ng serve` local, a mesma origem é `http://localhost:4200`, com proxy de

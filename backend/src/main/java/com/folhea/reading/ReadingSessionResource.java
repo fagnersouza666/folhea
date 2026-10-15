@@ -1,5 +1,6 @@
 package com.folhea.reading;
 
+import com.folhea.shared.ProblemTypes;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.folhea.book.BookRepository;
@@ -123,14 +124,14 @@ public class ReadingSessionResource {
     private ReadingSessionEntity findOwned(UUID userId, UUID id) {
         if (id == null) invalid("Identificador de sessão inválido.");
         ReadingSessionEntity session = sessions.findOwned(userId, id);
-        if (session == null) throw new ProblemException(404, "https://folhea.com.br/problems/session-not-found", "Sessão não encontrada", "Sessão inexistente ou não pertencente ao usuário.");
+        if (session == null) throw new ProblemException(404, ProblemTypes.SESSION_NOT_FOUND, "Sessão não encontrada", "Sessão inexistente ou não pertencente ao usuário.");
         return session;
     }
 
     private void ensureBookOwned(UUID userId, UUID bookId) {
         if (bookId == null) invalid("Informe o livro da sessão.");
         if (books.findOwned(userId, bookId) == null) {
-            throw new ProblemException(404, "https://folhea.com.br/problems/book-not-found", "Livro não encontrado", "Livro inexistente ou não pertencente ao usuário.");
+            throw new ProblemException(404, ProblemTypes.BOOK_NOT_FOUND, "Livro não encontrado", "Livro inexistente ou não pertencente ao usuário.");
         }
     }
 
@@ -148,7 +149,7 @@ public class ReadingSessionResource {
         if (date == null) invalid("Informe a data da leitura.");
         if (date.isAfter(today)) invalid("A data da leitura não pode estar no futuro no fuso horário da conta.");
     }
-    private static void invalid(String detail) { throw new ProblemException(400, "https://folhea.com.br/problems/invalid-reading-session", "Sessão de leitura inválida", detail); }
+    private static void invalid(String detail) { throw new ProblemException(400, ProblemTypes.INVALID_READING_SESSION, "Sessão de leitura inválida", detail); }
 
     private static void validateRequestFields(JsonNode request) {
         if (request == null || !request.isObject()) invalid("Informe os dados da sessão como um objeto JSON.");

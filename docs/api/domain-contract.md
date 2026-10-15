@@ -16,6 +16,17 @@ usa sessão BFF HttpOnly; obter `GET /api/v1/csrf` e enviar `X-CSRF-Token` e
 `Origin`/`Referer` da origem permitida nas mutações. Erros usam
 `application/problem+json`; recursos alheios retornam 404.
 
+O campo `type` é uma URI relativa `/problems/slug`, definida no catálogo
+[`shared/public-contract.json`](../../shared/public-contract.json). Java usa
+`ProblemTypes` e TypeScript usa `PROBLEM_TYPES`, ambos gerados pelo mesmo
+contrato e verificados no CI. Comparações são exatas; URLs absolutas e aliases
+de origens anteriores não são aceitos. Essa identificação não muda `status`,
+`title`, `detail`, as políticas de CSRF ou os fluxos OIDC.
+O schema OpenAPI de `type` declara `format: uri-reference`, com exemplo obtido
+da constante gerada. A regressão usa o scanner SmallRye real sobre o DTO para
+não anunciar formato absoluto para esses IDs relativos; isso não publica uma
+nova rota OpenAPI na borda.
+
 ## Conta e datas
 
 Cadastro e login seguem a [AUTH-01](../specs/AUTH-01.md): os dois acontecem na tela do

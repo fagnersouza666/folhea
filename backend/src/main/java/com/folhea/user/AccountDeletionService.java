@@ -1,5 +1,6 @@
 package com.folhea.user;
 
+import com.folhea.shared.ProblemTypes;
 import com.folhea.security.CsrfTokenService;
 import com.folhea.security.SessionCookiePolicy;
 import com.folhea.security.store.TokenStateStore;
@@ -28,7 +29,7 @@ public class AccountDeletionService {
             LOG.warn("Account deletion unavailable category=intent-persistence");
             throw unavailable();
         }
-        if (!complete(id)) throw new ProblemException(503, "https://folhea.com.br/problems/account-deletion-pending",
+        if (!complete(id)) throw new ProblemException(503, ProblemTypes.ACCOUNT_DELETION_PENDING,
                 "Exclusão em andamento", "A solicitação foi confirmada. A exclusão continuará automaticamente; o acesso à conta foi encerrado.");
     }
 
@@ -72,7 +73,7 @@ public class AccountDeletionService {
     }
 
     private static ProblemException unavailable() {
-        return new ProblemException(503, "https://folhea.com.br/problems/account-deletion-unavailable",
+        return new ProblemException(503, ProblemTypes.ACCOUNT_DELETION_UNAVAILABLE,
                 "Exclusão indisponível", "Não foi possível concluir a exclusão agora. A solicitação confirmada será tentada novamente.");
     }
 }

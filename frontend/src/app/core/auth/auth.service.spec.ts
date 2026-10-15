@@ -58,7 +58,15 @@ describe('AuthService account deletion state', () => {
   });
   it('clears the local identity after a durably accepted pending deletion', async () => {
     const deletion = auth.deleteAccount(); const failure = expect(deletion).rejects.toMatchObject({ status: 503 });
-    http.expectOne('/api/v1/me').flush({ type: 'https://folhea.com.br/problems/account-deletion-pending' }, { status: 503, statusText: 'Pending' });
+    http.expectOne('/api/v1/me').flush({ type: '/problems/account-deletion-pending' }, { status: 503, statusText: 'Pending' });
     await failure; expect(auth.user()).toBeNull(); expect(auth.isAuthenticated()).toBe(false);
+  });
+  it('preserves the local identity for a foreign pending URI', async () => {
+    const deletion = auth.deleteAccount();
+    const failure = expect(deletion).rejects.toMatchObject({ status: 503 });
+    http.expectOne('/api/v1/me').flush({ type: 'https://foreign.example/problems/account-deletion-pending' }, { status: 503, statusText: 'Service Unavailable' });
+    await failure;
+    expect(auth.user()).toEqual(user);
+    expect(auth.isAuthenticated()).toBe(true);
   });
 });

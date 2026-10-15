@@ -1,5 +1,6 @@
 package com.folhea.user;
 
+import com.folhea.shared.ProblemTypes;
 import com.folhea.book.BookRepository;
 import com.folhea.book.BookResource;
 import com.folhea.identity.CurrentUser;
@@ -69,7 +70,7 @@ public class UserResource {
     public MeResponse update(@Valid UpdateMeRequest request) {
         if (request == null || request.timezone() == null
                 || !ZoneId.getAvailableZoneIds().contains(request.timezone())) {
-            throw new ProblemException(400, "https://folhea.com.br/problems/invalid-timezone",
+            throw new ProblemException(400, ProblemTypes.INVALID_TIMEZONE,
                     "Fuso horário inválido", "Informe um identificador IANA de fuso horário válido.");
         }
         UserEntity user = currentUser.get();
@@ -95,7 +96,7 @@ public class UserResource {
         if (request == null || !Boolean.TRUE.equals(request.confirm())) {
             throw new ProblemException(
                     400,
-                    "https://folhea.com.br/problems/invalid-account-deletion",
+                    ProblemTypes.INVALID_ACCOUNT_DELETION,
                     "Confirmação necessária",
                     "Envie {\"confirm\": true} para excluir a conta.");
         }
@@ -104,7 +105,7 @@ public class UserResource {
         try {
             deletions.delete(user, ticket(headers, sessionCookies.name()), ticket(headers, oidcCookies.name()));
         } catch (ProblemException problem) {
-            if (!problem.type().endsWith("/account-deletion-pending")) throw problem;
+            if (!ProblemTypes.ACCOUNT_DELETION_PENDING.equals(problem.type())) throw problem;
             return Response.fromResponse(com.folhea.shared.ProblemResponses.build(problem.status(), problem.type(),
                     problem.title(), problem.getMessage()))
                     .cookie(sessionCookies.clear(), oidcCookies.clear(), com.folhea.security.CsrfCookiePolicy.clear()).build();

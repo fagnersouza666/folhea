@@ -1,5 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { Injectable, inject } from '@angular/core';
+import { PUBLIC_SITE_ORIGIN } from '../api/problem-types.generated';
 
 @Injectable({ providedIn: 'root' })
 export class SeoService {
@@ -34,7 +35,7 @@ export class SeoService {
     }
   }
 
-  private absoluteUrl(path: string): string { return `https://folhea.com.br${this.normalizePath(path)}`; }
+  private absoluteUrl(path: string): string { return `${PUBLIC_SITE_ORIGIN}${this.normalizePath(path)}`; }
 
   private normalizePath(path: string): string {
     const cleanPath = path.split(/[?#]/, 1)[0] || '/';

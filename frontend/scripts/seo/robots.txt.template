@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /app/
+Disallow: /entrar
+Disallow: /login
+Disallow: /callback
+
+Sitemap: __PUBLIC_SITE_ORIGIN__/sitemap.xml

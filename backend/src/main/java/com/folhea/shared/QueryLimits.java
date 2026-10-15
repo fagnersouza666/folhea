@@ -27,7 +27,7 @@ public final class QueryLimits {
     public static void ensureMaxDateRange(LocalDate from, LocalDate to) {
         if (ChronoUnit.DAYS.between(from, to) >= MAX_DATE_RANGE_DAYS) {
             throw new ProblemException(400,
-                    "https://folhea.com.br/problems/invalid-period", "Período inválido",
+                    ProblemTypes.INVALID_PERIOD, "Período inválido",
                     "O intervalo máximo permitido é de " + MAX_DATE_RANGE_DAYS + " dias.");
         }
     }

@@ -3,12 +3,13 @@
 # Node.js or a build toolchain.
 # Regenerate digests: docker buildx imagetools inspect <image:tag>
 
-FROM node:26.11.1-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a AS frontend-build
+FROM node:26.12.0-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5 AS frontend-build
 WORKDIR /workspace/frontend
 
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY frontend/ ./
+COPY shared/public-contract.json /workspace/shared/public-contract.json
 RUN NG_BUILD_MAX_WORKERS=2 NODE_OPTIONS=--max-old-space-size=1536 npm run build -- --configuration production
 
 FROM eclipse-temurin:27-jdk@sha256:2771efbbc159b89dc38b82ebe01312fd1b5f226071ff715ca9edd5411a389761 AS backend-build

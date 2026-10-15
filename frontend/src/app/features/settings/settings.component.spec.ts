@@ -136,20 +136,33 @@ describe('SettingsComponent', () => {
   });
 
   it('requires IdP reauthentication without automatically repeating the deletion', async () => {
-    authDeleteAccount.mockRejectedValueOnce({ status: 401, error: { type: 'https://folhea.com.br/problems/recent-authentication-required' } });
+    authDeleteAccount.mockRejectedValueOnce({ status: 401, error: { type: '/problems/recent-authentication-required' } });
     const fixture = TestBed.createComponent(SettingsComponent); fixture.detectChanges();
     fixture.componentInstance.openDeleteDialog(); fixture.componentInstance.deleteConfirmed.set(true);
     await fixture.componentInstance.confirmDelete(new Event('submit')); fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('a[href="/auth/reauthenticate"]')).not.toBeNull();
     expect(authDeleteAccount).toHaveBeenCalledOnce();
     expect(signOut).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('dialog button[type="submit"]').disabled).toBe(true);
+    await fixture.componentInstance.confirmDelete(new Event('submit'));
+    expect(authDeleteAccount).toHaveBeenCalledOnce();
   });
   it('explains a durable pending deletion without promising a preserved account or offering another delete', async () => {
-    authDeleteAccount.mockRejectedValueOnce({ status: 503, error: { type: 'https://folhea.com.br/problems/account-deletion-pending' } });
+    authDeleteAccount.mockRejectedValueOnce({ status: 503, error: { type: '/problems/account-deletion-pending' } });
     const fixture = TestBed.createComponent(SettingsComponent); fixture.detectChanges();
     fixture.componentInstance.openDeleteDialog(); fixture.componentInstance.deleteConfirmed.set(true);
     await fixture.componentInstance.confirmDelete(new Event('submit')); fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('dialog [role="alert"]').textContent).toContain('solicitação');
     expect(fixture.nativeElement.querySelector('dialog button[type="submit"]').disabled).toBe(true);
+  });
+  it.each(['/problems/invalid-account-deletion', 'https://foreign.example/problems/account-deletion-pending'])('keeps an unconfirmed deletion retryable for %s', async type => {
+    authDeleteAccount.mockRejectedValueOnce({ status: 400, error: { type } });
+    const fixture = TestBed.createComponent(SettingsComponent); fixture.detectChanges();
+    fixture.componentInstance.openDeleteDialog(); fixture.componentInstance.deleteConfirmed.set(true);
+    await fixture.componentInstance.confirmDelete(new Event('submit')); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('dialog [role="alert"]').textContent).toContain('A exclusão não foi confirmada');
+    expect(fixture.nativeElement.querySelector('dialog button[type="submit"]').disabled).toBe(false);
+    expect(fixture.nativeElement.querySelector('a[href="/auth/reauthenticate"]')).toBeNull();
+    expect(signOut).not.toHaveBeenCalled();
   });
 });

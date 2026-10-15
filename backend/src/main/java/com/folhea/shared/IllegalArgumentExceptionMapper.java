@@ -8,7 +8,7 @@ import jakarta.ws.rs.ext.Provider;
 public class IllegalArgumentExceptionMapper implements ExceptionMapper<IllegalArgumentException> {
     @Override
     public Response toResponse(IllegalArgumentException exception) {
-        return ProblemResponses.build(400, "https://folhea.com.br/problems/invalid-request",
+        return ProblemResponses.build(400, ProblemTypes.INVALID_REQUEST,
                 "Requisição inválida", "A requisição não atende ao contrato esperado.");
     }
 }

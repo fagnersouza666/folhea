@@ -47,7 +47,19 @@ describe('csrfInterceptor AUTH-01', () => {
   it('preserves the current session when deletion needs recent authentication', () => {
     http.delete('/api/v1/me', { body: { confirm: true } }).subscribe({ error: () => undefined });
     control.expectOne('/api/v1/csrf').flush({ token: 'current-csrf' });
-    control.expectOne('/api/v1/me').flush({ type: 'https://folhea.com.br/problems/recent-authentication-required' }, { status: 401, statusText: 'Unauthorized' });
+    control.expectOne('/api/v1/me').flush({ type: '/problems/recent-authentication-required' }, { status: 401, statusText: 'Unauthorized' });
+    expect(expired).not.toHaveBeenCalled();
+  });
+  it('expires the session for a foreign problem URI instead of treating its suffix as reauthentication', () => {
+    http.delete('/api/v1/me', { headers: { 'X-CSRF-Token': 'current-csrf' } }).subscribe({ error: () => undefined });
+    control.expectOne('/api/v1/me').flush({ type: 'https://foreign.example/problems/recent-authentication-required' }, { status: 401, statusText: 'Unauthorized' });
+    expect(expired).toHaveBeenCalledOnce();
+  });
+  it('preserves a validation problem response and the authenticated session', () => {
+    let failure: unknown;
+    http.patch('/api/v1/me', { timezone: 'invalid' }, { headers: { 'X-CSRF-Token': 'current-csrf' } }).subscribe({ error: error => { failure = error; } });
+    control.expectOne('/api/v1/me').flush({ type: '/problems/invalid-timezone', detail: 'Fuso inválido' }, { status: 400, statusText: 'Bad Request' });
+    expect(failure).toMatchObject({ status: 400, error: { type: '/problems/invalid-timezone', detail: 'Fuso inválido' } });
     expect(expired).not.toHaveBeenCalled();
   });
 });

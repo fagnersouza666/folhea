@@ -1,5 +1,6 @@
 package com.folhea.security;
 
+import com.folhea.shared.ProblemTypes;
 import com.folhea.shared.ProblemResponses;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.Priority;
@@ -63,7 +64,7 @@ public class AbuseProtectionFilter implements ContainerRequestFilter {
         if (!decision.allowed()) {
             context.abortWith(Response.fromResponse(ProblemResponses.build(
                             429,
-                            "https://folhea.com.br/problems/rate-limit",
+                            ProblemTypes.RATE_LIMIT,
                             "Muitas requisições",
                             "Tente novamente após alguns instantes."))
                     .header("Retry-After", Long.toString(decision.retryAfterSeconds()))

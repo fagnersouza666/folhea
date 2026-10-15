@@ -280,7 +280,7 @@ Exemplo:
 ```html
 <link
   rel="canonical"
-  href="https://folhea.com.br/como-funciona"
+  href="https://folhea.app/como-funciona"
 />
 ```
 
@@ -1507,7 +1507,7 @@ Exemplo:
 
 ```json
 {
-  "type": "https://folhea.com.br/problems/invalid-reading-session",
+  "type": "/problems/invalid-reading-session",
   "title": "Sessão de leitura inválida",
   "status": 400,
   "detail": "Informe páginas, minutos ou ambos."
@@ -1628,8 +1628,8 @@ Preferencialmente frontend e API utilizarão a mesma origem pública.
 Exemplo:
 
 ```text
-https://folhea.com.br
-https://folhea.com.br/api/*
+https://folhea.app
+https://folhea.app/api/*
 ```
 
 Isso reduz complexidade de:

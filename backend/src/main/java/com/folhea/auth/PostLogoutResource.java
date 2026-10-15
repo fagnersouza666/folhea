@@ -1,5 +1,6 @@
 package com.folhea.auth;
 
+import com.folhea.shared.ProblemTypes;
 import com.folhea.security.CsrfTokenService;
 import com.folhea.security.OidcSessionCookieSettings;
 import com.folhea.security.SessionCookieSettings;
@@ -34,7 +35,7 @@ public class PostLogoutResource {
         if (expected == null || supplied == null || expected.length() != 36 || supplied.length() != 36
                 || !MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), supplied.getBytes(StandardCharsets.UTF_8))) {
             return Response.fromResponse(ProblemResponses.build(403,
-                    "https://folhea.com.br/problems/invalid-logout-state", "Retorno de saída inválido",
+                    ProblemTypes.INVALID_LOGOUT_STATE, "Retorno de saída inválido",
                     "Não foi possível validar o retorno da saída da conta."))
                     .cookie(oidcCookies.clearPostLogout()).build();
         }

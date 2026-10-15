@@ -38,7 +38,7 @@ vigentes. A auditoria completa de 06/09/2026 está em
 - **Ação:** `frontend/proxy.conf.json` encaminha `/api` e `/auth` ao
   Quarkus em `http://localhost:8080`. O realm **dev** aceita
   `http://localhost:4200/auth/callback`; o realm **prod** continua só com
-  `https://folhea.com.br/auth/callback` (guard em
+  `${OIDC_PUBLIC_ORIGIN}/auth/callback` (guard em
   `scripts/ci/validate-oidc-surface.mjs`).
 
 ## Demais findings (SEC-004–SEC-013)

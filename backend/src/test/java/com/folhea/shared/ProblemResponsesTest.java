@@ -1,21 +1,39 @@
 package com.folhea.shared;
 
 import org.junit.jupiter.api.Test;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class ProblemResponsesTest {
     @Test
+    void internalErrorSerializesARelativeTypeWithoutChangingThePublicError() throws Exception {
+        try (var response = ProblemResponses.internalError()) {
+            var entity = (ProblemResponse) response.getEntity();
+            var json = new ObjectMapper().readTree(new ObjectMapper().writeValueAsBytes(entity));
+
+            assertEquals("/problems/internal-error", json.path("type").asText());
+            assertFalse(entity.type().isAbsolute());
+            assertEquals(500, response.getStatus());
+            assertEquals(500, json.path("status").asInt());
+            assertEquals("Erro interno", json.path("title").asText());
+            assertEquals("Não foi possível concluir a operação.", json.path("detail").asText());
+            assertEquals(ProblemResponses.MEDIA_TYPE, response.getHeaderString("Content-Type"));
+            assertEquals("no-store", response.getHeaderString("Cache-Control"));
+        }
+    }
+
+    @Test
     void everyPublicProblemHasStableMediaTypeAndNoStoreCachePolicy() {
         var response = ProblemResponses.build(400,
-                "https://folhea.com.br/problems/invalid-request",
+                ProblemTypes.INVALID_REQUEST,
                 "Requisição inválida", "Mensagem pública.");
 
         assertEquals(400, response.getStatus());
         assertEquals(ProblemResponses.MEDIA_TYPE, response.getHeaderString("Content-Type"));
         assertEquals("no-store", response.getHeaderString("Cache-Control"));
-        assertEquals("https://folhea.com.br/problems/invalid-request",
+        assertEquals(ProblemTypes.INVALID_REQUEST,
                 ((ProblemResponse) response.getEntity()).type().toString());
     }
 

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 
 const root = new URL('../dist/folhea/browser/', import.meta.url);
+const { publicOrigin } = JSON.parse(readFileSync(new URL('../../shared/public-contract.json', import.meta.url), 'utf8'));
 const routes = ['', 'como-funciona', 'recursos', 'sobre', 'privacidade', 'termos'];
 const titles = new Set();
 const descriptions = new Set();
@@ -16,9 +17,12 @@ for (const route of routes) {
   titles.add(title); descriptions.add(description);
   assert.equal(document.documentElement.lang, 'pt-BR');
   assert(document.querySelector('h1')?.textContent?.trim());
-  assert.equal(document.querySelector('link[rel="canonical"]')?.href, `https://folhea.com.br/${route}`);
+  assert.equal(document.querySelector('link[rel="canonical"]')?.href, `${publicOrigin}/${route}`);
   assert(!document.querySelector('meta[name="robots"]')?.content.includes('noindex'));
   for (const property of ['og:title', 'og:description', 'og:url', 'og:type', 'og:image']) assert(document.querySelector(`meta[property="${property}"]`)?.content, `${property} ${route}`);
+  assert.equal(document.querySelector('meta[property="og:url"]')?.content, `${publicOrigin}/${route}`);
+  assert.equal(document.querySelector('meta[property="og:image"]')?.content, `${publicOrigin}/folhea-social.png`);
+  assert.equal(document.querySelector('meta[name="twitter:image"]')?.content, `${publicOrigin}/folhea-social.png`);
   assert(document.querySelector('meta[property="og:image"]')?.content.endsWith('.png'));
   assert(!document.querySelector('[onload]'), `Handler inline incompatível com CSP: ${route}`);
 }
@@ -27,9 +31,10 @@ for (const route of ['entrar', 'cadastro']) {
   assert(document.querySelector('meta[name="robots"]')?.content.includes('noindex'));
 }
 const sitemap = readFileSync(new URL('sitemap.xml', root), 'utf8');
-for (const route of routes) assert(sitemap.includes(`https://folhea.com.br/${route}`));
+for (const route of routes) assert(sitemap.includes(`${publicOrigin}/${route}`));
 assert(!/\/app|\/entrar|\/cadastro/.test(sitemap));
 assert(readFileSync(new URL('robots.txt', root), 'utf8').includes('Disallow: /app/'));
+assert(readFileSync(new URL('robots.txt', root), 'utf8').includes(`Sitemap: ${publicOrigin}/sitemap.xml`));
 const sw = JSON.parse(readFileSync(new URL('ngsw.json', root), 'utf8'));
 assert.equal(sw.dataGroups.length, 0, 'Service worker não pode armazenar domínio privado.');
 assert(sw.assetGroups.some((group) => group.installMode === 'prefetch' && group.urls.includes(sw.index)), `Shell de navegação ${sw.index} ausente dos assets prefetch.`);
