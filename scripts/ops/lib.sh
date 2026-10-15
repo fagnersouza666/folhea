@@ -83,3 +83,44 @@ ops_init_compose() {
     COMPOSE+=(--project-name "$COMPOSE_PROJECT_NAME")
   fi
 }
+
+# An existing PostgreSQL container is NOT a service of the Folhea project.
+# Only database client execution is supported; never Docker/Compose lifecycle.
+ops_postgres_exec() {
+  if [[ -z "${OPS_EXTERNAL_POSTGRES_CONTAINER:-}" ]]; then
+    "${COMPOSE[@]}" exec -T "$POSTGRES_SERVICE" "$@"
+    return
+  fi
+  case "${DB_NAME:-}:${DB_USERNAME:-}" in
+    folhea:folhea_app|folhea_keycloak:folhea_keycloak) ;;
+    *) ops_die "external transport permits only the dedicated Folhea DB/role pairs" ;;
+  esac
+  case "$1" in
+    pg_dump|pg_restore|psql|pg_isready) ;;
+    *) ops_die "external transport permits only PostgreSQL client tools" ;;
+  esac
+  local docker_bin="${DOCKER_BIN:-docker}" metadata version argument expected=""
+  for argument in "$@"; do
+    if [[ -n "$expected" ]]; then
+      [[ "$argument" == "$expected" ]] || ops_die "client DB/role argument differs from the dedicated target"
+      expected=""
+      continue
+    fi
+    case "$argument" in
+      --dbname|-d) expected="$DB_NAME" ;;
+      --username|-U) expected="$DB_USERNAME" ;;
+      --dbname=*) [[ "${argument#*=}" == "$DB_NAME" ]] || ops_die "client database argument differs" ;;
+      --username=*) [[ "${argument#*=}" == "$DB_USERNAME" ]] || ops_die "client role argument differs" ;;
+      --host*|-h|--port*|-p|--role*) ops_die "external endpoint or role override forbidden" ;;
+    esac
+  done
+  [[ -z "$expected" ]] || ops_die "missing client DB/role argument"
+  ops_validate_name "$OPS_EXTERNAL_POSTGRES_CONTAINER" OPS_EXTERNAL_POSTGRES_CONTAINER
+  [[ "${OPS_EXTERNAL_POSTGRES_CONTAINER_ID:-}" =~ ^[0-9a-f]{64}$ ]] || ops_die "observed PG container ID required"
+  [[ "${OPS_EXTERNAL_POSTGRES_IMAGE_ID:-}" =~ ^sha256:[0-9a-f]{64}$ ]] || ops_die "observed PG image ID required"
+  metadata="$("$docker_bin" inspect --format '{{.Id}}|{{.Image}}|{{.State.Running}}|{{.State.Health.Status}}' "$OPS_EXTERNAL_POSTGRES_CONTAINER")" || ops_die "external PG metadata unavailable"
+  [[ "$metadata" == "$OPS_EXTERNAL_POSTGRES_CONTAINER_ID|$OPS_EXTERNAL_POSTGRES_IMAGE_ID|true|healthy" ]] || ops_die "external PG identity or health changed"
+  version="$("$docker_bin" exec "$OPS_EXTERNAL_POSTGRES_CONTAINER" pg_dump --version)" || ops_die "PG client version unavailable"
+  [[ "$version" == 'pg_dump (PostgreSQL) 16.'* ]] || ops_die "compatible PostgreSQL 16 client required; never filter restore errors"
+  "$docker_bin" exec -i "$OPS_EXTERNAL_POSTGRES_CONTAINER" "$@"
+}

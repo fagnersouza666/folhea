@@ -1,0 +1,13 @@
+# Four OWN immutable images. Shared PostgreSQL is intentionally absent.
+services:
+  redis:
+    image: ${FOLHEA_REDIS_IMAGE:?Verified release image required}
+  backend:
+    build: !reset null
+    image: ${FOLHEA_BACKEND_IMAGE:?Verified release image required}
+  caddy:
+    build: !reset null
+    image: ${FOLHEA_CADDY_IMAGE:?Verified release image required}
+  keycloak:
+    build: !reset null
+    image: ${FOLHEA_KEYCLOAK_IMAGE:?Verified release image required}

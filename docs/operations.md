@@ -643,3 +643,186 @@ remove somente seu container temporário com prazo explícito, sem aguardar um
 `test-caddy-startup.mjs` atrasa esse comando9s e executa os mesmos14casos reais;
 exige conclusão/cleanup em20s. Nenhum status/limite ou scanner é ignorado.
 O workflow conserva todos os gates e acrescenta essa regressão e prazos de steps.
+
+## Deploy em host compartilhado com PostgreSQL externo
+
+O perfil `docker-compose.external-pg.yml` +
+`docker-compose.external-pg.runtime.yml` gerencia **somente** backend, Keycloak,
+Redis e Caddy do Folhea. O Nginx Proxy Manager continua responsável pelo TLS
+público. Apenas Caddy entra na rede externa do proxy, com alias `folhea-caddy` e
+porta interna 80. Somente backend e Keycloak entram na rede privada do PostgreSQL.
+Não combinar esse perfil com os overlays de PostgreSQL gerenciado. O perfil
+standalone continua separado.
+
+A engine única é `scripts/ops/deploy-folhea.py`. Ela não provisiona servidor,
+configura DNS/NPM, altera PostgreSQL compartilhado, faz build remoto ou publica
+imagens em registry. O transporte é `docker save | SSH docker load`, com
+host key estrita, imagens imutáveis, manifesto e checksums. O identificador de
+configuração escaneado e o identificador runtime do Docker/containerd são
+preservados separadamente e vinculados pela atestação de exportação da imagem.
+
+### Configuração explícita e privada
+
+Não há destino SSH, usuário ou diretório de produção embutido no programa.
+Escolha um diretório absoluto exclusivo cujo último componente seja `folhea` e
+um projeto Compose `folhea` ou `folhea-<sufixo>`. O diretório remoto deve pertencer
+ao operador, modo 0700; `production.env` e os recibos privados, modo 0600. Não
+transportar `production.env` no bundle, nem usar credenciais em argumentos,
+build args ou logs.
+
+Além das origens canônicas descritas acima, o arquivo privado deve declarar os
+metadados observados `NPM_PROXY_CONTAINER`, `NPM_PROXY_CONTAINER_ID`,
+`NPM_PROXY_IP`, `NPM_PROXY_NETWORK`, `EXTERNAL_PG_CONTAINER`,
+`EXTERNAL_PG_CONTAINER_ID`, `EXTERNAL_PG_IMAGE_ID`, `EXTERNAL_PG_HOST`,
+`EXTERNAL_PG_NETWORK`, `EDGE_SUBNET` e `CADDY_EDGE_IP`. Não adivinhar esses valores:
+a engine confere container, imagem, saúde, rede e o peer único do proxy antes de
+alterar recursos Folhea. O BFF confia somente no IPv4 dedicado do Caddy; o Caddy
+valida Host e peer, reconstrói HTTPS canônico e encaminha o IP de cliente conforme
+o contrato NPM, preservando limites, cache privado e endpoints administrativos
+externos 404.
+
+O backend usa endereço dinâmico na rede edge, preservando o alias `backend-edge`;
+o perfil externo remove o IPv4 estático herdado do standalone. O endereço fixo
+do Caddy e qualquer outro IPv4 estático devem pertencer à faixa utilizável da
+sub-rede exclusiva, sem duplicação. O guard rejeita o modelo antes de iniciar
+serviços se esse vínculo ou o alias estiver incorreto.
+
+O banco compartilhado continua PostgreSQL **16.13**, sem novo serviço, volume,
+publicação de porta ou ciclo de vida Folhea. Os pares exclusivos são
+`folhea/folhea_app` e `folhea_keycloak/folhea_keycloak`, owners com markers próprios,
+sem privilégios globais elevados. O helper `folhea-postgres.py` exige container e
+redes explícitos; seu default é plano sem SQL. `--check` é catálogo/configuração;
+`--apply` só cria os objetos ausentes e nunca toma posse ou gira senha de objetos
+existentes. O init de cluster standalone não é executado no compartilhado.
+
+Os pools são limitados a 10 conexões no backend (mínimo/inicial 0) e 10 no
+Keycloak (mínimo/inicial 1). O preflight exige margem no servidor compartilhado,
+sem alterar `max_connections`, ACL global, HBA, roles ou dados de outros sistemas.
+
+### Preparar e transferir
+
+Com HEAD limpo/commitado, toolchains locais do projeto e Trivy disponíveis no
+PATH **somente do processo**, execute as fases explicitamente. Use cache Trivy
+próprio gravável; não ignorar severidades ou reutilizar o cache de outro usuário.
+Os valores abaixo são exemplos não operacionais, sem credenciais:
+
+```bash
+SOURCE="$(git rev-parse HEAD)"
+DEPLOY_HOST='operator@server.example'
+DEPLOY_ROOT='/srv/folhea'
+DEPLOY_ADDRESS='192.0.2.10'
+DEPLOY_PROJECT='folhea-prod'
+TARGET=(--host "$DEPLOY_HOST" --remote-root "$DEPLOY_ROOT" \
+  --project-name "$DEPLOY_PROJECT" --server-address "$DEPLOY_ADDRESS")
+OUTPUT="$HOME/.local/state/folhea/packages/$SOURCE"
+
+# Puro: não consulta Git, rede, Docker, banco ou arquivo de configuração.
+python3 -B scripts/ops/deploy-folhea.py --dry-run --source "$SOURCE" "${TARGET[@]}"
+
+# Local: testes, builds sequenciais, scans e bundle; output deve ser novo e fora do Git.
+python3 -B scripts/ops/deploy-folhea.py --prepare --source "$SOURCE" --output "$OUTPUT"
+
+# Remoto: recebe/verifica release e imagens; NÃO inicia serviços.
+python3 -B scripts/ops/deploy-folhea.py --transfer --source "$SOURCE" \
+  --bundle "$OUTPUT/release" "${TARGET[@]}"
+```
+
+O `--prepare` não tem flags para omitir testes/scans. Usa o PostgreSQL 16 local de
+teste equivalente, nunca o volume compartilhado. O manifesto permite exatamente
+os arquivos públicos do runtime e as quatro imagens. `--reuse-transferred-from`
+é exclusivo para os mesmos quatro config digests já carregados e novamente
+atestados; não aceita igualdade apenas de tags. Não usar `prune` global.
+
+### Backup e revisão antes de upgrade
+
+`--expected-current` é o SHA completo da release atualmente ativa, não a revisão
+que se deseja instalar. `--schema-compatible-reviewed` é uma declaração explícita
+do operador **após** revisar compatibilidade e o plano de dados; não comprova
+compatibilidade, CI, backup ou restore por si só. Não passar essa declaração para
+uma migração desconhecida. Alteração de versão do Keycloak ou Redis requer plano
+separado. Não há downgrade automático de banco.
+
+Antes de ativar, criar dumps separados APP e KC com os scripts reais do runtime.
+Para o transporte externo, fornecer `OPS_EXTERNAL_POSTGRES_CONTAINER`,
+`OPS_EXTERNAL_POSTGRES_CONTAINER_ID` e `OPS_EXTERNAL_POSTGRES_IMAGE_ID`, além do
+par `DB_NAME/DB_USERNAME` correto. `ops_postgres_exec` usa `docker exec` diretamente
+no container observado **somente para clientes PG16** (`pg_dump`, `pg_restore`,
+`psql`, `pg_isready`), nunca `compose exec --service` de outro projeto. Não copiar
+PGDATA ou usar cliente PG18 para restaurar no PG16; não filtrar erros/GUCs.
+
+Definir `COMPOSE_FILE` para o perfil externo do runtime e `COMPOSE_ENV_FILE` para
+o arquivo privado próprio. Para cada um dos dois pares, executar
+`backup-postgres.sh --output-dir <raiz>/backups/<candidate>` e
+`--external-destination file://<cópia-privada-própria>`. Diretórios 0700, dumps e
+sidecars 0600. A cópia deve diferir da origem; uma cópia local não é offsite. Não
+executar dump/restore de cluster, globals ou bancos de outros sistemas. Dumps
+`--no-owner --no-privileges` exigem owners/grants próprios previamente preparados.
+
+Registrar a revisão no servidor usando a engine da **candidata já transferida**:
+
+```bash
+PREVIOUS='<SHA completo confirmado em current>'
+REVIEW="$DEPLOY_ROOT/receipts/$SOURCE.backup-review.json"
+ENGINE="$DEPLOY_ROOT/releases/$SOURCE/scripts/ops/deploy-folhea.py"
+
+# printf %q protege os argumentos ao compor o comando remoto, sem segredos.
+printf -v REMOTE '%q ' python3 -B "$ENGINE" --record-backup-review \
+  --source "$SOURCE" --expected-current "$PREVIOUS" --schema-compatible-reviewed \
+  --app-backup "$DEPLOY_ROOT/backups/$SOURCE/app.dump" \
+  --idp-backup "$DEPLOY_ROOT/backups/$SOURCE/idp.dump" \
+  --backup-evidence "$REVIEW" "${TARGET[@]}"
+ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_HOST" "$REMOTE"
+```
+
+Usar os **nomes reais** produzidos pelo script de backup, não renomear outro dump
+para fazê-lo passar. O registro valida TOC com `pg_restore16`, banco de origem e
+versão do cliente, hashes dos dois dumps, privacidade e vínculo com previous,
+candidate, alvo, env e históricos Flyway/Liquibase. Recibo novo, sem sobrescrita.
+Isso não demonstra snapshot consistente entre os dois bancos, restore testado,
+RTO ou aprovação automática de mudanças de esquema.
+
+### Ativação e recuperação
+
+```bash
+printf -v REMOTE '%q ' python3 -B "$ENGINE" --activate --source "$SOURCE" \
+  --installation upgrade --expected-current "$PREVIOUS" \
+  --schema-compatible-reviewed --backup-evidence "$REVIEW" "${TARGET[@]}"
+ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_HOST" "$REMOTE"
+```
+
+Sob lock próprio, o upgrade verifica CAS de current, manifesto, atestação de
+imagens, ownership e snapshot saudável dos quatro serviços, configuração privada,
+peers, histórico e evidência de backup **antes** da parada. Grava journal 0600 por
+rename atômico, com fsync de arquivo/diretório; para somente backend, Keycloak e
+Caddy Folhea. Redis continua rodando. NPM, PostgreSQL e outros projetos nunca
+entram em stop/up/snapshot/rollback Folhea.
+
+Após a parada, mede **MemAvailable real**. Mantém o piso de soma dos quatro
+limites finitos efetivos + **512 MiB**, e disco livre **8 GiB**. As quotas atuais
+somam 2304 MiB; o piso é **2816 MiB**. Não credita aritmeticamente a memória que
+supostamente seria liberada, não diminui margem nem limpa caches globais. Se
+continuar insuficiente, restaura e verifica previous sem iniciar candidate e
+sem alterar current. Há indisponibilidade temporária própria durante o upgrade;
+não é blue/green nem garantia de tempo de recuperação.
+
+Falha parcial, timeout e sinais capturáveis acionam restauração dos writers
+anteriores quando a configuração e os históricos ainda permitem. Depois que a
+candidata puder ter executado, primeiro para e confirma a parada de todos os
+writers próprios, depois aguarda a ausência de conexões dos dois roles Folhea
+no PostgreSQL, com prazo limitado e consultas somente leitura. Só então compara
+os históricos estáveis; falha na parada, confirmação ou espera impede iniciar
+previous. Histórico diferente impede downgrade: writers
+próprios ficam parados e journal exige recuperação manual. Nunca restaurar dados
+automaticamente para satisfazer um guard. Somente promover current após saúde
+interna, HTTPS/status canônicos e imagens runtime exatas.
+
+SIGKILL, queda do processo ou energia não permitem promessa de trap. O journal
+pendente bloqueia nova ativação. Para recuperar, investigar a causa e executar
+explicitamente a engine da candidata com `--recover --source "$SOURCE"`,
+`--expected-current "$PREVIOUS"` e os mesmos argumentos `TARGET`. Ela revalida
+alvo, env, manifests/imagens, backup e históricos antes de restaurar previous;
+quando a candidata foi iniciada, aplica a mesma parada confirmada e espera das
+conexões próprias antes da leitura dos históricos, inclusive após timeout/crash;
+se esses vínculos mudaram ou os schemas divergiram, recusa downgrade. Não apagar
+journal para contornar a proteção. O estado final e o aceite real de OIDC/CSRF e
+dados precisam ser conferidos separadamente; homepage 200 não comprova login.

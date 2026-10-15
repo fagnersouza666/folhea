@@ -19,7 +19,21 @@ WORKDIR /workspace/backend
 COPY backend/ ./
 RUN --mount=type=cache,target=/root/.m2 chmod +x mvnw && MAVEN_OPTS="-Xmx1024m -XX:ActiveProcessorCount=4" ./mvnw -B package -DskipTests
 
+# The official 2.11.7 binary embeds Go 1.26.8/x/net 0.59.0. Overlay the same
+# stable Caddy release with corrected, locked dependencies and standard modules.
+# The build toolchain never enters the runtime image.
+FROM golang:1.27.2-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS caddy-build
+WORKDIR /workspace/caddy
+ENV GOTOOLCHAIN=local GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org \
+    CGO_ENABLED=0 GOMAXPROCS=4 GOMEMLIMIT=900MiB
+COPY infra/caddy-build/go.mod infra/caddy-build/go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download && go mod verify
+COPY infra/caddy-build/main.go ./
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    go build -mod=readonly -trimpath -buildvcs=false -tags nobadger,nomysql,nopgx -ldflags '-s -w' -o /out/caddy .
+
 FROM caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f AS caddy-runtime
+COPY --from=caddy-build /out/caddy /usr/bin/caddy
 COPY --from=frontend-build /workspace/frontend/dist/folhea/browser /srv
 COPY infra/Caddyfile /etc/caddy/Caddyfile
 ENV PUBLIC_DOMAIN=localhost \
@@ -29,7 +43,7 @@ ENV PUBLIC_DOMAIN=localhost \
 RUN caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 EXPOSE 80 443
 
-FROM quay.io/keycloak/keycloak:26.8.0@sha256:27b3230fbabb8c9ff3c66c864cf09dcd8a41aca82e5100679d109ef0eeb05741 AS keycloak-runtime
+FROM quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244 AS keycloak-runtime
 ENV KC_DB=postgres KC_HEALTH_ENABLED=true KC_METRICS_ENABLED=true
 RUN /opt/keycloak/bin/kc.sh build
 

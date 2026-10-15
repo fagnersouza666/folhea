@@ -1,0 +1,214 @@
+# Private HTTP profile behind the existing Nginx Proxy Manager.
+# NPM owns public TLS/80/443. No ACME, redirects or published host ports here.
+# Only the observed NPM peer and canonical Host can reach application routes.
+{
+	admin off
+	auto_https off
+	servers {
+		trusted_proxies static {$NPM_PROXY_IP}/32
+		trusted_proxies_strict
+		client_ip_headers X-Forwarded-For
+	}
+}
+
+http://:80 {
+	route {
+		@local-health {
+			path /healthz
+			remote_ip 127.0.0.1 ::1
+		}
+		handle @local-health {
+			respond 200
+		}
+		@untrusted-peer not remote_ip {$NPM_PROXY_IP}/32
+		handle @untrusted-peer {
+			header Cache-Control no-store
+			respond 403
+		}
+		@wrong-host not host {$PUBLIC_DOMAIN}
+		handle @wrong-host {
+			header Cache-Control no-store
+			respond 421
+		}
+		@private-endpoints path /admin /admin/* /q /q/* /api/openapi /api/openapi/*
+		handle @private-endpoints {
+			header Cache-Control no-store
+			respond 404
+		}
+		handle {
+			encode zstd gzip
+
+			header {
+				Strict-Transport-Security "max-age=31536000; includeSubDomains"
+				X-Content-Type-Options "nosniff"
+				X-Frame-Options "DENY"
+				Referrer-Policy "strict-origin-when-cross-origin"
+				Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+				-Server
+			}
+
+			# Keycloak owns its login theme's CSP. Do not replace it with Angular's
+			# script policy: the provider renders its own inline theme handlers.
+			# All Folhea pages/API retain the strict same-origin script policy.
+			@application-policy not path /realms/folhea/protocol/openid-connect/auth /realms/folhea/protocol/openid-connect/logout /realms/folhea/login-actions/* /realms/folhea/broker/google/* /resources/*
+			header @application-policy Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests"
+
+			# API responses default to no-store. Only owned photo GET 200/304 can use
+			# private browser revalidation; authorization always runs at the backend.
+			@api path /api/*
+			header @api Cache-Control "no-store"
+			# Only atomic book creation/update accepts a multipart image envelope.
+			# The backend independently limits each live image to 1MB and JSON part to 8KiB.
+			@book-multipart {
+				header_regexp Content-Type `(?i)^multipart/form-data([[:space:]]*;.*)?$`
+				expression `(method('POST') && path('/api/v1/books')) || (method('PATCH') && path_regexp('book_update', '^/api/v1/books/[^/]+$'))`
+			}
+			request_body @book-multipart {
+				max_size 3145728
+			}
+			@book-photo-upload {
+				method PUT
+				path_regexp book_photo_upload ^/api/v1/books/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/photo$
+			}
+			# RAW photo MIME/signature validation belongs to the backend. Unsupported
+			# inputs within this limit must reach its 415 response, not the JSON cap.
+			request_body @book-photo-upload {
+				max_size 1000000
+			}
+			@small-api-body {
+				path /api/*
+				not {
+					header_regexp Content-Type `(?i)^multipart/form-data([[:space:]]*;.*)?$`
+					expression `(method('POST') && path('/api/v1/books')) || (method('PATCH') && path_regexp('book_update_small', '^/api/v1/books/[^/]+$'))`
+				}
+				not {
+					method PUT
+					path_regexp book_photo_small ^/api/v1/books/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/photo$
+				}
+			}
+			request_body @small-api-body {
+				max_size 65536
+			}
+			handle @api {
+				# Explicit route order keeps the narrow photo handler ahead of the API
+				# fallback regardless of Caddy's matcher sorting.
+				route {
+					@book-photo-read {
+						method GET
+						path_regexp book_photo_read ^/api/v1/books/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/photo$
+					}
+					handle @book-photo-read {
+						reverse_proxy {$API_UPSTREAM} {
+							header_up -Forwarded
+							header_up -X-Forwarded-Port
+							header_up -X-Forwarded-Ssl
+							header_up -X-Forwarded-Prefix
+							header_up X-Forwarded-For {client_ip}
+							header_up X-Forwarded-Host {$PUBLIC_DOMAIN}
+							header_up Host {$PUBLIC_DOMAIN}
+							header_up X-Forwarded-Proto https
+							@photo-cacheable status 200 304
+							handle_response @photo-cacheable {
+								header >Cache-Control "private, no-cache, max-age=0, must-revalidate"
+								copy_response
+							}
+							handle_response {
+								header >Cache-Control "no-store"
+								copy_response
+							}
+						}
+					}
+					handle {
+						reverse_proxy {$API_UPSTREAM} {
+							# Caddy is the only trusted edge proxy. Strip client-supplied forwarding
+							# headers, replacing canonical values consumed by Quarkus.
+							# Never delete a header also set here: Caddy applies deletes last.
+							header_up -Forwarded
+							header_up -X-Forwarded-Port
+							header_up -X-Forwarded-Ssl
+							header_up -X-Forwarded-Prefix
+							header_up X-Forwarded-For {client_ip}
+							header_up X-Forwarded-Host {$PUBLIC_DOMAIN}
+							header_up Host {$PUBLIC_DOMAIN}
+							header_up X-Forwarded-Proto https
+							handle_response {
+								header >Cache-Control "no-store"
+								copy_response
+							}
+						}
+					}
+				}
+			}
+
+			# The BFF owns the OIDC start/callback/logout endpoints. There is no route
+			# to the Keycloak admin console or to its internal realm-management API.
+			@auth path /auth/*
+			header @auth Cache-Control "no-store"
+			handle @auth {
+				reverse_proxy {$API_UPSTREAM} {
+					header_up -Forwarded
+					header_up -X-Forwarded-Port
+					header_up -X-Forwarded-Ssl
+					header_up -X-Forwarded-Prefix
+					header_up X-Forwarded-For {client_ip}
+					header_up X-Forwarded-Host {$PUBLIC_DOMAIN}
+							header_up Host {$PUBLIC_DOMAIN}
+					header_up X-Forwarded-Proto https
+				}
+			}
+
+			# Keycloak is private by default. The browser only needs the authorization
+			# challenge, login actions, RP-initiated logout and static login resources;
+			# token, userinfo, introspection, certs, admin and realm-management paths
+			# remain unreachable from the public edge.
+			@oidc-public path /realms/folhea/protocol/openid-connect/auth /realms/folhea/protocol/openid-connect/logout /realms/folhea/login-actions/* /realms/folhea/broker/google/* /resources/*
+			handle @oidc-public {
+				reverse_proxy {$KEYCLOAK_UPSTREAM:http://keycloak:8080} {
+					header_up -Forwarded
+					header_up -X-Forwarded-Port
+					header_up -X-Forwarded-Ssl
+					header_up -X-Forwarded-Prefix
+					header_up X-Forwarded-For {client_ip}
+					header_up X-Forwarded-Host {$PUBLIC_DOMAIN}
+							header_up Host {$PUBLIC_DOMAIN}
+					header_up X-Forwarded-Proto https
+				}
+			}
+
+			root * {$STATIC_ROOT}
+			# The authenticated area is client-rendered. It needs the application shell
+			# for deep links, while keeping the whole area out of search indexes.
+			@private path /app /app/* /entrar /cadastro
+			handle @private {
+				header X-Robots-Tag "noindex, nofollow"
+				header >Cache-Control "no-store"
+				rewrite * /index.csr.html
+				file_server
+			}
+
+			# SSG emits an index.html for every public route. Check the generated
+			# document before the request path itself: resolving /route to
+			# /route/index.html avoids file_server's directory redirect while an
+			# unknown URL remains a real 404 instead of a soft 404 home page.
+			# Revalidate HTML and PWA version metadata; fingerprinted bundles are immutable.
+			@versioned path_regexp versioned [.-]([A-Z0-9]{8,}|[a-f0-9]{8,})\.(js|css)$
+			header @versioned Cache-Control "public, max-age=31536000, immutable"
+			@pwa path /ngsw.json /ngsw-worker.js /safety-worker.js /manifest.webmanifest
+			header @pwa Cache-Control "no-cache"
+			# Keep the public rewrite inside the fallback handler. A global try_files
+			# runs before handle and would turn /entrar into /entrar/index.html before
+			# the private matcher can apply its CSR shell and privacy headers.
+			handle {
+				try_files {path}/index.html {path}
+				file_server
+			}
+
+		}
+	}
+	# Error routes belong at site scope, outside ordered handler blocks.
+	handle_errors {
+		root * {$STATIC_ROOT}
+		rewrite * /404.html
+		file_server
+	}
+}

@@ -267,11 +267,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
       - name: Validate OIDC Compose/Caddy surface
         run: node scripts/ci/validate-oidc-surface.mjs
-      - name: Validate realm and backup/restore scripts
+      - name: Validate realm, ops tests and backup/restore scripts
         run: |
           bash scripts/tests/test-render-realm.sh
-          python3 -B -m unittest discover -s scripts/ops/tests -p test_keycloak_auth.py
-          python3 -B -m unittest discover -s scripts/ops/tests -p test_public_domain.py
+          python3 -B -m unittest discover -s scripts/ops/tests -p 'test_*.py'
           bash scripts/ops/tests/test-backup-restore.sh
       - name: Validate private book multipart body limits on actual Caddy
         timeout-minutes: 10
@@ -285,6 +284,18 @@ jobs:
         run: docker compose --env-file .env.example config --quiet
       - run: docker build --file infra/Dockerfile --tag folhea:ci .
       - run: docker build --file infra/Dockerfile --target caddy-runtime --tag folhea:caddy-ci .
+      - name: Validate built Caddy binary and modules
+        id: caddy-proof
+        timeout-minutes: 2
+        run: |
+          image_id="$(docker image inspect --format '{{.Id}}' folhea:caddy-ci)"
+          python3 -B scripts/ci/tests/test-caddy-build.py --image "$image_id"
+          printf 'image=%s\n' "$image_id" >> "$GITHUB_OUTPUT"
+      - name: Validate private HTTP edge behind NPM on built Caddy
+        timeout-minutes: 2
+        env:
+          CADDY_TEST_IMAGE: ${{ steps.caddy-proof.outputs.image }}
+        run: node scripts/ci/tests/test-npm-proxy.mjs
       - run: docker build --file infra/Dockerfile --target keycloak-runtime --tag folhea:keycloak-ci .
       - name: Validate production Compose configuration
         run: docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.example config --quiet
