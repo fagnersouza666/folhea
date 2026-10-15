@@ -62,6 +62,21 @@ class NpmComposeTest(unittest.TestCase):
         result = self.invoke(self.model)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_backend_edge_is_dynamic_with_alias_and_caddy_is_inside_subnet(self):
+        import ipaddress
+        edge = self.model['services']['backend']['networks']['edge']
+        self.assertFalse(edge.get('ipv4_address'), 'Inherited backend static IP escapes the exclusive subnet')
+        self.assertIn('backend-edge', edge['aliases'])
+        subnet = ipaddress.ip_network(self.model['networks']['edge']['ipam']['config'][0]['subnet'])
+        self.assertIn(ipaddress.ip_address(self.model['services']['caddy']['networks']['edge']['ipv4_address']), subnet)
+
+    def test_guard_rejects_static_edge_addresses_outside_subnet(self):
+        for service in ('backend', 'caddy'):
+            changed = copy.deepcopy(self.model)
+            changed['services'][service]['networks']['edge']['ipv4_address'] = '203.0.113.3'
+            if service == 'caddy': changed['services']['backend']['environment']['TRUSTED_PROXIES'] = '203.0.113.3'
+            self.assertEqual(self.invoke(changed).returncode, 1, service)
+
     def test_unsafe_models_fail_closed(self):
         mutations = [
             ("host-port", lambda m: m["services"]["caddy"].update(ports=[{"target": 80, "published": "80"}])),

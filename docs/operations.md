@@ -681,6 +681,12 @@ valida Host e peer, reconstrói HTTPS canônico e encaminha o IP de cliente conf
 o contrato NPM, preservando limites, cache privado e endpoints administrativos
 externos 404.
 
+O backend usa endereço dinâmico na rede edge, preservando o alias `backend-edge`;
+o perfil externo remove o IPv4 estático herdado do standalone. O endereço fixo
+do Caddy e qualquer outro IPv4 estático devem pertencer à faixa utilizável da
+sub-rede exclusiva, sem duplicação. O guard rejeita o modelo antes de iniciar
+serviços se esse vínculo ou o alias estiver incorreto.
+
 O banco compartilhado continua PostgreSQL **16.13**, sem novo serviço, volume,
 publicação de porta ou ciclo de vida Folhea. Os pares exclusivos são
 `folhea/folhea_app` e `folhea_keycloak/folhea_keycloak`, owners com markers próprios,
@@ -801,7 +807,11 @@ não é blue/green nem garantia de tempo de recuperação.
 
 Falha parcial, timeout e sinais capturáveis acionam restauração dos writers
 anteriores quando a configuração e os históricos ainda permitem. Depois que a
-candidata puder ter executado, histórico diferente impede downgrade: writers
+candidata puder ter executado, primeiro para e confirma a parada de todos os
+writers próprios, depois aguarda a ausência de conexões dos dois roles Folhea
+no PostgreSQL, com prazo limitado e consultas somente leitura. Só então compara
+os históricos estáveis; falha na parada, confirmação ou espera impede iniciar
+previous. Histórico diferente impede downgrade: writers
 próprios ficam parados e journal exige recuperação manual. Nunca restaurar dados
 automaticamente para satisfazer um guard. Somente promover current após saúde
 interna, HTTPS/status canônicos e imagens runtime exatas.
@@ -811,6 +821,8 @@ pendente bloqueia nova ativação. Para recuperar, investigar a causa e executar
 explicitamente a engine da candidata com `--recover --source "$SOURCE"`,
 `--expected-current "$PREVIOUS"` e os mesmos argumentos `TARGET`. Ela revalida
 alvo, env, manifests/imagens, backup e históricos antes de restaurar previous;
+quando a candidata foi iniciada, aplica a mesma parada confirmada e espera das
+conexões próprias antes da leitura dos históricos, inclusive após timeout/crash;
 se esses vínculos mudaram ou os schemas divergiram, recusa downgrade. Não apagar
 journal para contornar a proteção. O estado final e o aceite real de OIDC/CSRF e
 dados precisam ser conferidos separadamente; homepage 200 não comprova login.

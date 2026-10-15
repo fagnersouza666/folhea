@@ -58,6 +58,8 @@ services:
       keycloak: {condition: service_healthy}
       redis: {condition: service_healthy}
     networks:
+      edge:
+        ipv4_address: !reset null
       postgres-external:
 
   caddy:

@@ -23,6 +23,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.error
 import urllib.request
 
@@ -692,6 +693,46 @@ def state_target():
     return {'host': HOST, 'root': REMOTE_ROOT, 'project': PROJECT, 'address': SERVER_ADDRESS}
 
 
+def stop_candidate_writers(candidate, env_file, images):
+    """A failed `up --wait` can leave writers alive; stop and verify all OWN containers."""
+    compose(candidate, env_file, images, 'stop', *WRITERS)
+    containers = run(['docker', 'ps', '--all', '--quiet', '--no-trunc', '--filter',
+                      'label=com.docker.compose.project=' + PROJECT]).decode().split()
+    for container in containers:
+        require(re.fullmatch(r'[0-9a-f]{64}', container) is not None, 'candidate-container-id-invalid')
+        info = json.loads(run(['docker', 'inspect', '--format',
+            '{"project":{{json (index .Config.Labels "com.docker.compose.project")}},"service":{{json (index .Config.Labels "com.docker.compose.service")}},"running":{{json .State.Running}}}', container]))
+        require(info.get('project') == PROJECT and info.get('service') in SERVICES,
+                'candidate-container-ownership-mismatch')
+        if info['service'] in WRITERS:
+            require(info.get('running') is False, 'candidate-writer-still-running')
+
+
+def wait_database_writers(candidate, model, *, timeout=30):
+    """Wait for OWN server-side sessions to drain before comparing migration histories.
+
+    Docker stop alone does not prove an in-flight database commit has finished.
+    Query only the two dedicated roles, without terminating any connection.
+    """
+    database = database_module(candidate, model)
+    deadline = time.monotonic() + timeout
+    query = """BEGIN READ ONLY;
+SET LOCAL statement_timeout='2s';
+SELECT count(*) FROM pg_stat_activity
+ WHERE datname=current_database() AND usename=current_user AND pid<>pg_backend_pid();
+ROLLBACK;
+"""
+    while True:
+        idle = True
+        for name, role in [('folhea', 'folhea_app'), ('folhea_keycloak', 'folhea_keycloak')]:
+            count = database.sql(query, name, role).strip()
+            require(re.fullmatch(r'[0-9]+', count) is not None, 'own-database-session-metadata-invalid')
+            idle = idle and int(count) == 0
+        if idle: return
+        require(time.monotonic() < deadline, 'own-database-writers-not-idle')
+        time.sleep(0.2)
+
+
 def restore_previous(base, candidate, env_file, images, state):
     """Restore OWN writers only; never restore or downgrade either database."""
     previous = base / 'releases' / state['previous']
@@ -708,6 +749,9 @@ def restore_previous(base, candidate, env_file, images, state):
     guard.validate_model(model); guard.validate_peer(model, inspected_peer(model))
     external_preflight(previous, model)
     if state['candidate_attempted']:
+        state['phase'] = 'stopping-candidate'; write_json_atomic(base / 'deployment-state.json', state)
+        stop_candidate_writers(candidate, env_file, images)
+        wait_database_writers(previous, model)
         after = history(candidate, env_file, images)
         require(rollback_allowed(old_images, state['flyway_before'], after), 'schema-changed-no-db-downgrade')
     state['phase'] = 'restoring-previous'; write_json_atomic(base / 'deployment-state.json', state)

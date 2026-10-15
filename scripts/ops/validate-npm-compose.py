@@ -54,6 +54,20 @@ def validate_model(config):
             config["networks"]["npm-proxy"]["name"] == edge["NPM_PROXY_NETWORK"] and
             re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", edge["NPM_PROXY_NETWORK"]), "existing-proxy-network-required")
     require(config["networks"]["edge"].get("internal") is True, "private-edge-required")
+    subnets = config["networks"]["edge"]["ipam"]["config"]
+    require(len(subnets) == 1, "single-exclusive-edge-subnet-required")
+    subnet = ipaddress.ip_network(subnets[0]["subnet"])
+    require(subnet.version == 4, "ipv4-edge-subnet-required")
+    assigned = set()
+    for service in services.values():
+        address = service["networks"].get("edge", {}).get("ipv4_address")
+        if address:
+            ip = ipaddress.ip_address(address)
+            require(ip in subnet and ip not in (subnet.network_address, subnet.broadcast_address),
+                    "static-edge-ip-outside-usable-subnet")
+            require(ip not in assigned, "duplicate-static-edge-ip")
+            assigned.add(ip)
+    require("backend-edge" in backend["networks"]["edge"].get("aliases", []), "backend-edge-alias-required")
     require("folhea-caddy" in caddy["networks"]["npm-proxy"].get("aliases", []), "unique-proxy-alias-required")
     for name in services.keys() - {"caddy"}:
         require("npm-proxy" not in services[name]["networks"], "shared-network-service-forbidden")

@@ -50,15 +50,22 @@ class UpgradeTransactionTest(unittest.TestCase):
                 if args[:1] == ('stop',):
                     self.assertEqual(tuple(args[1:]), d.WRITERS)
                     journal = json.loads((base / 'deployment-state.json').read_text())
-                    self.assertIn(journal['phase'], ('stopping-previous', 'manual-recovery-required-no-db-downgrade', 'starting-candidate'))
-                    state['stopped'] = True
-                    event('stop')
+                    self.assertIn(journal['phase'], ('stopping-previous', 'stopping-candidate', 'manual-recovery-required-no-db-downgrade', 'starting-candidate'))
+                    if state['candidate_attempted']:
+                        event('candidate-stop')
+                        if state.get('candidate_stop_raises'): raise d.DeployFailure('candidate-stop-failed')
+                        state['stopped'] = True
+                        if state.get('commit_migration_on_stop'): state['late_schema_commit'] = True
+                    else:
+                        state['stopped'] = True
+                        event('stop')
                 elif args[:1] == ('up',):
                     self.assertEqual(tuple(args[-3:]), d.WRITERS)
                     if folder == candidate:
                         state['candidate_attempted'] = True
-                        event('candidate-up')
+                        state['stopped'] = False
                         state['images'] = dict(NEXT)
+                        event('candidate-up')
                     else:
                         event('restore-up')
                         state['images'] = dict(IMAGES)
@@ -72,13 +79,23 @@ class UpgradeTransactionTest(unittest.TestCase):
                 return dict(state['images'])
             def history(*unused):
                 event('history')
-                return {**HISTORY, 'app': 'changed'} if changed_history and state['candidate_attempted'] else dict(HISTORY)
+                return {**HISTORY, 'app': 'changed'} if (changed_history and state['candidate_attempted']) or state.get('late_schema_commit') else dict(HISTORY)
             def meminfo(path, *args, **kwargs):
                 if path == Path('/proc/meminfo'):
                     event('memory-after-stop' if state['stopped'] else 'memory-running')
                     value = stopped_memory if state['stopped'] else 2058 * MiB
                     return 'MemAvailable: ' + str(value // 1024) + ' kB\n'
                 return original_read(path, *args, **kwargs)
+            def run(command, **unused):
+                if command[:2] == ['docker', 'ps']:
+                    event('confirm-candidate-stop')
+                    return ('\n'.join(char * 64 for char in '1234')).encode()
+                if command[:2] == ['docker', 'inspect']:
+                    service = dict(zip('1234', d.SERVICES))[command[-1][0]]
+                    return json.dumps({'project': d.PROJECT, 'service': service,
+                                       'running': service == 'redis' or not state['stopped'] or state.get('candidate_still_running', False)}).encode()
+                event('caddy-validation')
+                return b''
             def validate(*unused): event('model')
             guard = SimpleNamespace(validate_model=validate, validate_peer=lambda *x: event('peer'))
             manifest = lambda folder, source: {'source': source, 'images': NEXT if source == NEW else IMAGES,
@@ -95,9 +112,10 @@ class UpgradeTransactionTest(unittest.TestCase):
             stack.enter_context(patch.object(d, 'check_subnet', lambda *x: event('subnet')))
             stack.enter_context(patch.object(d, 'snapshot', snapshot))
             stack.enter_context(patch.object(d, 'history', history))
+            stack.enter_context(patch.object(d, 'wait_database_writers', lambda *x, **k: event('database-writers-idle'), create=True))
             stack.enter_context(patch.object(d, 'public_preflight', lambda: event('public-preflight')))
             stack.enter_context(patch.object(d, 'public_health', lambda: event('public-health')))
-            stack.enter_context(patch.object(d, 'run', lambda *a, **k: event('caddy-validation') or b''))
+            stack.enter_context(patch.object(d, 'run', run))
             stack.enter_context(patch.object(d.shutil, 'disk_usage', lambda *x: SimpleNamespace(free=9 * 1024 ** 3)))
             args = SimpleNamespace(source=NEW, installation='upgrade', expected_current=OLD,
                                    schema_compatible_reviewed=True, backup_evidence=str(base / 'backup-evidence.json'))
@@ -204,6 +222,55 @@ class UpgradeTransactionTest(unittest.TestCase):
             self.assertIn('restore-up', events)
             self.assertFalse(state['stopped'])
             self.assertEqual(json.loads((base / 'deployment-state.json').read_text())['phase'], 'previous-restored')
+
+    def test_late_candidate_migration_is_observed_only_after_stop_and_confirmation(self):
+        with self.fixture(fail='candidate-up') as (d, args, base, events, state):
+            state['commit_migration_on_stop'] = True
+            with self.assertRaises(d.DeployFailure): d.activate(args)
+            self.assertIn('candidate-stop', events)
+            self.assertLess(events.index('candidate-stop'), events.index('confirm-candidate-stop'))
+            self.assertLess(events.index('confirm-candidate-stop'), events.index('database-writers-idle'))
+            self.assertLess(events.index('database-writers-idle'), len(events) - 1 - events[::-1].index('history'))
+            self.assertNotIn('restore-up', events)
+            self.assertEqual((base / 'current').resolve().name, OLD)
+
+    def test_failed_or_unconfirmed_candidate_stop_never_starts_previous(self):
+        for condition in ('candidate_stop_raises', 'candidate_still_running'):
+            with self.subTest(condition=condition), self.fixture(fail='candidate-up') as (d, args, base, events, state):
+                state[condition] = True
+                with self.assertRaises(d.DeployFailure): d.activate(args)
+                self.assertNotIn('restore-up', events)
+                self.assertNotIn('database-writers-idle', events)
+                self.assertEqual(events.count('history'), 1)
+
+    def test_explicit_recovery_also_stops_candidate_before_reading_schema(self):
+        with self.fixture() as (d, args, base, events, state):
+            journal = {'source': NEW, 'previous': OLD, 'target': d.state_target(),
+                       'running_images': IMAGES, 'flyway_before': HISTORY, 'env_sha256': d.sha(base / 'production.env'),
+                       'candidate_attempted': True, 'backup_evidence': args.backup_evidence, 'phase': 'starting-candidate'}
+            d.write_json_atomic(base / 'deployment-state.json', journal)
+            state.update(candidate_attempted=True, stopped=False, commit_migration_on_stop=True, images=dict(NEXT))
+            with self.assertRaises(d.DeployFailure): d.recover_activation(args)
+            self.assertLess(events.index('confirm-candidate-stop'), events.index('history'))
+            self.assertNotIn('restore-up', events)
+
+    def test_database_writer_drain_uses_only_own_roles_and_times_out_closed(self):
+        spec = importlib.util.spec_from_file_location('writer_drain', ROOT / 'scripts/ops/deploy-folhea.py')
+        d = importlib.util.module_from_spec(spec); spec.loader.exec_module(d)
+        self.assertTrue(hasattr(d, 'wait_database_writers'), 'Read-only database writer drain is missing')
+        from unittest.mock import Mock
+        sql = Mock(side_effect=['1', '0', '0', '0'])
+        with patch.object(d, 'database_module', return_value=SimpleNamespace(sql=sql)), patch.object(d.time, 'sleep'):
+            d.wait_database_writers(ROOT, {}, timeout=1)
+        self.assertEqual(sql.call_count, 4)
+        for query, database, role in (call.args for call in sql.call_args_list):
+            self.assertIn((database, role), [('folhea', 'folhea_app'), ('folhea_keycloak', 'folhea_keycloak')])
+            self.assertIn('BEGIN READ ONLY', query)
+            self.assertNotIn('pg_terminate', query)
+        sql = Mock(return_value='1')
+        with patch.object(d, 'database_module', return_value=SimpleNamespace(sql=sql)), \
+             patch.object(d.time, 'monotonic', side_effect=[0, 2]), patch.object(d.time, 'sleep'):
+            with self.assertRaises(d.DeployFailure): d.wait_database_writers(ROOT, {}, timeout=1)
 
     def test_catchable_signal_handlers_restore_original_handlers(self):
         spec = importlib.util.spec_from_file_location('signals', ROOT / 'scripts/ops/deploy-folhea.py')
