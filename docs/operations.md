@@ -831,6 +831,78 @@ os arquivos públicos do runtime e as quatro imagens. `--reuse-transferred-from`
 é exclusivo para os mesmos quatro config digests já carregados e novamente
 atestados; não aceita igualdade apenas de tags. Não usar `prune` global.
 
+#### Uso diário pelo shell
+
+`scripts/ops/deploy-folhea.sh` é uma interface fina dessa mesma engine Python.
+O padrão é **PLANO**, sem SSH, Docker, testes ou escrita. Com `--source` completo,
+nem Git ou outros subprocessos são chamados; sem essa opção, o shell lê o HEAD
+e o status do checkout do próprio script com Git, sem atualizar o índice.
+Na execução, a fonte precisa ser o HEAD limpo/commitado desse checkout, mesmo
+quando informada explicitamente. O script funciona por caminho absoluto fora
+da raiz, mas não aceita symlink ou engine não versionada/alterada. O plano não
+comprova validade do alvo, dos dumps ou do recibo: a engine aplica esses guards
+quando a ação é executada.
+
+Há três ações separadas: `--stage` (padrão) prepara e transfere, **PARA e NÃO
+publica a versão**; `--review` pede à engine da candidata o registro da revisão;
+`--activate` pede o upgrade com o recibo. **Só `--execute` permite executar a ação
+selecionada.** Não há modo `all`, confirmação automática, bypass de gates,
+instalação inicial, recuperação ou otimização de transporte implícita.
+
+Na raiz de um checkout limpo, reutilize o mesmo alvo explícito nos três comandos.
+Os exemplos usam endereço e host reservados, sem destino privado embutido:
+
+```bash
+SOURCE="$(git rev-parse HEAD)"
+PREVIOUS='<SHA40 confirmado em current>'
+DEPLOY_ROOT='/srv/folhea'
+TARGET=(--host 'operator@server.example' --remote-root "$DEPLOY_ROOT" \
+  --project-name 'folhea-prod' --server-address '192.0.2.10')
+OUTPUT="$HOME/.local/state/folhea/packages/$SOURCE"
+REVIEW="$DEPLOY_ROOT/receipts/$SOURCE.backup-review.json"
+APP_DUMP="$DEPLOY_ROOT/backups/$SOURCE/<nome-real-do-dump-app>"
+IDP_DUMP="$DEPLOY_ROOT/backups/$SOURCE/<nome-real-do-dump-kc>"
+
+# Plano puro: nenhum build ou acesso ao servidor.
+./scripts/ops/deploy-folhea.sh --source "$SOURCE" "${TARGET[@]}" --output "$OUTPUT"
+
+# 1. Executa os gates/builds da engine e transfere a candidata; NÃO ativa.
+./scripts/ops/deploy-folhea.sh --execute --stage --source "$SOURCE" \
+  "${TARGET[@]}" --output "$OUTPUT"
+
+# PARE: crie os dois backups reais PG16 conforme a seção abaixo. Confirme os
+# nomes dos dumps e current; revise schema/dados. O shell não faz isso por você.
+# 2. SOMENTE após essa revisão humana, registre-a junto aos dois dumps reais.
+./scripts/ops/deploy-folhea.sh --execute --review --source "$SOURCE" \
+  "${TARGET[@]}" --expected-current "$PREVIOUS" --app-backup "$APP_DUMP" \
+  --idp-backup "$IDP_DUMP" --backup-evidence "$REVIEW" --schema-compatible-reviewed
+
+# 3. Use o mesmo source/alvo/current e o recibo validado para pedir o upgrade.
+./scripts/ops/deploy-folhea.sh --execute --activate --source "$SOURCE" \
+  "${TARGET[@]}" --expected-current "$PREVIOUS" --backup-evidence "$REVIEW" \
+  --schema-compatible-reviewed
+```
+
+Retire `--execute` ou use `--dry-run` para apenas planejar qualquer uma dessas
+ações; não combine os dois. As opções de revisão são obrigatórias para review e
+activate e representam uma declaração do operador, **não aprovação calculada
+pelo shell**. A engine valida os dois dumps, hashes, privacidade, histórico,
+current e vínculo do recibo antes de registrar/ativar. O shell não gera recibo,
+não cria backups, não prova restore/RTO, não decide compatibilidade e não faz
+downgrade de banco. Uma falha interrompe a sequência e preserva o código de
+saída da engine/SSH, sem transferir, revisar ou ativar automaticamente depois.
+Depois de `stage`, não o repita para uma candidata já transferida: a engine não
+sobrescreve releases. Investigue a falha e use a fase apropriada documentada.
+
+Não há `--env-file` nessa CLI: somente a engine remota lê e valida
+`REMOTE_ROOT/production.env` existente, privado e próprio. O shell não lê,
+sourceia, imprime ou transporta esse arquivo. Se necessário, prefixe `PATH`,
+`JAVA_HOME` e `TRIVY_CACHE_DIR` somente no comando com suas toolchains e cache
+próprio gravável; o shell não instala ferramentas nem muda o PATH global.
+Manifesto/OCI, CAS, namespace, recursos, backups e rollback continuam sendo
+responsabilidade da engine. NPM, PostgreSQL compartilhado e outros sistemas não
+recebem comandos de ciclo de vida desse wrapper.
+
 ### Backup e revisão antes de upgrade
 
 `--expected-current` é o SHA completo da release atualmente ativa, não a revisão
