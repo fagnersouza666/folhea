@@ -1,6 +1,6 @@
 # DEPLOY-01 Ambiente de teste no servidor atual (NPM e PostgreSQL compartilhados)
 
-Status: Versão 2 (critério 10 alterado no PR #61) aguardando ok do Mestre
+Status: v3 aguardando ok do Mestre (correção do nome real do banco, regra não muda)
 
 Histórico: v1 aprovada pelo Mestre em 14/10/2026 (versão f790c8e). v2: o PR #61 trocou a busca com `rg` do critério 10 por `scripts/ci/validate-domain-surface.mjs` e tirou os domínios legados literais do Contexto e do Escopo item 6.
 
@@ -34,7 +34,7 @@ Colocar o Folhea no ar em https://folhea.app como ambiente de teste fechado (nã
    - NPM: o proxy host de folhea.app envia `X-Forwarded-For` e `X-Forwarded-Proto` (feito no painel, fora do repo).
 3. PostgreSQL compartilhado
    - Bancos `folhea` e `folhea_keycloak`, com usuários próprios (`folhea` e `folhea_keycloak`), sem SUPERUSER, CREATEDB nem CREATEROLE, donos só dos seus bancos.
-   - `REVOKE CONNECT ON DATABASE ... FROM PUBLIC` em `folhea` e `folhea_keycloak`, com `GRANT CONNECT` só ao dono. A DEPLOY-01 não mexe no banco `acertoapp`: o GRANT/REVOKE CONNECT dele é do card DB-01 do AcertoAPP.
+   - `REVOKE CONNECT ON DATABASE ... FROM PUBLIC` em `folhea` e `folhea_keycloak`, com `GRANT CONNECT` só ao dono. A DEPLOY-01 não mexe no banco `acerto`: o GRANT/REVOKE CONNECT dele é do card DB-01 do AcertoAPP.
    - Script SQL idempotente de provisionamento em `infra/postgres/` com placeholders, rodado uma vez à mão por um admin. Senhas nunca no repo.
    - No overlay de produção o serviço `postgres` do compose não sobe; `DB_JDBC_URL` e `KC_DB_URL` apontam para o host do PostgreSQL compartilhado por variável.
    - Backup por banco (`pg_dump` só de `folhea` e `folhea_keycloak`), ajustando `scripts/ops/backup-postgres.sh` e o timer `infra/systemd/folhea-backup.*`.
@@ -50,7 +50,7 @@ Colocar o Folhea no ar em https://folhea.app como ambiente de teste fechado (nã
 ## Critérios de aceite
 
 1. No PostgreSQL compartilhado existem os bancos `folhea` e `folhea_keycloak`, cada um com usuário próprio sem SUPERUSER, CREATEDB e CREATEROLE.
-2. `psql -U folhea -d acertoapp` falha com `permission denied for database`.
+2. `psql -U folhea -d acerto` falha com `permission denied for database`.
 3. No sentido contrário, o usuário do AcertoAPP tentando `psql -d folhea` (e `-d folhea_keycloak`) falha com `permission denied for database`.
 4. O backup roda por banco e gera dumps só de `folhea` e `folhea_keycloak`; o restore de teste (`scripts/ops/verify-recovery.sh`) passa.
 5. O Caddyfile tem `servers { trusted_proxies static ... }` com a subnet do NPM (subnet fixa declarada no compose), não tem `header_up X-Forwarded-For {remote_host}`, e o log usa `{client_ip}`; uma requisição de fora para https://folhea.app aparece com o IP real no log do Caddy e no do Quarkus, e não com o IP da rede Docker do NPM.
@@ -62,7 +62,7 @@ Colocar o Folhea no ar em https://folhea.app como ambiente de teste fechado (nã
 11. O domínio público vem só de `PUBLIC_DOMAIN` (e variáveis derivadas no `.env`); trocar o valor no `.env` muda o domínio sem mexer em código.
 12. Nenhum segredo, IP real, nome de host interno ou detalhe de infra do servidor aparece em código, docs ou exemplos; só placeholders (ex.: `<NPM_SUBNET>`, `<DB_HOST>`, `<TOKEN>`). O `security.yml` (varredura de segredos) passa.
 13. Um deploy do Folhea não derruba nem reinicia nenhum container do AcertoAPP: comparar `docker ps --format '{{.Names}} {{.Status}}'` dos containers do AcertoAPP antes e depois, com o mesmo uptime.
-14. O script do Folhea faz `REVOKE CONNECT ... FROM PUBLIC` só em `folhea` e `folhea_keycloak` e não altera o banco `acertoapp` nem configuração do PostgreSQL (sem reiniciar e sem mudar `postgresql.conf`).
+14. O script do Folhea faz `REVOKE CONNECT ... FROM PUBLIC` só em `folhea` e `folhea_keycloak` e não altera o banco `acerto` nem configuração do PostgreSQL (sem reiniciar e sem mudar `postgresql.conf`).
 15. Login e cadastro manual funcionam em https://folhea.app com o cadastro público do Keycloak desligado.
 
 ## Dependências
@@ -70,7 +70,7 @@ Colocar o Folhea no ar em https://folhea.app como ambiente de teste fechado (nã
 - DOMINIO-01 Parte A (configuração do login e `contato@folhea.app`).
 - FIX-03 (`/healthz` público retornando 200).
 - SEG-02.
-- DB-01 do AcertoAPP (https://trello.com/c/ztRsXeFL): faz o GRANT/REVOKE CONNECT no banco `acertoapp`, necessário para o critério 2.
+- DB-01 do AcertoAPP (https://trello.com/c/ztRsXeFL): faz o GRANT/REVOKE CONNECT no banco `acerto`, necessário para o critério 2.
 
 ## Fora do escopo
 
