@@ -833,6 +833,67 @@ atestados; não aceita igualdade apenas de tags. Não usar `prune` global.
 
 #### Uso diário pelo shell
 
+Para publicar com **uma chamada**, configure o alvo uma única vez:
+
+~~~bash
+install -d -m 700 "$HOME/.config/folhea"
+install -m 600 scripts/ops/deploy-config.example.json "$HOME/.config/folhea/deploy.json"
+# Edite esse JSON com o alvo autorizado e output_parent absoluto/privado/próprio.
+# O exemplo usa host/IP reservados e não é uma configuração operacional.
+~~~
+
+O JSON contém somente host, remote_root, project_name, server_address e
+output_parent. O arquivo precisa ser regular, próprio e modo 0600; campos
+extras são recusados. Não coloque senha, token, chave ou conteúdo de
+production.env nele. Ele é lido como dados JSON, nunca com source/eval.
+
+Num checkout limpo e commitado da versão revisada, com os gates de CI aprovados
+e toolchains/cache disponíveis, este comando **executa o deploy de produção**:
+
+~~~bash
+./scripts/ops/deploy-folhea.sh --production
+~~~
+
+Para escolher outro arquivo, use --production --config /caminho/privado/deploy.json.
+FOLHEA_DEPLOY_CONFIG também seleciona esse arquivo, sem alterar o PATH global.
+Para **somente simular**, sem terminal, SSH, Docker, build ou escrita:
+
+~~~bash
+./scripts/ops/deploy-folhea.sh --production --dry-run
+~~~
+
+A produção valida configuração, HEAD limpo e terminal **antes** de gastar com
+build ou acessar o servidor. O source padrão é esse HEAD; --source SHA40 precisa
+corresponder a ele. Observa e verifica a release ativa e usa seu SHA como
+expected-current em todo o restante do fluxo. --expected-current SHA40
+opcional também pode fixar o valor esperado pelo operador; uma divergência
+interrompe antes de preparar.
+
+O comando conduz, em ordem: preflight próprio, prepare local e transfer pela
+engine, dois backups reais PG16 e cópias privadas/guards pelos helpers existentes,
+resumo de previous/candidata/caminhos/checksums e **revisão explícita do operador**.
+Somente após digitar PUBLICAR, declarando que revisou código, migrations,
+Keycloak e plano de recuperação dessa candidata, delega record-backup-review e
+activate upgrade à mesma engine. O prompt não decide ou comprova compatibilidade
+por você. Não há aprovação antecipada ou não interativa nesse modo.
+
+Os backups usam apenas APP folhea/folhea_app e KC folhea_keycloak/folhea_keycloak;
+endpoint/identidade PG vêm do modelo privado validado pela engine em memória.
+Dumps, sidecars e cópias ficam em diretórios novos próprios sob
+REMOTE_ROOT/backups, com modos 0700/0600 e nomes reais do helper. A cópia local
+não é offsite; dumps sequenciais não provam consistência entre os bancos,
+restore ou RTO. O recibo só é criado pela engine depois da declaração explícita
+e da validação dos dumps/TOC/hashes/históricos.
+
+Cancelamento, erro, current alterado ou perda da revisão impede ativar; bundle,
+backups e recibos existentes são preservados. Não há retry cego ou cleanup
+global. Não repita uma transferência já concluída sem investigar a fronteira
+da falha; os modos avançados abaixo permanecem disponíveis. Depois de um
+activate iniciado, journal/rollback e recusa de downgrade continuam na engine.
+Nenhum ciclo de vida de NPM, PG compartilhado ou outros sistemas foi acrescentado.
+
+##### Modos avançados preservados
+
 `scripts/ops/deploy-folhea.sh` é uma interface fina dessa mesma engine Python.
 O padrão é **PLANO**, sem SSH, Docker, testes ou escrita. Com `--source` completo,
 nem Git ou outros subprocessos são chamados; sem essa opção, o shell lê o HEAD
@@ -888,7 +949,7 @@ ações; não combine os dois. As opções de revisão são obrigatórias para r
 activate e representam uma declaração do operador, **não aprovação calculada
 pelo shell**. A engine valida os dois dumps, hashes, privacidade, histórico,
 current e vínculo do recibo antes de registrar/ativar. O shell não gera recibo,
-não cria backups, não prova restore/RTO, não decide compatibilidade e não faz
+nesses modos não cria backups, não prova restore/RTO, não decide compatibilidade e não faz
 downgrade de banco. Uma falha interrompe a sequência e preserva o código de
 saída da engine/SSH, sem transferir, revisar ou ativar automaticamente depois.
 Depois de `stage`, não o repita para uma candidata já transferida: a engine não
