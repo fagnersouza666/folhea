@@ -30,6 +30,13 @@ http://:80 {
 			header Cache-Control no-store
 			respond 421
 		}
+		# Public edge health is available only after peer and Host validation.
+		# It reports Caddy availability, without querying private dependencies.
+		@health path /healthz
+		handle @health {
+			header Cache-Control no-store
+			respond 200
+		}
 		@private-endpoints path /admin /admin/* /q /q/* /api/openapi /api/openapi/*
 		handle @private-endpoints {
 			header Cache-Control no-store

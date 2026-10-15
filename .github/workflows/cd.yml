@@ -107,7 +107,7 @@ jobs:
           DEPLOY_HOOK: ${{ secrets.PRODUCTION_DEPLOY_HOOK }}
           HEALTHCHECK_URL: ${{ vars.PRODUCTION_HEALTH_URL }}
           HEALTHCHECK_PATHS: ${{ vars.PRODUCTION_HEALTH_PATHS || '/q/health/live,/q/health/ready' }}
-        if: env.HEALTHCHECK_URL != '' && env.DEPLOY_HOOK != ''
+        if: env.HEALTHCHECK_URL != ''
         run: node scripts/ci/health-check.mjs
       - name: Explain health-check contract
         env:
