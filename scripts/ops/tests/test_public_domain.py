@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 
 
@@ -10,11 +11,11 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class PublicDomainComposeTest(unittest.TestCase):
-    def model(self, variables=None, production=False):
+    def model(self, variables=None, production=False, env_file=None):
         environment = {key: value for key, value in os.environ.items()
                        if key in {"PATH", "HOME", "DOCKER_CONFIG"}}
         environment.update(variables or {})
-        command = ["docker", "compose", "--env-file", str(ROOT / ".env.example"),
+        command = ["docker", "compose", "--env-file", str(env_file or ROOT / ".env.example"),
                    "-f", str(ROOT / "docker-compose.yml")]
         if production:
             command += ["-f", str(ROOT / "docker-compose.prod.yml")]
@@ -74,6 +75,23 @@ class PublicDomainComposeTest(unittest.TestCase):
         self.assertEqual(backend["OIDC_TOKEN_ISSUER"], "http://localhost:8180/realms/folhea")
         self.assertEqual(services["keycloak"]["environment"]["KC_HOSTNAME"],
                          "http://localhost:8180")
+
+    def test_legacy_env_without_public_origin_keeps_its_explicit_oidc_origin(self):
+        origin = "https://localhost:9443"
+        with tempfile.TemporaryDirectory(prefix="folhea-domain-config-") as directory:
+            fixture = Path(directory) / "legacy.env"
+            lines = []
+            for line in (ROOT / ".env.example").read_text().splitlines():
+                name = line.partition("=")[0]
+                if name == "PUBLIC_ORIGIN":
+                    continue
+                if name in {"OIDC_PUBLIC_ORIGIN", "SECURITY_CANONICAL_ORIGIN",
+                            "SECURITY_ALLOWED_ORIGINS", "CORS_ORIGINS"}:
+                    line = name + "=" + origin
+                lines.append(line)
+            fixture.write_text("\n".join(lines) + "\n")
+            fixture.chmod(0o600)
+            self.assert_origin(self.model(env_file=fixture), "localhost", origin)
 
 
 if __name__ == "__main__":

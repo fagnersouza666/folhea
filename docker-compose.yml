@@ -113,7 +113,7 @@ services:
       # TLS terminates at Caddy; the private BFF listener must accept HTTP.
       QUARKUS_HTTP_INSECURE_REQUESTS: enabled
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-localhost}
-      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://${PUBLIC_DOMAIN:-localhost}}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-${OIDC_PUBLIC_ORIGIN:-https://${PUBLIC_DOMAIN:-localhost}}}
       OIDC_PUBLIC_ORIGIN: ${OIDC_PUBLIC_ORIGIN:?OIDC_PUBLIC_ORIGIN must be provided}
       DB_USERNAME: ${DB_USERNAME:-folhea}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be provided by an external secret or .env}
