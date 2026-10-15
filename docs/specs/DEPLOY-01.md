@@ -16,7 +16,7 @@ Colocar o Folhea no ar em https://folhea.app como ambiente de teste fechado (nã
 - O Quarkus em `%prod` usa `quarkus.http.proxy.trusted-proxies=${TRUSTED_PROXIES}`, que no compose aponta para o IP do Caddy (`CADDY_IPV4`).
 - O backend já tem healthcheck em `/q/health/ready` no compose. O Caddy responde `/healthz` (hoje retorna 404 em produção, tratado na FIX-03).
 - O CD (`.github/workflows/cd.yml`) dispara `PRODUCTION_DEPLOY_HOOK` e depois roda `scripts/ci/health-check.mjs` em `PRODUCTION_HEALTH_URL` com `PRODUCTION_HEALTH_PATHS` (padrão `/q/health/live,/q/health/ready`, que o Caddy não expõe).
-- O repo ainda tem 145 ocorrências de `folhea.com.br` em 49 arquivos (defaults do `application.properties`, URIs de problema, SEO, sitemap, docs) e 1 de `fagnersouza.tech` no `NOTICE`.
+- O inventário da base acima registrou 145 ocorrências do domínio comercial anterior em 49 arquivos (defaults do `application.properties`, URIs de problema, SEO, sitemap, docs) e uma referência ao domínio técnico anterior no `NOTICE`. Estes números são históricos; a limpeza de DOMINIO-01 não altera os demais requisitos desta spec.
 
 ## Escopo
 
@@ -42,7 +42,7 @@ Colocar o Folhea no ar em https://folhea.app como ambiente de teste fechado (nã
    - O hook retorna erro (e o CD falha) se o `--wait` não terminar com o backend saudável em `/q/health/ready`.
    - CD: `PRODUCTION_HEALTH_URL` aponta para a URL pública e `PRODUCTION_HEALTH_PATHS=/healthz`.
    - Exemplos de `hooks.json`, unit systemd e trecho de proxy só com placeholders.
-6. Limpeza de domínio: trocar `folhea.com.br` e `folhea.fagnersouza.tech` por `folhea.app` ou por variável, incluindo os testes que verificam esses valores.
+6. Limpeza de domínio: trocar os dois domínios legados identificados por `folhea.app` ou por variável, incluindo os testes que verificam esses valores.
 7. Cadastro: `registrationAllowed: false` e usuários criados à mão. O cadastro só é ligado durante o teste do Avaliador e desligado depois.
 
 ## Critérios de aceite
@@ -56,7 +56,7 @@ Colocar o Folhea no ar em https://folhea.app como ambiente de teste fechado (nã
 7. O healthcheck do serviço `backend` no compose usa `/q/health/ready`.
 8. O hook é chamado pelo Caddy, no mesmo proxy host de folhea.app no NPM, exige o token e roda `docker compose ... up -d --build --wait`; se o backend não ficar saudável, o hook retorna erro e o job de deploy do CD falha.
 9. O job `health-check` do CD verifica o `/healthz` público via `PRODUCTION_HEALTH_URL` e falha se não receber 200.
-10. `rg "folhea\.fagnersouza\.tech|folhea\.com\.br"` na raiz do repo não retorna nada.
+10. `node scripts/ci/validate-domain-surface.mjs` na raiz não encontra os domínios legados nos textos rastreados, incluindo literais escapados.
 11. O domínio público vem só de `PUBLIC_DOMAIN` (e variáveis derivadas no `.env`); trocar o valor no `.env` muda o domínio sem mexer em código.
 12. Nenhum segredo, IP real, nome de host interno ou detalhe de infra do servidor aparece em código, docs ou exemplos; só placeholders (ex.: `<NPM_SUBNET>`, `<DB_HOST>`, `<TOKEN>`). O `security.yml` (varredura de segredos) passa.
 13. Um deploy do Folhea não derruba nem reinicia nenhum container do AcertoAPP: comparar `docker ps --format '{{.Names}} {{.Status}}'` dos containers do AcertoAPP antes e depois, com o mesmo uptime.

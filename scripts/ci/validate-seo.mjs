@@ -5,7 +5,11 @@ import { basename, dirname, join, relative } from 'node:path';
 
 const dist = process.argv[2] ?? 'frontend/dist';
 const reportPath = process.argv[3] ?? 'seo-report/seo-validation.txt';
-const canonicalOrigin = (process.env.SEO_CANONICAL_ORIGIN ?? 'https://folhea.com.br').replace(/\/+$/, '');
+const { publicOrigin: canonicalOrigin } = JSON.parse(readFileSync(new URL('../../shared/public-contract.json', import.meta.url), 'utf8'));
+const origin = new URL(canonicalOrigin);
+if (origin.protocol !== 'https:' || origin.origin !== canonicalOrigin || origin.username || origin.password) {
+  throw new Error('shared/public-contract.json must declare a canonical HTTPS publicOrigin');
+}
 const failures = [];
 
 const publicRoutes = [
@@ -138,6 +142,14 @@ function validateSitemapUrls(content, source) {
   for (const url of actual) if (!expected.has(url)) failures.push(`${source}: unexpected non-public URL ${url}`);
 }
 
+function validateRobots(content, source) {
+  if (!/user-agent\s*:/i.test(content)) failures.push(`${source}: missing User-agent directive`);
+  const sitemaps = [...content.matchAll(/^\s*sitemap\s*:\s*(\S+)\s*$/gim)].map(match => match[1]);
+  if (sitemaps.length !== 1 || sitemaps[0] !== `${canonicalOrigin}/sitemap.xml`) {
+    failures.push(`${source}: expected one Sitemap directive for ${canonicalOrigin}/sitemap.xml`);
+  }
+}
+
 function validateStaticSite() {
   if (!existsSync(dist)) {
     failures.push(`missing SSG output directory: ${dist}`);
@@ -188,9 +200,7 @@ function validateStaticSite() {
   const robotsFile = join(siteRoot, 'robots.txt');
   requireFile(robotsFile, 'robots.txt');
   if (existsSync(robotsFile)) {
-    const robotsContent = readFileSync(robotsFile, 'utf8');
-    if (!/user-agent\s*:/i.test(robotsContent)) failures.push(`robots.txt has no User-agent directive: ${robotsFile}`);
-    if (!/sitemap\s*:/i.test(robotsContent)) failures.push(`robots.txt has no Sitemap directive: ${robotsFile}`);
+    validateRobots(readFileSync(robotsFile, 'utf8'), robotsFile);
   }
 
   requireFile(join(siteRoot, '404.html'), '404 page');
@@ -310,8 +320,7 @@ async function validateHttp() {
 
   for (const [path, contentType, validator] of [
     ['/robots.txt', 'text/plain', (body) => {
-      if (!/user-agent\s*:/i.test(body)) failures.push('HTTP /robots.txt: missing User-agent directive');
-      if (!/sitemap\s*:/i.test(body)) failures.push('HTTP /robots.txt: missing Sitemap directive');
+      validateRobots(body, 'HTTP /robots.txt');
     }],
     ['/sitemap.xml', 'xml', (body) => {
       if (!/<urlset[\s>]/i.test(body)) failures.push('HTTP /sitemap.xml: invalid sitemap root');

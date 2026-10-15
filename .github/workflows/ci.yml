@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: '26.11.1'
+  NODE_VERSION: '26.12.0'
   JAVA_VERSION: '27'
 
 jobs:
@@ -116,7 +116,15 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: test -f package.json && test -f package-lock.json
+      - name: Check the shared public contract and retired-domain surface
+        working-directory: .
+        run: |
+          node scripts/ci/generate-public-contract.mjs --check
+          node --test scripts/ci/tests/public-contract.test.mjs scripts/ci/tests/seo-validator.test.mjs scripts/ci/tests/domain-surface.test.mjs
+          node scripts/ci/validate-domain-surface.mjs
       - run: npm ci
+      - run: npm run check:seo
+      - run: npm run test:seo
       - run: npm run lint
       - run: npm run build -- --configuration production
       - run: npm run build:ssg -- --configuration production

@@ -155,15 +155,15 @@ if (from == null && to == null) return sessions.allOwned(userId).stream().map(Se
 ### SEC-006: Realm de produção importa redirect URIs de localhost
 
 **Localização:** infra/keycloak/folhea-realm.json:28-37
-**Descrição:** O mesmo JSON de importação lista `http://localhost:8080/auth/callback` e `https://localhost:8443/auth/callback` junto com `https://folhea.com.br/auth/callback`. O BFF fixa o callback, então o impacto prático é menor com PKCE; ainda assim mistura ambiente e viola a regra de redirect URI exata do baseline.
+**Descrição:** O mesmo JSON de importação lista `http://localhost:8080/auth/callback` e `https://localhost:8443/auth/callback` junto com o callback HTTPS da origem pública então configurada. O BFF fixa o callback, então o impacto prático é menor com PKCE; ainda assim mistura ambiente e viola a regra de redirect URI exata do baseline.
 **Referência:** OWASP A07:2021 | CWE-601
 
 **Evidência:**
 
-**folhea-realm.json:28-32:**
+**folhea-realm.json:28-32:** (host histórico anonimizado como `public.example`)
 ```json
 "redirectUris": [
-  "https://folhea.com.br/auth/callback",
+  "https://public.example/auth/callback",
   "http://localhost:8080/auth/callback",
   "https://localhost:8443/auth/callback"
 ]
@@ -173,7 +173,7 @@ if (from == null && to == null) return sessions.allOwned(userId).stream().map(Se
 
 **Se não corrigido:** Drift de configuração e falha em auditoria de OAuth.
 
-**Correção:** Realm de produção só com `https://folhea.com.br/auth/callback`. Localhost em arquivo/overlay de desenvolvimento.
+**Correção:** Realm de produção só com o callback exato `${OIDC_PUBLIC_ORIGIN}/auth/callback`. Localhost em arquivo/overlay de desenvolvimento.
 
 ### SEC-007: Cliente OIDC público no BFF
 
@@ -387,7 +387,7 @@ Duas réplicas sem Redis (SEC-002) → CSRF 403 intercalado e rate limit por nó
 | PLAY-14 LGPD | Sem CPF. E-mail e hábitos de leitura (SEC-008) |
 | PLAY-15 Deps | npm produção limpo; Keycloak/Caddy atrasados; Maven/Trivy local não reexecutados nesta sessão |
 
-Falsos positivos descartados: `SecurityPolicyTest` aceita `preview.folhea.com.br` só no fixture do teste, não no default de produção (`https://folhea.com.br`). `start-dev` no compose local é intencional se o overlay de prod for usado. Express em `frontend/src/server.ts` não entra na imagem de runtime (Caddy serve estático).
+Falsos positivos descartados: `SecurityPolicyTest` aceitava um subdomínio de preview só no fixture do teste, não na origem pública configurada à época. `start-dev` no compose local é intencional se o overlay de prod for usado. Express em `frontend/src/server.ts` não entra na imagem de runtime (Caddy serve estático).
 
 ---
 

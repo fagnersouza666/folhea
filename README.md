@@ -120,11 +120,11 @@ abaixo são o contrato usado pelo CI; execute-os antes de abrir um pull request.
 
 ### Pré-requisitos
 
-O frontend usa Angular 22.2.2 e o builder `@angular/build` 22.2.2. As dependências
+O frontend usa Angular 22.2.3 e o builder `@angular/build` 22.2.2. As dependências
 de build são fixadas no lockfile validado; a migração remove a cadeia antiga de
 build, e `proxy-addr` 2.0.8 corrige a versão vulnerável detectada pelo Trivy.
 
-- Node.js26.11.1 estável e npm (engines Angular: `^22.22.3 || ^24.15.0 || >=26.0.0`);
+- Node.js26.12.0 estável e npm (engines Angular: `^22.22.3 || ^24.15.0 || >=26.0.0`);
 - Java 27 estável e Docker (necessário para Dev Services/Testcontainers);
 - Docker Compose, quando for necessário executar a stack completa.
 
@@ -158,6 +158,17 @@ npm run build:ssg -- --configuration production
 npm run test:coverage
 node ../scripts/ci/validate-api-contract.mjs contract-report.txt
 node ../scripts/ci/validate-seo.mjs dist seo-report/seo-validation.txt
+```
+
+A origem SEO e os IDs relativos de problemas vêm de `shared/public-contract.json`.
+Após mudar o catálogo, gere Java/TypeScript com `node scripts/ci/generate-public-contract.mjs`
+e os assets com `npm --prefix frontend run generate:seo`; commite os outputs.
+O CI verifica sincronização e referências a domínios aposentados antes de regenerar:
+
+```bash
+node scripts/ci/generate-public-contract.mjs --check
+node scripts/ci/validate-domain-surface.mjs
+npm --prefix frontend run check:seo
 ```
 
 O build SSG deve gerar as páginas públicas. O teste de SEO executado no CI
@@ -243,5 +254,5 @@ force-push. Não permita bypass para merges normais. O workflow publica logs,
 relatórios de teste, relatório Playwright e artefato SEO por 14 dias; esses
 artefatos são a evidência da aprovação.
 
-Build frontend/CI: Node26.11.1 estável e TypeScript6.0.3, compatíveis com
+Build frontend/CI: Node26.12.0 estável e TypeScript6.0.3, compatíveis com
 Angular22.2.2. O runtime do frontend é estático no Caddy e não contém Node.

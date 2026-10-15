@@ -13,6 +13,38 @@ de autenticação, além da proteção de indexação.
 API, BFF e IdP possuem handlers próprios no mesmo grupo do fallback, para
 que o servidor de arquivos nunca intercepte as chamadas de autenticação.
 
+## Contrato público e geração SEO (DOMINIO-01 B)
+
+`shared/public-contract.json` contém a origem SEO e os IDs de problemas relativos.
+O backend continua recebendo sua origem de runtime pelas variáveis documentadas;
+o catálogo de build não altera OIDC, CSRF, cookies ou configuração do servidor.
+Java `ProblemTypes` e TypeScript `PROBLEM_TYPES`/`PUBLIC_SITE_ORIGIN` são outputs
+versionados, gerados pelo mesmo script. Comparadores usam igualdade exata aos
+IDs `/problems/slug`, sem aliases de URLs absolutas.
+
+Ao editar o catálogo, na raiz do repositório:
+
+```sh
+node scripts/ci/generate-public-contract.mjs
+npm --prefix frontend run generate:seo
+node scripts/ci/generate-public-contract.mjs --check
+npm --prefix frontend run check:seo
+node scripts/ci/validate-domain-surface.mjs
+```
+
+Commite o catálogo e os outputs Java, TypeScript, index, robots e sitemap juntos.
+O CI verifica drift antes do build, porque o build regenera os assets SEO.
+`validate-seo.mjs` lê a mesma `publicOrigin`, sem fallback de domínio ou override
+`SEO_CANONICAL_ORIGIN`. `SEO_BASE_URL` continua sendo apenas o alvo opcional dos
+checks HTTP; não redefine a origem dos metadados. Os testes negativos usam
+origens reservadas genéricas. O gate de domínio examina todos os textos
+rastreados, inclusive docs/specs/fixtures e pontos escapados; reporta só arquivo
+e linha, ignora binários e recusa symlinks sem ler seus destinos.
+
+O estágio frontend do Docker recebe somente o JSON no diretório irmão `shared`.
+O gerador SEO não depende de Java nesse estágio. O check completo Java+TS roda
+na raiz do CI; Maven isolado usa o Java já gerado e não exige Node.
+
 ## Deploy
 
 1. Instale Docker Engine com Docker Compose atual e prepare um host Linux com
@@ -479,10 +511,10 @@ O Caddy mantém emissão/renovação TLS automática, mas usa um redirecionament
 HTTP explícito para `OIDC_PUBLIC_ORIGIN`, incluindo a porta9443 no ambiente
 local. Isso evita que o redirect automático do Caddy perca a porta publicada.
 
-A etapa de build e o CI usam Node26.11.1 estável, verificado em
+Em 15/10/2026, a etapa de build e o CI foram alinhados ao Node26.12.0 estável, verificado em
 [releases oficiais](https://nodejs.org/dist/index.json) e pinado por digest na
-imagem Docker. Angular22.2.2 aceita `^22.22.3 || ^24.15.0 || >=26.0.0`;
-TypeScript6.0.3 satisfaz o peer `>=6.0 <6.1`. A escolha de26 segue a versão
+imagem Docker. Angular22.2.3 aceita `^22.22.3 || ^24.15.0 || >=26.0.0`;
+TypeScript6.0.3 satisfaz o peer `>=6.0 <6.1`. A referência Node26.11.1 na lista de 11/10 acima é histórica. A escolha de26 segue a versão
 estável mais recente; Node24.15+ também atende ao contrato de engines.
 Os runtimes publicados pelo Compose contêm apenas Caddy, JVM e Keycloak.
 

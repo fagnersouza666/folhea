@@ -1,5 +1,7 @@
 # Bug Report — Folhea
 
+Nota DOMINIO-01 (15/10/2026): os exemplos de IDs abaixo foram alinhados ao catálogo público atual; datas, achados e decisões históricas foram preservados.
+
 > Data: 06/09/2026 | Stack: Java 25, Quarkus 3.33.3, Hibernate ORM/Panache, Flyway, OIDC BFF, PostgreSQL 18, Angular 22, TypeScript
 > Modo: **full**
 > **Status:** corrigido em 06/09/2026 — os 20 itens abaixo foram implementados conforme o plano de correções.
@@ -273,7 +275,7 @@ Violação de unique em `identity_subject` (BUG-008), falha de Hibernate ou NPE 
 public Response toResponse(Throwable exception) {
     return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
             .type(MediaType.valueOf("application/problem+json"))
-            .entity(new ProblemResponse(URI.create("https://folhea.com.br/problems/internal-error"),
+            .entity(new ProblemResponse(URI.create(ProblemTypes.INTERNAL_ERROR),
                     "Erro interno", 500, "Não foi possível concluir a operação."))
             .build();
 }
@@ -288,7 +290,7 @@ public Response toResponse(Throwable exception) {
     LOG.error("Unhandled exception", exception);
     return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
             .type(MediaType.valueOf("application/problem+json"))
-            .entity(new ProblemResponse(URI.create("https://folhea.com.br/problems/internal-error"),
+            .entity(new ProblemResponse(URI.create(ProblemTypes.INTERNAL_ERROR),
                     "Erro interno", 500, "Não foi possível concluir a operação."))
             .build();
 }
@@ -520,7 +522,7 @@ O restante da API é em português e sanitizado (`UnhandledExceptionMapper`, `Pr
 
 **Solução:**
 ```java
-.entity(new ProblemResponse(URI.create("https://folhea.com.br/problems/invalid-request"),
+.entity(new ProblemResponse(URI.create(ProblemTypes.INVALID_REQUEST),
         "Requisição inválida", 400, "A requisição não atende ao contrato esperado."))
 ```
 
@@ -622,7 +624,7 @@ public Response create(@Valid CreateSessionRequest request) { ... }
 private void ensureBookOwned(UUID userId, UUID bookId) {
     if (bookId == null) invalid("Informe o livro da sessão.");
     if (books.findOwned(userId, bookId) == null) {
-        throw new ProblemException(404, "https://folhea.com.br/problems/book-not-found",
+        throw new ProblemException(404, ProblemTypes.BOOK_NOT_FOUND,
                 "Livro não encontrado", "Livro inexistente ou não pertencente ao usuário.");
     }
 }
