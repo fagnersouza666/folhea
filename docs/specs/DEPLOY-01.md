@@ -1,6 +1,8 @@
 # DEPLOY-01 Ambiente de teste no servidor atual (NPM e PostgreSQL compartilhados)
 
-Status: Versão final aguardando ok do Mestre
+Status: Versão 2 (critério 10 alterado no PR #61) aguardando ok do Mestre
+
+Histórico: v1 aprovada pelo Mestre em 14/10/2026 (versão f790c8e). v2: o PR #61 trocou a busca com `rg` do critério 10 por `scripts/ci/validate-domain-surface.mjs` e tirou os domínios legados literais do Contexto e do Escopo item 6.
 
 Base: decisões do Arquiteto de 14/10/2026 (comentário no card e respostas às perguntas do Analista) e código do repo em `main` (b10e387). Substitui o plano antigo de VPS exclusiva, que não deve ser implementado.
 
