@@ -46,7 +46,7 @@ Tirar do repositório e da configuração todo resto de `folhea.com.br` e `folhe
 
 ## Dependências
 - Caixa `contato@folhea.app` precisa existir e receber e-mail antes de ir ao ar.
-- Mestre confirma o IP `195.35.16.186` como servidor do Folhea.
+- Mestre confirma o IP do servidor (ver DNS de folhea.app) como servidor do Folhea.
 - Libera o teste do Avaliador (precisa do login em folhea.app).
 
 ## Fora do escopo
