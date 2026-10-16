@@ -146,6 +146,7 @@ case "$BACKUP_FILE" in
   *.gz)
     gzip -dc -- "$BACKUP_FILE" |
       ops_postgres_exec pg_restore \
+        --single-transaction \
         --exit-on-error \
         --clean \
         --if-exists \
@@ -158,6 +159,7 @@ case "$BACKUP_FILE" in
   *)
     cat -- "$BACKUP_FILE" |
       ops_postgres_exec pg_restore \
+        --single-transaction \
         --exit-on-error \
         --clean \
         --if-exists \

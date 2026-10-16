@@ -67,6 +67,15 @@ case "$command_name" in
     printf 'PGDMP fake custom-format dump\n'
     ;;
   pg_restore)
+    if (( list_mode == 0 )); then
+      # The transaction flag is part of our external pg_restore contract.
+      # Its actual database effect is covered by test_restore_atomicity.py.
+      transaction=0
+      for argument in "$@"; do
+        [[ "$argument" == --single-transaction ]] && transaction=1
+      done
+      (( transaction == 1 )) || { echo 'restore must be atomic' >&2; exit 1; }
+    fi
     cat >/dev/null
     ;;
   pg_isready)

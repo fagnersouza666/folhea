@@ -89,6 +89,18 @@ data não duplica a finalização. Uma nova data explícita altera a finalizaç�
 `DELETE /books/{id}/finish` reabre e remove `finishedOn`. Excluir um livro
 exclui suas sessões por cascade e recalcula as métricas.
 
+Mutações de livros, fotos/capas e sessões da mesma conta são serializadas no
+PostgreSQL por um lock da linha da conta, adquirido antes de ler o estado que
+será alterado e mantido até o commit. Assim, PATCH preserva campos omitidos
+mesmo com duas abas/dispositivos: editar título não desfaz uma finalização
+concorrente, e editar minutos não restaura páginas antigas. A ordem começa
+pela conta, antes de livros e seus dependentes, inclusive em exclusões por
+cascade. Contas diferentes continuam independentes; GETs não adquirem esse
+lock de mutação. Não há alteração de payload ou nova versão exigida do cliente.
+Se a exclusão da conta ocorrer antes da aquisição do lock, a mutação retorna
+`401`, mesmo quando a autenticação já carregou o usuário no contexto ORM;
+alterações pendentes dos metadados de identidade também são desfeitas.
+
 Sessões aceitam páginas, minutos ou ambos: JSON inteiro, valores não negativos,
 ao menos um positivo. Campos omitidos na criação equivalem a zero; PATCH
 preserva campos omitidos. Máximos por sessão: 10.000 páginas e 1.440 minutos.
@@ -343,6 +355,13 @@ O novo fluxo salva o livro por JSON; `totalPages` é opcional, inteiro positivo 
 - `DELETE /api/v1/books/{id}/photo`: CSRF e ownership, 204 presente; foto ausente ou livro alheio/inexistente 404. Exclusão do livro/conta remove a foto por FK cascade.
 
 Assinatura e decoder ImageIO reais são conferidos, com entrada limitada a 24 MP/16384 px por lado antes da alocação. JPEG/PNG/WebP são regravados como JPEG sem EXIF/GPS, fundo branco para alpha, lado máximo 1600 e saída até 1.000.000 bytes; qualidade/dimensões adaptam ao orçamento. WebP usa SPI Java TwelveMonkeys ImageIO 3.15.3, sem JNI. Formato/decoder inválido retorna 415 em /photo; corpo acima do limite retorna 413; excesso de dimensões/pixels retorna 400, com o mesmo detail usado por multipart; problemas usam application/problem+json.
+
+Em JPEG, as oito orientações EXIF (rotações e espelhamentos) são aplicadas aos
+pixels antes de remover os metadados, inclusive em uploads RAW/multipart que
+não passaram pelo frontend. O lado máximo considera a imagem orientada. A
+leitura de orientação fica restrita ao diretório TIFF do segmento EXIF limitado;
+offsets ou diretórios fora desse segmento são rejeitados como imagem inválida.
+O encoder congelado da migração V010 permanece inalterado.
 
 V010 é migração Java Flyway transacional com normalizador congelado integralmente em `db.migration`, sem dependência de serviços da aplicação. `getChecksum()` continua NULL, como no histórico já aplicado; não há repair nem V011. A conversão legada conserva entrada até 2 MiB, 16.384 pixels por lado e 24 MP, separada da política HTTP atual. Os testes comparam bytes/SHA e metadados a goldens sintéticos capturados antes da alteração. A migração processa cada capa V008 com cursor de uma linha, preserva o original até o sucesso de toda a transação e apaga as linhas legadas somente depois da conversão. Falha reverte DDL/dados e mantém originais. V008/V009 não são alteradas. `book_photo` contém uma foto por livro (bytes, content_type, SHA, dimensões/tamanho e timestamps); `book_cover` permanece vazia apenas para compatibilidade de schema, nunca como segunda mídia retida. POST/PATCH multipart e /cover anteriores delegam à foto canônica; a UI nova usa somente JSON e /photo RAW.
 

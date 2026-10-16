@@ -4,6 +4,20 @@ import { transparentCover as cover } from './cover-fixture';
 import { expect, signIn, test, TODAY } from './fixtures';
 
 test.describe('estante e capas — API/BFF simulados, arquivo e Canvas reais', () => {
+  test('apaga autor e edição e mantém os campos vazios após recarregar', async ({ page, mockApi }) => {
+    mockApi.books[0].author = 'Autora'; mockApi.books[0].edition = '2ª edição';
+    await signIn(page);
+    await page.getByRole('link', { name: 'Livros', exact: true }).click();
+    await page.getByRole('link', { name: 'Abrir O Hobbit' }).click();
+    await page.getByLabel('Autor').fill(''); await page.getByLabel('Edição').fill('');
+    await page.getByRole('button', { name: 'Salvar alterações' }).click();
+    await expect(page.getByText('Alterações salvas.', { exact: true })).toBeVisible();
+    expect(mockApi.books[0].author).toBeNull(); expect(mockApi.books[0].edition).toBeNull();
+    await page.reload();
+    await expect(page.getByLabel('Autor')).toHaveValue('');
+    await expect(page.getByLabel('Edição')).toHaveValue('');
+  });
+
   test('cria JSON e foto RAW no mesmo livro, seleciona livro e recalcula após editar/excluir leitura', async ({ page, mockApi }) => {
     mockApi.books = []; await signIn(page);
     await page.getByRole('link', { name: /cadastrar livro/i }).click();

@@ -6,7 +6,10 @@ import io.quarkus.oidc.AuthorizationCodeTokens;
 import io.quarkus.oidc.OidcRequestContext;
 import io.quarkus.oidc.OidcTenantConfig;
 import io.quarkus.oidc.TokenStateManager;
+import io.quarkus.security.AuthenticationFailedException;
+import io.quarkus.vertx.http.runtime.security.HttpSecurityUtils;
 import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.infrastructure.Infrastructure;
 import io.vertx.ext.web.RoutingContext;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -30,9 +33,12 @@ public class ServerTokenStateManager implements TokenStateManager {
     private static final int TOKEN_REFERENCE_BYTES = 32;
     private static final int DEFAULT_MAX_ENTRIES = 100_000;
     private static final String OIDC_SESSION_COOKIE_PREFIX = "q_session";
+    // Quarkus marks refresh grants before deleteTokens/createTokenState. Keep
+    // this adapter covered when upgrading the OIDC runtime.
+    private static final String REFRESH_GRANT = "refresh_token_grant_response";
+    private static final String REFRESH_REFERENCE = ServerTokenStateManager.class.getName() + ".refreshReference";
     private final TokenStateStore store;
     private final SecureRandom random = new SecureRandom();
-    private final Clock clock;
     private final int maxEntries;
 
     @Inject
@@ -54,7 +60,6 @@ public class ServerTokenStateManager implements TokenStateManager {
 
     ServerTokenStateManager(TokenStateStore store, Clock clock, int maxEntries) {
         this.store = store;
-        this.clock = clock;
         this.maxEntries = maxEntries;
     }
 
@@ -68,6 +73,13 @@ public class ServerTokenStateManager implements TokenStateManager {
     }
 
     private synchronized String saveTokenState(RoutingContext context, AuthorizationCodeTokens authorizationCodeTokens) {
+        String refreshing = context == null ? null : context.remove(REFRESH_REFERENCE);
+        if (refreshing != null) {
+            if (!store.replaceIfPresent(refreshing, authorizationCodeTokens, SessionCookiePolicy.MAX_AGE)) {
+                throw new AuthenticationFailedException();
+            }
+            return refreshing;
+        }
         if (store.atCapacity(maxEntries)) return null;
         String previousReference = currentSessionReference(context);
         String reference;
@@ -76,9 +88,8 @@ public class ServerTokenStateManager implements TokenStateManager {
             if (store.save(reference, authorizationCodeTokens, SessionCookiePolicy.MAX_AGE)) break;
             if (attempt >= 7) return null;
         }
-        // Quarkus calls this method for both the initial callback and a token
-        // refresh. A refresh replaces the browser reference, so the previous
-        // reference must not remain usable until its TTL elapses.
+        // A new login rotates the reference. Refreshes keep the same handle so
+        // requests already in flight can still resolve the server-side state.
         if (previousReference != null && !previousReference.equals(reference)) {
             store.remove(previousReference);
         }
@@ -101,7 +112,42 @@ public class ServerTokenStateManager implements TokenStateManager {
             OidcTenantConfig tenantConfig,
             String tokenState,
             OidcRequestContext<Void> requestContext) {
-        return blocking(requestContext, () -> { store.remove(tokenState); return null; });
+        return blocking(requestContext, () -> {
+            if (context != null && Boolean.TRUE.equals(context.remove(REFRESH_GRANT))
+                    && SessionCookiePolicy.isValidTicket(tokenState)
+                    && context.failure() == null
+                    && HttpSecurityUtils.getAuthenticationFailureFromEvent(context) == null
+                    && !isLogout(context, tenantConfig)) {
+                context.put(REFRESH_REFERENCE, tokenState);
+            } else {
+                // A failed refresh can start a challenge after Quarkus has
+                // already cleared the cookie. Revoke the captured handle too.
+                String pending = context == null ? null : context.remove(REFRESH_REFERENCE);
+                if (pending != null) store.remove(pending);
+                store.remove(tokenState);
+            }
+            return null;
+        });
+    }
+
+    private static boolean isLogout(RoutingContext context, OidcTenantConfig config) {
+        String path = context.request() == null ? null : context.request().path();
+        String logoutPath = config == null ? "/auth/logout" : config.logout().path().orElse("/auth/logout");
+        return logoutPath.equals(path);
+    }
+
+    /** API failures return 401 without an OIDC challenge, so clean up explicitly. */
+    public Uni<Void> revokeFailedSession(RoutingContext context) {
+        if (context == null) return Uni.createFrom().voidItem();
+        String pending = context.remove(REFRESH_REFERENCE);
+        String current = currentSessionReference(context);
+        context.remove(REFRESH_GRANT);
+        if (pending == null && current == null) return Uni.createFrom().voidItem();
+        return Uni.createFrom().<Void>item(() -> {
+            if (pending != null) store.remove(pending);
+            if (current != null && !current.equals(pending)) store.remove(current);
+            return null;
+        }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }
 
     private static <T> Uni<T> blocking(OidcRequestContext<T> context, java.util.function.Supplier<T> operation) {

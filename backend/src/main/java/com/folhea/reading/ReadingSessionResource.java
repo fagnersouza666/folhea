@@ -79,6 +79,7 @@ public class ReadingSessionResource {
         if (request == null) invalid("Informe os dados da sessão.");
         validateProgress(request.pages(), request.minutes());
         validateDate(request.readingDate(), time.today(user.timezone));
+        books.lockOwnerForMutation(user.id);
         ensureBookOwned(user.id, request.bookId());
         ReadingSessionEntity session = new ReadingSessionEntity();
         session.userId = user.id;
@@ -99,6 +100,7 @@ public class ReadingSessionResource {
     @PATCH @Path("/{id}") @Transactional
     public SessionResponse update(@PathParam("id") UUID id, @Valid UpdateSessionRequest request) {
         var user = currentUser.get();
+        books.lockOwnerForMutation(user.id);
         ReadingSessionEntity session = findOwned(user.id, id);
         if (request == null || request.isEmpty()) invalid("Informe ao menos um campo para alterar.");
         UUID nextBookId = request.bookId() == null ? session.bookId : request.bookId();
@@ -119,7 +121,12 @@ public class ReadingSessionResource {
     }
 
     @DELETE @Path("/{id}") @Transactional
-    public Response delete(@PathParam("id") UUID id) { sessions.delete(findOwned(currentUser.get().id, id)); return Response.noContent().build(); }
+    public Response delete(@PathParam("id") UUID id) {
+        var user = currentUser.get();
+        books.lockOwnerForMutation(user.id);
+        sessions.delete(findOwned(user.id, id));
+        return Response.noContent().build();
+    }
 
     private ReadingSessionEntity findOwned(UUID userId, UUID id) {
         if (id == null) invalid("Identificador de sessão inválido.");

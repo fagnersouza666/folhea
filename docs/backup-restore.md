@@ -28,7 +28,7 @@ Os scripts ficam em `scripts/ops/` e falham cedo com `set -Eeuo pipefail`:
 | Script | Função |
 | --- | --- |
 | `backup-postgres.sh` | Gera um dump PostgreSQL custom-format, checksum SHA-256, cópia externa e rotação local. |
-| `restore-postgres.sh` | Valida o checksum e restaura `.dump` ou `.dump.gz` com `pg_restore --clean --if-exists`. |
+| `restore-postgres.sh` | Valida o checksum e restaura `.dump` ou `.dump.gz` com `pg_restore --single-transaction --clean --if-exists`. |
 | `verify-recovery.sh` | Confere `pg_isready`, a tabela de migrações e o readiness do backend. |
 
 Os comandos exigem `COMPOSE_FILE`/`--compose-file` e
@@ -50,6 +50,8 @@ principal (`file:///mnt/backup-offsite/postgres`), um caminho absoluto, ou um
 bucket S3 compatível (`s3://folhea-backups/postgres`). Para S3, o script usa o
 perfil/credenciais já fornecidos pelo ambiente do job, envia o checksum junto e
 confirma o objeto com `head-object`. Não coloque credenciais na URI.
+O bucket ou prefixo pode terminar em `/`: o script remove as barras finais e
+usa a mesma chave para upload e verificação, inclusive na raiz `s3://bucket/`.
 
 Exemplo de execução manual:
 
@@ -121,9 +123,12 @@ backups gerados por este processo é validado antes de qualquer alteração no
 banco. Um sidecar ausente permite restaurar artefatos legados, mas o operador
 deve registrar a exceção e gerar checksum antes de promover os dados.
 
-O restore usa `--clean --if-exists --no-owner --no-privileges` e deve ser
+O restore usa `--single-transaction --clean --if-exists --no-owner --no-privileges` e deve ser
 executado com o serviço backend parado ou apontando para outra base enquanto a
-operação acontece. Depois, execute `verify-recovery.sh`; o teste padrão
+operação acontece. DROP, criação e carga pertencem à mesma transação: um erro
+durante a restauração desfaz as alterações dessa tentativa, preservando a base
+anterior. Isso vale para `.dump` e `.dump.gz`; a validação prévia do TOC não
+substitui essa garantia. Depois, execute `verify-recovery.sh`; o teste padrão
 confirma as migrações V007, V008 e V009 aplicadas com sucesso (`version` igual a
 `7`/`007`, `8`/`008` e `9`/`009`, formatos do histórico Flyway), a presença de
 `public.folhea_user`, `public.account_deletion` e `public.book_cover`, a ausência
@@ -191,6 +196,16 @@ Os testes shell em `scripts/ops/tests/test-backup-restore.sh` usam um Compose e
 um cliente Docker falsos em um diretório temporário; eles cobrem argumentos,
 caminhos, retenção, checksum, confirmação de produção e falhas de healthcheck
 sem iniciar containers ou tocar em dados reais.
+`test_backup_destinations.py` exercita o script com um transporte S3 falso que
+distingue chaves exatas, cobrindo bucket/prefixo com e sem barras finais.
+`test_restore_atomicity.py` inicia um PostgreSQL temporário próprio e verifica
+que uma falha de COPY após o início do restore preserva os dados anteriores,
+além do restore válido nos dois formatos. Ele requer os binários PostgreSQL
+locais (ou `PG_TEST_BIN`) e permissão para socket Unix; registra skip explícito
+em execução local quando esse ambiente não estiver disponível. No CI,
+`FOLHEA_REQUIRE_POSTGRES_TESTS=1` transforma essa indisponibilidade em falha:
+o gate não pode aprovar atomicidade sem executar o PostgreSQL real. O teste
+nunca conecta a uma base existente.
 
 ## Continuidade de identidade e instâncias isoladas
 

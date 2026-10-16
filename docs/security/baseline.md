@@ -15,7 +15,16 @@ primeira release; o PRD continua sendo a fonte dos requisitos de produto.
   `nbf`, `iat`, `nonce` e o `state` associado à tentativa. Aceitar somente uma
   redirect URI exata; não aceitar curingas em produção.
 - Após autenticação, rotacionar o ticket de sessão e invalidar o ticket
-  anterior. Timeout absoluto e de inatividade devem ser configurados no
+  anterior. Durante refresh, preservar a referência opaca OIDC e substituir
+  atomicamente somente um registro ainda existente e não expirado; refresh
+  nunca recria uma sessão revogada. O adaptador acompanha a sequência
+  `deleteTokens → createTokenState` e o marcador de refresh do Quarkus,
+  com regressões obrigatórias ao atualizar o runtime. O cleanup de um refresh
+  falho revoga também a referência capturada antes de o Quarkus esvaziar o cookie.
+  O mapper de falha de autenticação revoga a referência atual/pendente em worker
+  antes de responder 401 à API, que não inicia um novo challenge OIDC.
+  Logout e falhas de autenticação continuam removendo o registro. Timeout
+  absoluto e de inatividade devem ser configurados no
   Keycloak/BFF e documentados no ambiente. Logout revoga a sessão server-side e
   inicia logout OIDC quando aplicável.
 - A política aplicada pelo realm é de 30 minutos de inatividade e 8 horas de
@@ -159,6 +168,9 @@ O código mantém fallback in-memory fail-closed para `%test` e testes unitário
 Em produção (`%prod`) o Redis na rede privada persiste sessão OIDC, CSRF e rate
 limit com TTL alinhado ao cookie de sessão (8 h). Fora do Compose, exigir TLS
 (`rediss://`) — ressalva documentada no veredicto de segurança.
+O contador de rate limit e seu TTL de janela são criados atomicamente por Lua
+no Redis; nenhuma instância pode sobrescrever o incremento de outra ao definir
+a expiração. O TTL dos contadores segue a janela de cada limite.
 
 ## 6. Segredos, dados e logs
 

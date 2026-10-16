@@ -168,15 +168,15 @@ describe('DashboardStore', () => {
     expect(store.error()).toBe('Não foi possível finalizar o livro.');
   });
 
-  it('rolls back deleteBook books and sessions and surfaces the mutation error when delete fails', () => {
+  it('preserves books and sessions until deletion is confirmed and surfaces a failed mutation', () => {
     seedBooks([readingBook]);
     seedSessions([readingSession]);
     const previousBooks = structuredClone(store.books());
     const previousSessions = structuredClone(store.sessions());
 
     store.deleteBook(BOOK_ID).subscribe({ error: () => undefined });
-    expect(store.books()).toEqual([]);
-    expect(store.sessions()).toEqual([]);
+    expect(store.books()).toEqual(previousBooks);
+    expect(store.sessions()).toEqual(previousSessions);
 
     flushServerError(httpMock, `/api/v1/books/${BOOK_ID}`);
 

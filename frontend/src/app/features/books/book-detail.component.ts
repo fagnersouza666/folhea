@@ -81,7 +81,7 @@ export class BookDetailComponent {
     const title = this.title.value.trim();
     if (!title) { this.title.setErrors({ required: true }); return; }
     if (this.form.invalid || !this.id) return;
-    this.run(this.store.updateBook(this.id, { title, author: this.form.controls.author.value.trim() || null, edition: this.form.controls.edition.value.trim() || null, totalPages: this.totalPages.value }), 'Alterações salvas.', false);
+    this.run(this.store.updateBook(this.id, { title, author: this.form.controls.author.value.trim(), edition: this.form.controls.edition.value.trim(), totalPages: this.totalPages.value }), 'Alterações salvas.', false);
   }
 
   uploadPhoto(): void {
