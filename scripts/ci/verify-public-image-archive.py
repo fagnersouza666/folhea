@@ -23,6 +23,11 @@ CHUNK = 128 * 1024
 SENSITIVE = re.compile(r'(?:^|_)(?:PASSWORD|PASSWD|SECRET|TOKEN|CREDENTIALS?|API_KEY|PRIVATE_KEY)(?:_|$)', re.I)
 ASSIGNMENT = re.compile(r'\b([A-Za-z_][A-Za-z_0-9]*)\s*=\s*([^\s;]+)')
 PRIVATE_KEY = re.compile(rb'-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----')
+# Public lifespan/URL fields (accessTokenLifespan/tokenUrl) are not credentials.
+# These actual Keycloak credential names use camelCase, unlike environment keys.
+KEYCLOAK_CREDENTIAL_FIELDS = {'clientsecret', 'secretdata', 'credentialdata',
+                              'privatekey', 'accesstoken', 'refreshtoken'}
+PEM_OVERLAP = 256
 DIGEST = re.compile(r'^[0-9a-f]{64}$')
 PRIVATE_SUFFIXES = {'.key', '.p12', '.pfx', '.jks', '.keystore', '.dump'}
 
@@ -67,6 +72,10 @@ def private_path(name):
     return private_path_rule(name) is not None
 
 
+def sensitive_field(key):
+    return bool(SENSITIVE.search(key)) or key.casefold() in KEYCLOAK_CREDENTIAL_FIELDS
+
+
 def private_file_diagnostic(entry, name, layer_name, content):
     """Only fixed enums and one-way path identifiers may reach public logs.
 
@@ -94,7 +103,7 @@ def private_file_diagnostic(entry, name, layer_name, content):
 def metadata_policy(value):
     if isinstance(value, dict):
         for key, item in value.items():
-            if SENSITIVE.search(key) and item not in (None, '', [], {}):
+            if sensitive_field(key) and item not in (None, '', [], {}):
                 reject('sensitive-metadata')
             metadata_policy(item)
     elif isinstance(value, list):
@@ -102,7 +111,7 @@ def metadata_policy(value):
             metadata_policy(item)
     elif isinstance(value, str):
         for key, item in ASSIGNMENT.findall(value):
-            if SENSITIVE.search(key) and item.strip('"\''):
+            if sensitive_field(key) and item.strip('"\''):
                 reject('sensitive-metadata')
         if PRIVATE_KEY.search(value.encode()):
             reject('private-key')
@@ -115,7 +124,7 @@ def config_policy(config):
         if not isinstance(env, str) or '=' not in env:
             reject('invalid-config')
         key, value = env.split('=', 1)
-        if SENSITIVE.search(key) and value:
+        if sensitive_field(key) and value:
             reject('sensitive-environment')
     metadata_policy(config)
 
@@ -127,7 +136,7 @@ def public_realm_template(obj, body):
 
     def placeholders(value):
         if isinstance(value, dict):
-            return all((not SENSITIVE.search(key) or item in (None, '')
+            return all((not sensitive_field(key) or item in (None, '')
                         or isinstance(item, str) and re.fullmatch(r'\$\{[A-Z_][A-Z_0-9]*\}', item))
                        and placeholders(item) for key, item in value.items())
         if isinstance(value, list):
@@ -158,6 +167,34 @@ def drain(stream):
         pass
 
 
+def inspect_file(content, size, collect_json):
+    """Scan textual files through EOF, retaining only a bounded PEM overlap.
+
+    Preserve the initial NUL-byte binary classification: executable libraries
+    may contain PEM parser literals rather than a PEM document. JSON collection
+    has its separate MAX_METADATA bound. Non-JSON file size does not affect RAM.
+    """
+    block = content.read(min(size, CHUNK))
+    text = b'\x00' not in block
+    pieces = []
+    overlap = b''
+    while block:
+        if text:
+            window = overlap + block
+            if PRIVATE_KEY.search(window):
+                reject('private-key')
+            # Do not silently truncate a contrived, unbounded armor label. All
+            # standard PEM labels fit the overlap; oversized labels fail closed.
+            pending = re.search(rb'-----BEGIN [A-Z0-9 ]*$', window)
+            if pending and len(pending.group()) > PEM_OVERLAP:
+                reject('unsupported-pem-label')
+            overlap = window[-PEM_OVERLAP:]
+        if collect_json:
+            pieces.append(block)
+        block = content.read(CHUNK)
+    return b''.join(pieces) if collect_json else None
+
+
 def layer_policy(stream, layer_name):
     with tarfile.open(fileobj=stream, mode='r|') as layer:
         for entry in layer:
@@ -170,26 +207,22 @@ def layer_policy(stream, layer_name):
                 # Links and devices are never followed or materialized.
                 continue
             content = layer.extractfile(entry)
-            first = content.read(min(entry.size, CHUNK))
-            # A PEM private key is different from a public CA certificate. Do
-            # not flag binary libraries merely containing PEM parser strings.
-            if b'\x00' not in first and PRIVATE_KEY.search(first):
-                reject('private-key')
-            if name.endswith('.json'):
+            is_json = name.endswith('.json')
+            if is_json:
                 if 'opt/keycloak/data/import/' in name:
                     reject('embedded-realm')
                 if entry.size > MAX_METADATA:
                     reject('oversized-json')
-                if entry.size <= MAX_METADATA:
-                    body = first + content.read()
-                    try:
-                        obj = json.loads(body)
-                    except (ValueError, UnicodeError):
-                        continue
-                    if isinstance(obj, dict) and isinstance(obj.get('realm'), str) and (
-                            'clients' in obj or 'users' in obj):
-                        if not public_realm_template(obj, body):
-                            reject('embedded-realm')
+            body = inspect_file(content, entry.size, is_json)
+            if is_json:
+                try:
+                    obj = json.loads(body)
+                except (ValueError, UnicodeError):
+                    continue
+                if isinstance(obj, dict) and isinstance(obj.get('realm'), str) and (
+                        'clients' in obj or 'users' in obj):
+                    if not public_realm_template(obj, body):
+                        reject('embedded-realm')
     drain(stream)  # Include tar padding in the uncompressed layer digest.
 
 
@@ -342,7 +375,7 @@ def check_source():
         instruction = tokens[0].upper()
         if instruction in {'ARG', 'ENV'}:
             keys = [token.split('=', 1)[0] for token in tokens[1:]]
-            if any(SENSITIVE.search(key) for key in keys):
+            if any(sensitive_field(key) for key in keys):
                 reject('sensitive-build-input')
         if instruction in {'COPY', 'ADD'}:
             if any(private_path(token) or 'realm' in token.lower()

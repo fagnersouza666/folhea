@@ -31,7 +31,9 @@ def tar_bytes(files):
 def fixture(layout='classic', files=None, env=None, history=None, delete_after=False):
     layers = [tar_bytes(files or [('srv/index.html', b'public app')])]
     if delete_after:
-        layers.append(tar_bytes([('srv/.wh..env.production', b'')]))
+        target = delete_after if isinstance(delete_after, str) else 'srv/.env.production'
+        parent, leaf = target.rsplit('/', 1)
+        layers.append(tar_bytes([(parent + '/.wh.' + leaf, b'')]))
     config = json.dumps({'architecture': 'amd64', 'os': 'linux',
                          'config': {'Env': env or ['KC_DB=postgres', 'PUBLIC_DOMAIN=localhost']},
                          'history': history or [],
@@ -162,6 +164,54 @@ class PublicImageArchiveTest(unittest.TestCase):
         realm = json.dumps({'realm': 'test', 'clients': [
             {'secret': '${CLIENT_SECRET}'}, {'secret': value}]}).encode()
         self.rejected(fixture(files=[('templates/realm.json', realm)]), 'embedded-realm', value)
+
+    def test_camel_case_realm_credentials_must_be_empty_or_placeholders(self):
+        for field in ['clientSecret', 'secretData', 'credentialData', 'privateKey',
+                      'accessToken', 'refreshToken']:
+            with self.subTest(field=field):
+                value = secrets.token_urlsafe(32)
+                obj = {'realm': 'test', 'clients': [{'secret': '${CLIENT_SECRET}'}],
+                       'identityProviders': [{'config': {field: value}}]}
+                self.rejected(fixture(files=[('templates/realm.json', json.dumps(obj).encode())]),
+                              'embedded-realm', value)
+                for permitted in ['', '${PROVIDER_CREDENTIAL}']:
+                    obj['identityProviders'][0]['config'][field] = permitted
+                    result = self.check(fixture(files=[('templates/realm.json', json.dumps(obj).encode())]))
+                    self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_public_realm_lifetimes_and_endpoints_are_not_credential_values(self):
+        obj = {'realm': 'test', 'accessTokenLifespan': 300,
+               'clients': [{'secret': '${CLIENT_SECRET}'}],
+               'identityProviders': [{'config': {'tokenUrl': 'https://idp.example/token'}}]}
+        result = self.check(fixture(files=[('templates/realm.json', json.dumps(obj).encode())]))
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_text_private_key_after_first_chunk_and_across_boundary_is_rejected(self):
+        chunk = 128 * 1024
+        certificate = b'-----BEGIN CERTIFICATE-----\npublic certificate\n-----END CERTIFICATE-----\n'
+        for offset in [chunk + 41, chunk - 9]:
+            with self.subTest(offset=offset):
+                value = secrets.token_urlsafe(32)
+                prefix = certificate + b' ' * (offset - len(certificate))
+                body = prefix + ('-----BEGIN PRIVATE KEY-----\n' + value
+                                 + '\n-----END PRIVATE KEY-----').encode()
+                self.rejected(fixture(files=[('etc/bundle.pem', body)], delete_after='etc/bundle.pem'),
+                              'private-key', value)
+
+    def test_binary_parser_literals_are_not_private_pem_files(self):
+        body = b'\x7fELF\x00' + b' ' * (128 * 1024) + b'-----BEGIN PRIVATE KEY-----'
+        result = self.check(fixture(files=[('usr/lib/parser.so', body)]))
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_large_public_certificate_bundle_is_allowed(self):
+        body = (b'-----BEGIN CERTIFICATE-----\npublic certificate\n-----END CERTIFICATE-----\n'
+                * 5000)
+        result = self.check(fixture(files=[('etc/ssl/certs/public.pem', body)]))
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_unbounded_pem_label_cannot_escape_the_overlap_window(self):
+        body = b'-----BEGIN ' + b'X' * (128 * 1024) + b' PRIVATE KEY-----'
+        self.rejected(fixture(files=[('etc/oversized-label.pem', body)]), 'unsupported-pem-label')
 
     def test_rejects_traversal_without_extracting_any_file(self):
         self.rejected(fixture(files=[('../escape', b'not extracted')]), 'unsafe-path')
