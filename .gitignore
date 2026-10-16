@@ -21,3 +21,14 @@ seo-report/
 # Estado privado e certificados da stack local.
 .local/
 .env-*
+.env.*
+*.env
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+.ssh/
+# Public placeholder model; never whitelist runtime env files.
+!.env.example

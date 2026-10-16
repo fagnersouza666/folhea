@@ -248,6 +248,10 @@ O relatório da última varredura de bugs (modo full) está em
 remediados) está em
 [`docs/relatorio-seguranca.md`](docs/relatorio-seguranca.md).
 
+Relate vulnerabilidades pelo canal privado descrito na [política de segurança](SECURITY.md),
+sem publicar detalhes em issues. Segredos expostos devem ser revogados ou
+trocados imediatamente; remover o texto do Git não substitui essa ação.
+
 Em Settings → Branches → Branch protection rules, configure `main` para exigir
 pull request, exigir `CI / merge-gate`, exigir branch atualizada e bloquear
 force-push. Não permita bypass para merges normais. O workflow publica logs,
