@@ -48,6 +48,15 @@ public final class InMemoryTokenStateStore implements TokenStateStore {
     }
 
     @Override
+    public boolean replaceIfPresent(String reference, AuthorizationCodeTokens replacement, Duration ttl) {
+        return tokens.computeIfPresent(reference, (key, stored) -> {
+            Instant now = clock.instant();
+            return now.isBefore(stored.expiresAt())
+                    ? new StoredTokens(copy(replacement), now.plus(ttl)) : null;
+        }) != null;
+    }
+
+    @Override
     public int size() {
         purgeExpired(clock.instant());
         return tokens.size();

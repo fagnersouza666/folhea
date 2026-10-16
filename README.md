@@ -11,7 +11,7 @@ Frontend (`frontend/package.json`), backend (`backend/pom.xml`) e OpenAPI
 chore, teste ou infra sem mudança de produto não incrementam. Detalhe em
 `.cursor/rules/versionamento.mdc`.
 
-Versão atual: **0.6.0**
+Versão atual: **0.6.1**
 
 ## Estante privada
 
@@ -120,7 +120,7 @@ abaixo são o contrato usado pelo CI; execute-os antes de abrir um pull request.
 
 ### Pré-requisitos
 
-O frontend usa Angular 22.2.3 e o builder `@angular/build` 22.2.2. As dependências
+O frontend usa Angular 22.2.3 e o builder `@angular/build` 22.2.3. As dependências
 de build são fixadas no lockfile validado; a migração remove a cadeia antiga de
 build, e `proxy-addr` 2.0.8 corrige a versão vulnerável detectada pelo Trivy.
 

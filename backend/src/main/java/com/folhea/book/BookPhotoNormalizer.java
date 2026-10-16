@@ -2,13 +2,17 @@ package com.folhea.book;
 
 import com.folhea.shared.ProblemTypes;
 import com.folhea.shared.ProblemException;
+import com.twelvemonkeys.imageio.metadata.jpeg.JPEGSegmentUtil;
 import java.awt.Color;
 import java.awt.RenderingHints;
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -51,12 +55,15 @@ public final class BookPhotoNormalizer {
                 if (width > maxSide || height > maxSide || (long)width * height > maxPixels) {
                     throw new ProblemException(400, ProblemTypes.PHOTO_DIMENSIONS, "Dimensões inválidas", "A imagem deve ter no máximo 16.384 pixels por lado e 24.000.000 pixels no total.");
                 }
+                int orientation = type.equals("image/jpeg") ? jpegOrientation(source) : 1;
                 BufferedImage decoded = reader.read(0);
                 if (decoded == null) throw invalid();
                 try {
-                    double scale = Math.min(1d, (double)MAX_SIDE / Math.max(width, height));
-                    int targetWidth = Math.max(1, (int)Math.round(width * scale));
-                    int targetHeight = Math.max(1, (int)Math.round(height * scale));
+                    int orientedWidth = orientation >= 5 ? height : width;
+                    int orientedHeight = orientation >= 5 ? width : height;
+                    double scale = Math.min(1d, (double)MAX_SIDE / Math.max(orientedWidth, orientedHeight));
+                    int targetWidth = Math.max(1, (int)Math.round(orientedWidth * scale));
+                    int targetHeight = Math.max(1, (int)Math.round(orientedHeight * scale));
                     while (true) {
                         BufferedImage rgb = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_RGB);
                         try {
@@ -64,7 +71,8 @@ public final class BookPhotoNormalizer {
                             try {
                                 graphics.setColor(Color.WHITE); graphics.fillRect(0, 0, targetWidth, targetHeight);
                                 graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                                graphics.drawImage(decoded, 0, 0, targetWidth, targetHeight, null);
+                                graphics.scale((double)targetWidth / orientedWidth, (double)targetHeight / orientedHeight);
+                                graphics.drawImage(decoded, orientationTransform(orientation, width, height), null);
                             } finally { graphics.dispose(); }
                             for (float quality : new float[]{.88f, .78f, .68f, .58f, .45f}) {
                                 byte[] encoded = encode(rgb, quality);
@@ -77,6 +85,53 @@ public final class BookPhotoNormalizer {
                 } finally { decoded.flush(); }
             } finally { reader.dispose(); }
         } catch (IOException | IllegalArgumentException e) { throw invalid(); }
+    }
+
+    private static int jpegOrientation(byte[] source) throws IOException {
+        try (var input = new MemoryCacheImageInputStream(new ByteArrayInputStream(source))) {
+            for (var segment : JPEGSegmentUtil.readSegments(input, 0xffe1, "Exif")) {
+                try (var data = segment.data()) {
+                    // data() skips "Exif" and its first NUL; TIFF follows the second NUL.
+                    if (data.read() != 0) throw new IOException("Invalid EXIF header");
+                    byte[] bytes = data.readAllBytes(); // One JPEG segment is at most 65,535 bytes.
+                    if (bytes.length < 8) throw new IOException("Truncated EXIF header");
+                    ByteOrder order;
+                    if (bytes[0] == 'I' && bytes[1] == 'I') order = ByteOrder.LITTLE_ENDIAN;
+                    else if (bytes[0] == 'M' && bytes[1] == 'M') order = ByteOrder.BIG_ENDIAN;
+                    else throw new IOException("Invalid EXIF byte order");
+                    var tiff = ByteBuffer.wrap(bytes).order(order);
+                    if (Short.toUnsignedInt(tiff.getShort(2)) != 42) throw new IOException("Invalid EXIF TIFF header");
+                    long offset = Integer.toUnsignedLong(tiff.getInt(4));
+                    if (offset == 0) continue;
+                    if (offset < 8 || offset + 2 > bytes.length) throw new IOException("Invalid EXIF directory");
+                    int count = Short.toUnsignedInt(tiff.getShort((int)offset));
+                    if (offset + 2L + count * 12L + 4 > bytes.length) throw new IOException("Truncated EXIF directory");
+                    for (int i = 0; i < count; i++) {
+                        int entry = (int)offset + 2 + i * 12;
+                        if (Short.toUnsignedInt(tiff.getShort(entry)) == 0x112
+                                && Short.toUnsignedInt(tiff.getShort(entry + 2)) == 3
+                                && tiff.getInt(entry + 4) == 1) {
+                            int orientation = Short.toUnsignedInt(tiff.getShort(entry + 8));
+                            if (orientation >= 1 && orientation <= 8) return orientation;
+                        }
+                    }
+                }
+            }
+        }
+        return 1;
+    }
+
+    private static AffineTransform orientationTransform(int orientation, int width, int height) {
+        return switch (orientation) {
+            case 2 -> new AffineTransform(-1, 0, 0, 1, width, 0);
+            case 3 -> new AffineTransform(-1, 0, 0, -1, width, height);
+            case 4 -> new AffineTransform(1, 0, 0, -1, 0, height);
+            case 5 -> new AffineTransform(0, 1, 1, 0, 0, 0);
+            case 6 -> new AffineTransform(0, 1, -1, 0, height, 0);
+            case 7 -> new AffineTransform(0, -1, -1, 0, height, width);
+            case 8 -> new AffineTransform(0, -1, 1, 0, 0, width);
+            default -> new AffineTransform();
+        };
     }
     private static byte[] encode(BufferedImage image, float quality) throws IOException {
         var writers = ImageIO.getImageWritersByFormatName("jpeg");

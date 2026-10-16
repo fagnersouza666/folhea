@@ -346,9 +346,12 @@ O endpoint oficial reexecuta o job e seus descendentes; este health é terminal
 no DAG atual e não requer reexecutar ancestors release/deploy. A documentação
 não garante explicitamente o frescor de variáveis alteradas entre run e rerun;
 confirmar pela execução efetiva, sem presumir. Não ativar hook ou disparar um
-workflow completo para contornar essa condição. Antes, conferir 200 direto com TLS normal
-e sem seguir redirects; o checker atual aceita 2xx e segue redirects, portanto
-seu EXIT0 isolado não é prova de 200 direto:
+workflow completo para contornar essa condição. O checker exige HTTP 200 direto,
+rejeita redirects e limita cada requisição e leitura do corpo a 10 segundos
+(`HEALTHCHECK_TIMEOUT_MS`). `/healthz` deve ter corpo vazio; os endpoints de
+dependências devem retornar JSON com `status: "UP"`. HTML, JSON sem status,
+DOWN e uma lista vazia de endpoints falham. A checagem direta continua útil
+para diagnóstico, sempre com TLS normal:
 
 ```sh
 test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' https://folhea.app/healthz)" = 200
@@ -414,11 +417,15 @@ restaure diretamente sobre o volume de produção sem uma janela aprovada.
 ```bash
 gunzip -c backups/folhea-20260906T000000Z.dump.gz \
   | docker compose --env-file .env exec -T postgres \
-      pg_restore --clean --if-exists --no-owner --dbname="$DB_NAME" \
+      pg_restore --single-transaction --clean --if-exists --no-owner --dbname="$DB_NAME" \
       --username="$DB_USERNAME"
 docker compose --env-file .env exec backend \
   wget --no-verbose --spider http://127.0.0.1:8080/q/health/ready
 ```
+
+Use `--single-transaction` também em restores manuais: uma falha na carga
+deve desfazer os DROP e alterações anteriores da tentativa, como já faz
+`scripts/ops/restore-postgres.sh` para dumps normais ou gzip.
 
 Registre data, origem, checksum, duração, resultado do healthcheck e a versão
 da aplicação restaurada. Keycloak possui uma base separada e deve ter seu

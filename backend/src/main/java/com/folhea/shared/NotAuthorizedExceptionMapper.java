@@ -1,5 +1,6 @@
 package com.folhea.shared;
 
+import com.folhea.security.ServerTokenStateManager;
 import io.quarkus.security.AuthenticationFailedException;
 import io.quarkus.vertx.http.runtime.security.ChallengeData;
 import io.quarkus.vertx.http.runtime.security.HttpAuthenticator;
@@ -20,19 +21,21 @@ import static io.quarkus.vertx.http.runtime.security.HttpSecurityUtils.addAuthen
 @Provider
 public class NotAuthorizedExceptionMapper implements ExceptionMapper<NotAuthorizedException> {
     @Inject HttpAuthenticator authenticator;
+    @Inject ServerTokenStateManager tokenStates;
 
     @ServerExceptionMapper(value = AuthenticationFailedException.class, priority = Priorities.AUTHENTICATION)
     public Uni<Response> failedAuthentication(AuthenticationFailedException exception, RoutingContext routingContext) {
         addAuthenticationFailureToEvent(exception, routingContext);
         String path = routingContext == null ? null : routingContext.request().path();
-        // OIDC has already removed unavailable token state and expired its
-        // cookie. Calling the authenticator here would start a new code flow
-        // for an API request, yielding an IdP redirect instead of a REST error.
+        // A failed refresh may still have a deferred reference or an incoming
+        // cookie. Revoke it on a worker even when the API does not challenge.
         if (path == null || path.equals("/api") || path.startsWith("/api/")) {
-            return Uni.createFrom().item(unauthorizedResponse());
+            return tokenStates.revokeFailedSession(routingContext).replaceWith(unauthorizedResponse());
         }
         // Preserve the mechanism's state/nonce/PKCE challenge for browser paths.
-        return authenticator.getChallenge(routingContext).map(NotAuthorizedExceptionMapper::fromChallenge);
+        return tokenStates.revokeFailedSession(routingContext)
+                .chain(() -> authenticator.getChallenge(routingContext))
+                .map(NotAuthorizedExceptionMapper::fromChallenge);
     }
 
     @ServerExceptionMapper(io.quarkus.security.UnauthorizedException.class)

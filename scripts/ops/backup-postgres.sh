@@ -160,21 +160,24 @@ temporary_checksum=""
 
 case "$BACKUP_EXTERNAL_DESTINATION" in
   s3://*)
-    external_uri="${BACKUP_EXTERNAL_DESTINATION%/}/$artifact_name"
-    external_checksum_uri="${external_uri}.sha256"
     aws_bin="${AWS_BIN:-aws}"
     s3_location="${BACKUP_EXTERNAL_DESTINATION#s3://}"
+    # Build upload and HEAD from the same exact key. Trailing separators are
+    # optional for both a bucket root and a prefix; interior slashes are keys.
+    while [[ "$s3_location" == */ ]]; do
+      s3_location="${s3_location%/}"
+    done
     s3_bucket="${s3_location%%/*}"
     [[ -n "$s3_bucket" ]] || ops_die "s3 external destination is missing a bucket"
     if [[ "$s3_location" == */* ]]; then
       s3_prefix="${s3_location#*/}"
-      [[ -n "$s3_prefix" ]] || ops_die "s3 external destination has an empty prefix"
       s3_key="$s3_prefix/$artifact_name"
-      s3_checksum_key="$s3_prefix/$artifact_name.sha256"
     else
       s3_key="$artifact_name"
-      s3_checksum_key="$artifact_name.sha256"
     fi
+    s3_checksum_key="${s3_key}.sha256"
+    external_uri="s3://${s3_bucket}/${s3_key}"
+    external_checksum_uri="s3://${s3_bucket}/${s3_checksum_key}"
     "$aws_bin" s3 cp --only-show-errors --no-progress "$artifact" "$external_uri"
     "$aws_bin" s3 cp --only-show-errors --no-progress "$checksum" "$external_checksum_uri"
     "$aws_bin" s3api head-object --bucket "$s3_bucket" --key "$s3_key" >/dev/null

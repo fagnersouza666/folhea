@@ -12,6 +12,9 @@ public interface TokenStateStore {
 
     boolean save(String reference, AuthorizationCodeTokens tokens, Duration ttl);
 
+    /** Atomically replace an unexpired entry; never recreate a revoked reference. */
+    boolean replaceIfPresent(String reference, AuthorizationCodeTokens tokens, Duration ttl);
+
     void remove(String reference);
 
     int size();

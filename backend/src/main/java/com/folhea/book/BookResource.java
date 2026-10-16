@@ -78,6 +78,7 @@ public class BookResource {
         if (request == null || request.title() == null || request.title().isBlank()) invalid("Informe o título do livro.");
         validateTextLength(request.title(), request.author());
         var user = currentUser.get();
+        books.lockOwnerForMutation(user.id);
         BookEntity book = new BookEntity();
         book.userId = user.id;
         book.title = request.title().trim();
@@ -96,12 +97,12 @@ public class BookResource {
 
     @PATCH @Path("/{id}") @Transactional @Consumes(MediaType.APPLICATION_JSON)
     public BookResponse update(@PathParam("id") UUID id, @Valid UpdateBookRequest request) {
-        return updateBook(findOwned(id), request, null);
+        return updateBook(findOwnedForMutation(id), request, null);
     }
 
     @PATCH @Path("/{id}") @Transactional @Consumes(MediaType.MULTIPART_FORM_DATA)
     public BookResponse updateMultipart(@PathParam("id") UUID id, org.jboss.resteasy.reactive.server.multipart.MultipartFormDataInput input) throws java.io.IOException {
-        BookEntity book = findOwned(id);
+        BookEntity book = findOwnedForMutation(id);
         UpdateBookRequest request = covers.metadata(input, UpdateBookRequest.class);
         return updateBook(book, request, covers.cover(input, false));
     }
@@ -123,15 +124,15 @@ public class BookResource {
     }
 
     @DELETE @Path("/{id}") @Transactional
-    public Response delete(@PathParam("id") UUID id) { books.delete(findOwned(id)); return Response.noContent().build(); }
+    public Response delete(@PathParam("id") UUID id) { books.delete(findOwnedForMutation(id)); return Response.noContent().build(); }
 
     @POST @Path("/{id}/finish") @Transactional
     @Consumes(MediaType.WILDCARD)
     @Operation(summary = "Finaliza um livro de forma idempotente")
     public BookResponse finish(@PathParam("id") UUID id, String requestBody) throws JsonProcessingException {
         FinishRequest request = parseFinishRequest(requestBody);
+        BookEntity book = findOwnedForMutation(id);
         var user = currentUser.get();
-        BookEntity book = findOwned(id);
         LocalDate date = request != null && request.finishedOn() != null
                 ? request.finishedOn()
                 : (book.status == BookStatus.FINISHED && book.finishedOn != null
@@ -152,7 +153,7 @@ public class BookResource {
     @DELETE @Path("/{id}/finish") @Transactional
     @Operation(summary = "Reabre um livro")
     public BookResponse reopen(@PathParam("id") UUID id) {
-        BookEntity book = findOwned(id);
+        BookEntity book = findOwnedForMutation(id);
         book.status = BookStatus.READING;
         book.finishedOn = null;
         books.flush();
@@ -162,7 +163,7 @@ public class BookResource {
     @PUT @Path("/{id}/photo") @Transactional @Consumes(MediaType.WILDCARD)
     @Operation(summary = "Envia ou substitui a foto privada com corpo RAW")
     public BookResponse putPhoto(@PathParam("id") UUID id, @HeaderParam("Content-Type") String mime, java.io.InputStream input) throws java.io.IOException {
-        BookEntity book = findOwned(id);
+        BookEntity book = findOwnedForMutation(id);
         byte[] bytes = input == null ? new byte[0] : input.readNBytes(BookPhotoNormalizer.MAX_BYTES + 1);
         photos.save(book.id, BookPhotoNormalizer.normalize(bytes, mime, BookPhotoNormalizer.MAX_BYTES));
         return reads.response(book, currentUser.get());
@@ -185,7 +186,7 @@ public class BookResource {
 
     @DELETE @Path("/{id}/photo") @Transactional
     public Response deletePhoto(@PathParam("id") UUID id) {
-        photos.delete(findOwned(id).id, true); return Response.noContent().build();
+        photos.delete(findOwnedForMutation(id).id, true); return Response.noContent().build();
     }
 
     @GET @Path("/{id}/cover") @Produces({"image/jpeg", "image/png"})
@@ -199,7 +200,7 @@ public class BookResource {
 
     @DELETE @Path("/{id}/cover") @Transactional
     public Response deleteCover(@PathParam("id") UUID id) {
-        covers.delete(findOwned(id).id);
+        covers.delete(findOwnedForMutation(id).id);
         return Response.noContent().header("Cache-Control", "no-store").build();
     }
 
@@ -208,9 +209,15 @@ public class BookResource {
         if (totalPages != null && (totalPages < 1)) invalid("O total de páginas deve ser inteiro positivo.");
     }
 
-    private BookEntity findOwned(UUID id) {
+    private BookEntity findOwned(UUID id) { return findOwned(id, false); }
+
+    private BookEntity findOwnedForMutation(UUID id) { return findOwned(id, true); }
+
+    private BookEntity findOwned(UUID id, boolean mutation) {
         if (id == null) invalid("Identificador de livro inválido.");
-        BookEntity book = books.findOwned(currentUser.get().id, id);
+        var user = currentUser.get();
+        if (mutation) books.lockOwnerForMutation(user.id);
+        BookEntity book = books.findOwned(user.id, id);
         if (book == null) throw new ProblemException(404, ProblemTypes.BOOK_NOT_FOUND, "Livro não encontrado", "Livro inexistente ou não pertencente ao usuário.");
         return book;
     }

@@ -6,6 +6,7 @@ import io.quarkus.oidc.AuthorizationCodeTokens;
 import io.quarkus.redis.datasource.RedisDataSource;
 import io.quarkus.redis.datasource.keys.KeyCommands;
 import io.quarkus.redis.datasource.value.ValueCommands;
+import io.quarkus.redis.datasource.value.SetArgs;
 
 import java.time.Duration;
 import java.util.Optional;
@@ -57,6 +58,16 @@ public class RedisTokenStateStore implements TokenStateStore {
     @Override
     public void remove(String reference) {
         if (reference != null) keys.del(key(reference));
+    }
+
+    @Override
+    public boolean replaceIfPresent(String reference, AuthorizationCodeTokens tokens, Duration ttl) {
+        try {
+            String payload = mapper.writeValueAsString(SerializedAuthorizationTokens.from(tokens));
+            return values.setGet(key(reference), payload, new SetArgs().xx().ex(ttl)) != null;
+        } catch (JsonProcessingException exception) {
+            return false;
+        }
     }
 
     @Override

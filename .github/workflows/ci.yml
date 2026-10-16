@@ -276,10 +276,13 @@ jobs:
       - name: Validate OIDC Compose/Caddy surface
         run: node scripts/ci/validate-oidc-surface.mjs
       - name: Validate realm, ops tests and backup/restore scripts
+        env:
+          FOLHEA_REQUIRE_POSTGRES_TESTS: '1'
         run: |
           bash scripts/tests/test-render-realm.sh
           python3 -B -m unittest discover -s scripts/ops/tests -p 'test_*.py'
           bash scripts/ops/tests/test-backup-restore.sh
+          python3 -B -m unittest discover -s scripts/ci/tests -p 'test_health_check.py'
       - name: Validate private book multipart body limits on actual Caddy
         timeout-minutes: 10
         run: node scripts/ci/tests/test-api-body-limits.mjs

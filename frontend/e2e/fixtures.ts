@@ -151,7 +151,11 @@ async function handleApi(route: Route, state: MockState): Promise<void> {
     if (method === 'GET' && !bookMatch[2]) return json(route, 200, officialBook(state, book));
     if (method === 'PATCH' && !bookMatch[2]) {
       const { metadata, bytes } = bookPayload(request);
-      Object.assign(book, metadata, { updatedAt: now });
+      const { author, edition, ...otherMetadata } = metadata;
+      Object.assign(book, otherMetadata, { updatedAt: now });
+      // Match BookResource: null/omitted preserves text; blank clears it.
+      if (author != null) book.author = author.trim() || null;
+      if (edition != null) book.edition = edition.trim() || null;
       if (bytes) { book.hasPhoto = true; state.covers ??= new Map(); state.covers.set(book.id, bytes); }
       return json(route, 200, officialBook(state, book));
     }

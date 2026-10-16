@@ -28,6 +28,22 @@ describe('book metadata and private cover editing', () => {
     http.expectOne('/api/v1/dashboard').flush({ currentStreakDays: 0, currentBook: null, week: { pages: 45, minutes: 0, booksFinished: 0 } });
     http.expectOne(request => request.url === '/api/v1/stats').flush({ pages: 45 });
   }
+  it('sends empty strings to remove existing author and edition under the PATCH contract', () => {
+    const fixture = render({ ...legacy, author: 'Autora', edition: '2ª edição' });
+    const root = fixture.nativeElement as HTMLElement;
+    for (const selector of ['#detail-book-author', '#detail-book-edition']) {
+      const input = root.querySelector<HTMLInputElement>(selector)!;
+      input.value = ''; input.dispatchEvent(new Event('input'));
+    }
+    root.querySelector('form')!.dispatchEvent(new Event('submit'));
+    const request = http.expectOne('/api/v1/books/old-book');
+    expect(request.request.body).toMatchObject({ author: '', edition: '' });
+    request.flush(legacy); flushRefresh(legacy);
+    fixture.detectChanges();
+    expect(store.getBook(legacy.id)?.author).toBeNull();
+    expect(store.getBook(legacy.id)?.edition).toBeNull();
+    expect(root.textContent).toContain('Alterações salvas');
+  });
   it('keeps legacy totals blank and lets the reader complete metadata without changing readings', () => {
     const fixture = render(); const root = fixture.nativeElement as HTMLElement;
     const total = root.querySelector<HTMLInputElement>('#detail-book-total-pages');
@@ -36,7 +52,7 @@ describe('book metadata and private cover editing', () => {
     total!.value = '200'; total!.dispatchEvent(new Event('input')); edition.value = '3ª edição'; edition.dispatchEvent(new Event('input'));
     root.querySelector('form')!.dispatchEvent(new Event('submit'));
     const patch = http.expectOne('/api/v1/books/old-book');
-    expect(patch.request.method).toBe('PATCH'); expect(patch.request.body).toEqual({ title: 'Antigo', author: null, edition: '3ª edição', totalPages: 200 });
+    expect(patch.request.method).toBe('PATCH'); expect(patch.request.body).toEqual({ title: 'Antigo', author: '', edition: '3ª edição', totalPages: 200 });
     const book = { ...legacy, edition: '3ª edição', totalPages: 200, progressPercent: 22, stats: { ...legacy.stats!, totalPages: 200, percent: 22.5 } };
     patch.flush(book); flushRefresh(book); fixture.detectChanges();
     expect(root.querySelector('.percent')?.textContent).toContain('22%');

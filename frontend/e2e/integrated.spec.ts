@@ -54,6 +54,15 @@ test('jornada com BFF, Keycloak e banco reais pela UI', async ({ page }) => {
   await expect(bookRow.locator('.percent')).toHaveText('50%');
   await expect(bookRow.locator('.daily-average')).toContainText('15 páginas por dia de leitura');
   await page.getByRole('link', { name: `Abrir ${title}` }).click();
+  await expect(page.getByLabel('Autor')).toHaveValue('Autora de teste');
+  await expect(page.getByLabel('Edição')).toHaveValue('2ª edição');
+  await page.getByLabel('Autor').fill('');
+  await page.getByLabel('Edição').fill('');
+  await page.getByRole('button', { name: 'Salvar alterações' }).click();
+  await expect(page.getByText('Alterações salvas.', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel('Autor')).toHaveValue('');
+  await expect(page.getByLabel('Edição')).toHaveValue('');
   await page.getByRole('button', { name: 'Remover capa salva' }).click();
   await expect(page.getByText('Capa removida.', { exact: true })).toBeVisible();
   await expect(page.getByAltText(`Capa de ${title}`)).toHaveCount(0);
