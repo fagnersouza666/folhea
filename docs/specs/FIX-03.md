@@ -6,7 +6,7 @@ Status: aprovada pelo Mestre em 14/10/2026. Card: https://trello.com/c/XdoAuCQQ
 
 ## Contexto (14/10/2026)
 - Hoje `https://folhea.app/healthz` retorna 404.
-- Os timeouts de TLS vistos pelos bots vinham do IP de saída compartilhado deles (WARP 104.28.194.238). O teste do Mestre pela rede dele deu 10 de 10 com 200, e os testes externos também passaram. Por isso o timeout fica fora do escopo da FIX-03 e segue em card próprio.
+- Os timeouts de TLS vistos pelos bots vinham do IP de saída compartilhado deles (WARP `<IP_SAIDA_BOTS>`). O teste do Mestre pela rede dele deu 10 de 10 com 200, e os testes externos também passaram. Por isso o timeout fica fora do escopo da FIX-03 e segue em card próprio.
 
 ## Problema
 No bloco do domínio do `infra/Caddyfile`, o `respond @health 200` está solto. O `handle { ... }` final dos arquivos estáticos atende antes e devolve o 404.html. O bloco `:81` funciona porque usa `handle @health`.

@@ -41,7 +41,7 @@ ENV PUBLIC_DOMAIN=localhost \
     OIDC_PUBLIC_ORIGIN=https://localhost:9443 \
     API_UPSTREAM=http://backend-edge:8080 \
     STATIC_ROOT=/srv
-RUN caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+RUN --mount=type=tmpfs,target=/data --mount=type=tmpfs,target=/config caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 EXPOSE 80 443
 
 FROM quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244 AS keycloak-runtime

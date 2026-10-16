@@ -19,3 +19,15 @@ frontend/coverage
 **/.env
 **/.env-*
 .ao
+**/.env.*
+**/*.env
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+**/*.jks
+**/*.keystore
+**/.ssh
+**/.local
+# Only the placeholder example is a public build input.
+!**/.env.example

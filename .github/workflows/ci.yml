@@ -310,6 +310,15 @@ jobs:
           CADDY_TEST_IMAGE: ${{ steps.caddy-proof.outputs.image }}
         run: node scripts/ci/tests/test-caddy-health.mjs
       - run: docker build --file infra/Dockerfile --target keycloak-runtime --tag folhea:keycloak-ci .
+      - name: Validate the actual public image archive without publishing it
+        run: |
+          set -euo pipefail
+          umask 077
+          archive_dir="$(mktemp -d "$RUNNER_TEMP/folhea-public-images.XXXXXX")"
+          trap 'rm -rf -- "$archive_dir"' EXIT
+          docker save folhea:ci folhea:caddy-ci folhea:keycloak-ci | gzip > "$archive_dir/folhea-images.tar.gz"
+          python3 -B scripts/ci/verify-public-image-archive.py "$archive_dir/folhea-images.tar.gz" \
+            --expected-tag folhea:ci --expected-tag folhea:caddy-ci --expected-tag folhea:keycloak-ci
       - name: Validate production Compose configuration
         run: docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.example config --quiet
 
