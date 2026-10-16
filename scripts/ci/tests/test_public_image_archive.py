@@ -112,6 +112,29 @@ class PublicImageArchiveTest(unittest.TestCase):
         self.rejected(fixture(files=[('srv/.env.production', value.encode())], delete_after=True),
                       'private-file', value)
 
+    def test_private_file_diagnostic_exposes_only_reason_kind_and_public_signature(self):
+        value = secrets.token_urlsafe(32)
+        path = 'srv/' + secrets.token_hex(16) + '/.env.production'
+        result = self.check(fixture(files=[(path, value.encode())]))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('category=private-file rule=ENV_FILE kind=file extension=other signature=none',
+                      result.stderr)
+        self.assertIn('path_sha256=' + hashlib.sha256(path.encode()).hexdigest(), result.stderr)
+        self.assertRegex(result.stderr, r'layer_path_sha256=[0-9a-f]{64}')
+        self.assertRegex(result.stderr, r'\Apublic-image-archive: FAIL category=private-file '
+                         r'rule=ENV_FILE kind=file extension=other signature=none '
+                         r'path_sha256=[0-9a-f]{64} layer_path_sha256=[0-9a-f]{64}\n\Z')
+        self.assertTrue(path not in result.stderr and value not in result.stderr,
+                        'Diagnostic must not include a path or synthetic value')
+
+    def test_private_suffix_remains_rejected_even_for_a_public_pem_signature(self):
+        certificate = b'-----BEGIN CERTIFICATE-----\npublic certificate\n-----END CERTIFICATE-----'
+        result = self.check(fixture(files=[('etc/vendor/public.key', certificate)]))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('rule=KEY_MATERIAL_EXTENSION kind=file extension=key signature=certificate',
+                      result.stderr)
+        self.assertNotIn('etc/vendor/public.key', result.stderr)
+
     def test_rejects_private_key_but_accepts_public_certificate(self):
         value = secrets.token_urlsafe(32)
         key = ('-----BEGIN PRIVATE KEY-----\n' + value + '\n-----END PRIVATE KEY-----').encode()

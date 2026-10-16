@@ -44,18 +44,51 @@ def safe_path(name):
     return str(path)
 
 
-def private_path(name):
+def private_path_rule(name):
     parts = PurePosixPath(name).parts
     if any(p in {'.ssh', '.local', '.ao', '.aws', '.kube'} for p in parts):
-        return True
+        return 'PRIVATE_STATE_DIRECTORY'
     leaf = parts[-1] if parts else ''
     # The committed example is a public placeholder model, not a runtime env.
     if leaf == '.env.example':
-        return False
-    return (leaf == '.env' or leaf.startswith(('.env.', '.env-'))
-            or leaf.endswith(('.env', '.dump.gz'))
-            or PurePosixPath(leaf).suffix.lower() in PRIVATE_SUFFIXES
-            or leaf in {'id_rsa', 'id_ed25519', 'credentials', 'credentials.json'})
+        return None
+    if leaf == '.env' or leaf.startswith(('.env.', '.env-')) or leaf.endswith('.env'):
+        return 'ENV_FILE'
+    if leaf.endswith('.dump.gz') or PurePosixPath(leaf).suffix.lower() == '.dump':
+        return 'DATABASE_DUMP'
+    if PurePosixPath(leaf).suffix.lower() in PRIVATE_SUFFIXES:
+        return 'KEY_MATERIAL_EXTENSION'
+    if leaf in {'id_rsa', 'id_ed25519', 'credentials', 'credentials.json'}:
+        return 'CREDENTIAL_NAME'
+    return None
+
+
+def private_path(name):
+    return private_path_rule(name) is not None
+
+
+def private_file_diagnostic(entry, name, layer_name, content):
+    """Only fixed enums and one-way path identifiers may reach public logs.
+
+    layer_path_sha256 identifies the enclosing archive member's NAME, not its
+    content digest. Never expose a member name, link target or parser exception.
+    This classifies the existing rejection; it does not exempt public-looking
+    payloads from any rule.
+    """
+    kind = ('file' if entry.isfile() else 'directory' if entry.isdir()
+            else 'symlink' if entry.issym() else 'hardlink' if entry.islnk()
+            else 'fifo' if entry.isfifo() else 'device' if entry.isdev() else 'other')
+    suffix = PurePosixPath(name).suffix.lower()
+    extension = {'.key': 'key', '.p12': 'p12', '.pfx': 'pfx', '.jks': 'jks',
+                 '.keystore': 'keystore', '.dump': 'dump', '.env': 'env', '.json': 'json'
+                 }.get(suffix, 'other')
+    signature = ('private' if PRIVATE_KEY.search(content)
+                 else 'public' if re.search(rb'-----BEGIN (?:RSA |EC |PGP )?PUBLIC KEY(?: BLOCK)?-----', content)
+                 else 'certificate' if b'-----BEGIN CERTIFICATE-----' in content else 'none')
+    return (f'private-file rule={private_path_rule(name)} kind={kind}'
+            f' extension={extension} signature={signature}'
+            f' path_sha256={hashlib.sha256(name.encode()).hexdigest()}'
+            f' layer_path_sha256={hashlib.sha256(layer_name.encode()).hexdigest()}')
 
 
 def metadata_policy(value):
@@ -125,12 +158,14 @@ def drain(stream):
         pass
 
 
-def layer_policy(stream):
+def layer_policy(stream, layer_name):
     with tarfile.open(fileobj=stream, mode='r|') as layer:
         for entry in layer:
             name = safe_path(entry.name)
             if private_path(name):
-                reject('private-file')
+                content = (layer.extractfile(entry).read(min(entry.size, CHUNK))
+                           if entry.isfile() else b'')
+                reject(private_file_diagnostic(entry, name, layer_name, content))
             if not entry.isfile():
                 # Links and devices are never followed or materialized.
                 continue
@@ -177,7 +212,7 @@ def read_archive(path):
                 decoded = gzip.GzipFile(fileobj=stream) if prefix.startswith(b'\x1f\x8b') else stream
                 layer_hash = HashedReader(decoded)
                 buffered = io.BufferedReader(layer_hash)
-                layer_policy(buffered)
+                layer_policy(buffered, name)
                 drain(stream)
                 layers[name] = layer_hash.digest.hexdigest()
             else:
