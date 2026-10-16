@@ -1,0 +1,15 @@
+title = "Folhea: default Gitleaks rules with one documented false positive"
+
+[extend]
+useDefault = true
+
+# This password is deliberately fake in the historical PasswordHasher unit test.
+# BOTH the complete path AND the exact extracted value must match. No other
+# credential in this file, or copy of this value elsewhere, is exempted.
+[[allowlists]]
+description = "The one fake password documented by SEG-02"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''\Abackend/src/test/java/com/folhea/security/PasswordHasherTest\.java\z''']
+regexTarget = "secret"
+regexes = ['''\Auma-senha-segura-2026\z''']

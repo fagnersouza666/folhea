@@ -3,7 +3,6 @@ name: Security
 on:
   pull_request:
   push:
-    branches: [main]
 
 permissions:
   contents: read
@@ -13,15 +12,37 @@ jobs:
   secret-scan:
     name: Secret scan (Gitleaks)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
       - name: Checkout full history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: Scan repository for secrets
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+          persist-credentials: false
+      - name: Install verified Gitleaks
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: '8.30.1'
+          GITLEAKS_ARCHIVE_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
+        run: |
+          set -euo pipefail
+          umask 077
+          tool_dir="$(mktemp -d "$RUNNER_TEMP/gitleaks.XXXXXX")"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            --output "$tool_dir/archive.tar.gz"
+          printf '%s  %s\n' "$GITLEAKS_ARCHIVE_SHA256" "$tool_dir/archive.tar.gz" | sha256sum --check --status
+          tar -xzf "$tool_dir/archive.tar.gz" -C "$tool_dir" gitleaks
+          printf '%s\n' "$tool_dir" >> "$GITHUB_PATH"
+      - name: Regress secret scan and workflow policy
+        run: |
+          python3 -B -m unittest discover -s scripts/ci/tests -p 'test_secret_scan.py'
+          python3 -B -m unittest discover -s scripts/ci/tests -p 'test_workflow_security.py'
+          python3 -B -m unittest discover -s scripts/ci/tests -p 'test_public_image_archive.py'
+          python3 -B scripts/ci/verify-public-image-archive.py --check-source
+      - name: Scan repository for secrets
+        run: python3 -B scripts/ci/scan-secrets.py
 
   filesystem-scan:
     name: Filesystem vulnerabilities and misconfiguration (Trivy)
