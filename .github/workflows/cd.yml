@@ -15,9 +15,12 @@ env:
 jobs:
   release:
     name: build release
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -46,26 +49,25 @@ jobs:
         working-directory: backend
       - name: Build Docker image
         run: |
+          umask 077
+          python3 scripts/ci/verify-public-image-archive.py --check-source
           docker build --file infra/Dockerfile --target backend-runtime --tag folhea:backend-${{ github.sha }} .
           docker build --file infra/Dockerfile --target caddy-runtime --tag folhea:caddy-${{ github.sha }} .
           docker build --file infra/Dockerfile --target keycloak-runtime --tag folhea:keycloak-${{ github.sha }} .
           docker save folhea:backend-${{ github.sha }} folhea:caddy-${{ github.sha }} folhea:keycloak-${{ github.sha }} | gzip > folhea-images.tar.gz
+          python3 scripts/ci/verify-public-image-archive.py folhea-images.tar.gz --expected-tag folhea:backend-${{ github.sha }} --expected-tag folhea:caddy-${{ github.sha }} --expected-tag folhea:keycloak-${{ github.sha }}
       - name: Upload release evidence
-        if: always()
+        if: success()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-evidence
-          path: |
-            folhea-images.tar.gz
-            frontend/dist/
-            frontend/coverage/
-            backend/target/surefire-reports/
-            backend/target/failsafe-reports/
-          if-no-files-found: ignore
+          path: folhea-images.tar.gz
+          if-no-files-found: error
           retention-days: 14
 
   deploy:
     name: deploy production
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: release
     runs-on: ubuntu-latest
     steps:
@@ -77,7 +79,10 @@ jobs:
         if: env.DEPLOY_HOOK != ''
         run: |
           payload="$(jq -n --arg revision "$REVISION" --arg runId "$RUN_ID" '{revision:$revision,runId:$runId,artifact:"release-evidence"}')"
-          curl --fail --silent --show-error --retry 2 -X POST --header 'Content-Type: application/json' --data "$payload" "$DEPLOY_HOOK"
+          if ! curl --fail --silent --retry 2 --output /dev/null -X POST --header 'Content-Type: application/json' --data "$payload" "$DEPLOY_HOOK" 2>/dev/null; then
+            echo '::error::Production deployment request failed; inspect the private deployment channel.'
+            exit 1
+          fi
       - name: Explain local deployment contract
         env:
           DEPLOY_HOOK: ${{ secrets.PRODUCTION_DEPLOY_HOOK }}
@@ -86,10 +91,13 @@ jobs:
 
   health-check:
     name: production health check
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: deploy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
