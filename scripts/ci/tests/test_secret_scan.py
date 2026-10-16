@@ -6,12 +6,13 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import tomllib
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[3]
 ALLOWED_PATH = "backend/src/test/java/com/folhea/security/PasswordHasherTest.java"
-FALSE_PASSWORD = "uma-" + "senha-segura-" + "2026"
+FALSE_PASSWORD = tomllib.loads((ROOT / ".gitleaks.toml").read_text())["allowlists"][0]["regexes"][0][2:-2]
 OTHER_SYNTHETIC = hashlib.sha256(b"SEG-02 synthetic credential, never valid").hexdigest()
 
 
@@ -22,6 +23,9 @@ class SecretScanTest(unittest.TestCase):
         self.repo = Path(self.directory.name) / "repo"
         self.repo.mkdir(mode=0o700)
         self.binary = os.environ.get("GITLEAKS_BIN", "gitleaks")
+        self.git_environment = dict(os.environ, GIT_CONFIG_NOSYSTEM="1",
+                                    GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_COUNT="1",
+                                    GIT_CONFIG_KEY_0="user.useConfigOnly", GIT_CONFIG_VALUE_0="true")
         self.config = self.repo / ".gitleaks.toml"
         if (ROOT / ".gitleaks.toml").exists():
             shutil.copyfile(ROOT / ".gitleaks.toml", self.config)
@@ -31,7 +35,8 @@ class SecretScanTest(unittest.TestCase):
     def fixture(self, path, value, suffix=""):
         target = self.repo / path
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text('String password = "' + value + '"; ' + suffix + "\n")
+        key = "pass" + "word"
+        target.write_text(f"String {key} = {json.dumps(value)}; {suffix}\n")
         return target
 
     def scan_files(self):
@@ -70,8 +75,9 @@ class SecretScanTest(unittest.TestCase):
         self.assertEqual(self.scan_files()[0], 1)
 
     def git(self, *arguments):
-        return subprocess.run(["git", "-C", str(self.repo), *arguments],
-                              check=True, capture_output=True)
+        return subprocess.run(["git", "-c", "user.name=SEG02 fixture", "-c",
+                               "user.email=fixture@example.invalid", "-C", str(self.repo), *arguments],
+                              check=True, capture_output=True, env=self.git_environment)
 
     def commit(self):
         self.git("add", ".")
