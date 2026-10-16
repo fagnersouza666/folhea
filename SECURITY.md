@@ -39,3 +39,10 @@ caminhos do servidor ou nomes de containers de produção. Exemplos devem usar
 placeholders ou endereços reservados para documentação (RFC5737). O domínio
 público do produto, endereços de loopback e versões de dependências podem ser
 documentados quando necessários para explicar o contrato do projeto.
+
+Antes da publicação, o CD verifica metadados e todas as camadas do arquivo de
+imagens, inclusive arquivos removidos em camadas posteriores. A validação do
+Caddy no build usa armazenamento temporário em memória para sua PKI local;
+esse material não deve entrar nas camadas publicadas. Uma falha no gate impede
+o upload do arquivo de imagens. Esses controles não substituem a investigação
+e a revogação de um segredo exposto.
