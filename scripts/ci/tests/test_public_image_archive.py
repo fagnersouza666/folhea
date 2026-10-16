@@ -268,6 +268,35 @@ class PublicImageArchiveTest(unittest.TestCase):
 
 
 class PublicBuildBoundaryTest(unittest.TestCase):
+    def test_caddy_validate_requires_both_tmpfs_mounts_on_the_same_run(self):
+        spec = importlib.util.spec_from_file_location('public_archive_gate', CHECK)
+        gate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gate)
+        command = 'caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile'
+        cases = [
+            ('RUN ' + command, False),
+            ('RUN --mount=type=tmpfs,target=/data ' + command, False),
+            ('RUN --mount=type=cache,target=/data --mount=type=tmpfs,target=/config ' + command, False),
+            ('RUN --mount=type=tmpfs,target=/data --mount=type=tmpfs,target=/config true\nRUN '
+             + command, False),
+            ('RUN echo --mount=type=tmpfs,target=/data --mount=type=tmpfs,target=/config && '
+             + command, False),
+            ('RUN --mount=type=tmpfs,target=/data --mount=type=tmpfs,target=/config ' + command, True),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'infra').mkdir()
+            (root / '.dockerignore').write_text((ROOT / '.dockerignore').read_text())
+            for index, (run, permitted) in enumerate(cases):
+                with self.subTest(case=index):
+                    (root / 'infra/Dockerfile').write_text('FROM base\n' + run + '\n')
+                    with patch.object(gate, 'ROOT', root):
+                        if permitted:
+                            self.assertEqual(gate.check_source(), 1)
+                        else:
+                            with self.assertRaisesRegex(gate.Rejected, '^persistent-validation-state$'):
+                                gate.check_source()
+
     def test_release_upload_requires_success_and_follows_archive_validation(self):
         workflow = (ROOT / '.github/workflows/cd.yml').read_text()
         release = workflow.split('  deploy:', 1)[0]

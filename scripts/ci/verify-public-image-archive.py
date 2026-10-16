@@ -381,6 +381,25 @@ def check_source():
             if any(private_path(token) or 'realm' in token.lower()
                    for token in tokens[1:] if not token.startswith('--')):
                 reject('private-build-input')
+        if instruction == 'RUN':
+            lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
+            lexer.whitespace_split = True
+            command = list(lexer)
+            if any(PurePosixPath(left).name == 'caddy' and right == 'validate'
+                   for left, right in zip(command, command[1:])):
+                ephemeral = set()
+                # BuildKit options must precede the shell command. Mounts in
+                # another RUN, an echo, or a persistent cache do not protect PKI.
+                for option in command[1:]:
+                    if not option.startswith('--'):
+                        break
+                    if option.startswith('--mount='):
+                        fields = dict(field.split('=', 1) for field in option[8:].split(',')
+                                      if '=' in field)
+                        if fields.get('type') == 'tmpfs':
+                            ephemeral.add(fields.get('target'))
+                if not {'/data', '/config'} <= ephemeral:
+                    reject('persistent-validation-state')
     return 1
 
 
